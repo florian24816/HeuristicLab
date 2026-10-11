@@ -22,3 +22,10 @@ surface on modern .NET can be fixed here.
    every serialization and deserialization, mutated the shared type/GUID dictionaries without
    the lock that RegisterType uses, and the lookups read them unlocked. Both now hold the
    existing lock. Same symptom as patch 1.
+3. Portable string comparers (src/Transformers/PortableComparers.cs, used by
+   DictionaryTransformer.cs and SetTransformers.cs): .NET 5+ gives Dictionary<string, T> and
+   HashSet<string> the default comparer type System.Collections.Generic.StringEqualityComparer,
+   which .NET Framework lacks, so files written on modern .NET could not be opened by
+   HeuristicLab 3.3. It is written as GenericEqualityComparer<string> (what .NET Framework uses;
+   also field-less, created with Activator on reading). Files written before this patch still
+   load (HeuristicLab.Common/AtticRuntimeTypes.cs keeps the old type registered).

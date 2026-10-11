@@ -215,6 +215,12 @@
   Exit 0 completed, 1 failed, 2 usage, 3 stopped (timeout/Ctrl+C; reports still written).
   Batches: explicit seeds S..S+N-1 (base seed drawn and recorded if not given), deep clones per
   run; parallel and sequential give identical results. Results store = folder of JSON reports.
+- next/tools/HeuristicLab.Examples: builds the course's example experiments (HEU5 exercises 3-6)
+  as .hl files (dotnet run --project next/tools/HeuristicLab.Examples -- <folder>; "probe" lists an
+  algorithm's choices, "show f.hl" what a file holds). Each configuration gets a tiny trial run first.
+  Batch runs hold the algorithm directly (as HeuristicLab builds them; Studio's ExperimentTree wraps
+  in "Batch content"). HeuristicLab's TSP has no swap2 move evaluator: a swap2 tabu search "completes"
+  evaluating nothing; the tabu search uses inversion (2-opt) moves instead.
 - Not ported yet: Problems.ExternalEvaluation* (protobuf 2.4 / Matlab COM / Scilab),
   ExactOptimization (OR-Tools, Windows-only native runtime), all Views/GUI, Hive/OKB/Services.
 - next/tests/HeuristicLab.Tests: legacy tests linked unchanged incl. samples, run on
@@ -225,7 +231,10 @@
   thread-safe caches/type registry. Same assembly identity as the NuGet package, same format.
 - HEAL.Attic does not know .NET 5+'s StringEqualityComparer (default comparer of
   Dictionary<string,T>/HashSet<string>); next/core/HeuristicLab.Common/AtticRuntimeTypes.cs
-  registers it in a module initializer. StringComparer.Ordinal(IgnoreCase) dictionaries
+  registers it in a module initializer.
+  It is written as GenericEqualityComparer<string> (vendored Attic patch 3, PortableComparers.cs),
+  so files saved here open in HeuristicLab 3.3 on .NET Framework (test
+  SavedFilesContainNoModernDotNetOnlyTypes); files written before still load. StringComparer.Ordinal(IgnoreCase) dictionaries
   still cannot be persisted on .NET Core (Attic re-creates comparers via Activator).
 - Item.ItemImage and VSImageLibrary throw PlatformNotSupportedException off Windows
   (System.Drawing.Common). Front-end code must never touch ItemImage until decoupled.

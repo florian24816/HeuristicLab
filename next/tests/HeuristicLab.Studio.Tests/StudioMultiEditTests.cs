@@ -305,7 +305,7 @@ public class StudioMultiEditTests {
   [TestMethod]
   public void AutoNamesShortenEveryParameter() {
     var ls = Setups.Create(new SetupRequest("LocalSearch") { Problem = "TravelingSalesmanProblem", Instance = "berlin52" }).Algorithm;
-    const string iterations = "a/p:MaximumIterations#value", generator = "a/p:MoveGenerator#choice";
+    const string iterations = "a/p:MaximumIterations#value";
     ParameterEditor.Apply(ls, ["MaximumIterations=300"]);
     Assert.AreEqual("LS", AutoName.AlgorithmTag(ls));
     Assert.AreEqual("LS_maxIt300", AutoName.Apply("", ls, iterations), "no name");
