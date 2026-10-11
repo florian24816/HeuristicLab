@@ -13,12 +13,13 @@
             <Setter Property="Canvas.Left" Value="{Binding LabelX}" />
             <Setter Property="Canvas.Top" Value="{Binding LabelY}" />
         </Style>
-        <!-- an operator: orange square with its pictogram, then a rounded block shading from the name
+        <!-- an operator: orange square with its pictogram, then a block (both corners rounded alike) shading from the name
              rectangles' light grey (top right) to the orange (bottom left) -->
         <Style Selector="Border.opsquare">
             <Setter Property="Background" Value="#F7931D" />
             <Setter Property="Width" Value="44" />
             <Setter Property="Height" Value="44" />
+            <Setter Property="CornerRadius" Value="10" />
             <Setter Property="Padding" Value="9" />
         </Style>
         <Style Selector="Border.node">
