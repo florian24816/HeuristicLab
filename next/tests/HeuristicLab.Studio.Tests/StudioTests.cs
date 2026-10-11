@@ -34,11 +34,11 @@ public class StudioTests {
 
   /// <summary>
   /// No toolbar: a file opens in the Experiments tab, runs with the seed in its own parameters
-  /// (Start all), and its runs show in the Run tab, the run's tour in the Solution tab.
+  /// (Start all), and its runs show in the Runs tab.
   /// </summary>
   [TestMethod]
-  public async Task OpenedFileRunsWithItsOwnSeedAndShowsInTheRunTab() {
-    var (best, runsShown, solutions, buttons, shot) = await OnUiThread(async () => {
+  public async Task OpenedFileRunsWithItsOwnSeedAndShowsInTheRunsTab() {
+    var (best, runsShown, buttons, shot) = await OnUiThread(async () => {
       var vm = new MainViewModel();
       var window = new MainWindow { DataContext = vm, Width = 1440, Height = 880 };
       window.Show();
@@ -49,7 +49,7 @@ public class StudioTests {
 
       // "Show runs" on the algorithm: the Run tab with its newest run selected
       block.ShowRunsCommand.Execute(null);
-      Assert.AreEqual(MainViewModel.RunTab, vm.SelectedTab);
+      Assert.AreEqual(MainViewModel.RunsTab, vm.SelectedTab);
       Assert.AreSame(block.Algorithm, vm.Runs.SelectedSource!.Optimizer);
       var run = vm.Runs.SelectedRun!;
       Assert.AreSame(block.Algorithm.Runs.Last(), run);
@@ -60,11 +60,10 @@ public class StudioTests {
       window.CaptureRenderedFrame()!.Save(file);
       var buttons = window.GetVisualDescendants().OfType<Avalonia.Controls.Button>().Select(b => b.Content as string).OfType<string>().ToList();
       window.Close();
-      return (result.Summary, vm.Runs.Runs!.Rows.Count, vm.Solution.Solutions.Count, buttons, file);
+      return (result.Summary, vm.Runs.Runs!.Rows.Count, buttons, file);
     });
     Assert.AreEqual("12332", best, "seed 0 gives what HeuristicLab gives");
     Assert.IsTrue(runsShown >= 1);
-    Assert.AreEqual(1, solutions, "the run's best tour");
     CollectionAssert.DoesNotContain(buttons, "Results folder...", "no toolbar");
     CollectionAssert.DoesNotContain(buttons, "Open...");
     Assert.IsTrue(new FileInfo(shot).Length > 10_000, "screenshot looks empty");

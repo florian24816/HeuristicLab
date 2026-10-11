@@ -84,34 +84,7 @@
                             <Button Content="Export CSV..." Command="{Binding ExportCommand}" ToolTip.Tip="The table as shown: filtered, sorted, these columns" />
                             <TextBlock Text="Click a column title to sort; select a run to see it under Run." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
                         </StackPanel>
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                            <DockPanel>
-                                <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding TableColumns}" Margin="12,0,0,4">
-                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ColumnChoice">
-                                            <Button Content="{Binding Display}" Width="150" Margin="0,0,4,0" HorizontalContentAlignment="Left" FontWeight="SemiBold"
-                                                    Background="Transparent" ToolTip.Tip="{Binding Key}"
-                                                    Command="{Binding $parent[UserControl].((vm:RunAnalysisViewModel)DataContext).SortCommand}" CommandParameter="{Binding Key}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <ListBox ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:AnalysisRow">
-                                            <ItemsControl ItemsSource="{Binding Cells}">
-                                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:DataType="x:String">
-                                                        <TextBlock Text="{Binding}" Width="150" Margin="0,0,4,0" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </DockPanel>
-                        </ScrollViewer>
+                        <ContentControl Content="{Binding Grid}" HorizontalAlignment="Left" VerticalAlignment="Top" />
                     </DockPanel>
                 </TabItem>
 

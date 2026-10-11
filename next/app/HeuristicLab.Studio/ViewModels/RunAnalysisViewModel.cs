@@ -276,8 +276,17 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     }
     var selected = SelectedRow?.Row;
     Rows = rows.Select(r => new AnalysisRow(r, TableColumns.Select(c => r.Text(c.Key)).ToList())).ToList();
+    Grid = new TableGridViewModel(TableColumns.Select(c => new GridColumn(c.Key, c.Display, 150, c.Key switch {
+        "source" => TableGridViewModel.SourceShade, "origin" => TableGridViewModel.OriginShade, "run" => TableGridViewModel.RunShade, _ => (Avalonia.Media.Color?)null
+      })).ToList(),
+      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort);
     SelectedRow = Rows.FirstOrDefault(r => ReferenceEquals(r.Row, selected));
+    Grid.Mark(SelectedRow);
   }
+
+  /// <summary>The table as shown: where a run comes from and which run it is stay in view.</summary>
+  [ObservableProperty]
+  public partial TableGridViewModel? Grid { get; set; }
 
   [RelayCommand]
   private async Task ExportAsync() {
@@ -308,6 +317,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   public partial ResultDetailViewModel? RunResultDetail { get; set; }
 
   partial void OnSelectedRowChanged(AnalysisRow? value) {
+    Grid?.Mark(value);
     RunDetails = value == null ? [] : TableColumns.Select(c => new NameValue(c.Display, value.Row.Text(c.Key))).ToList();
     RunResults = value?.Row.Run is { } run
       ? run.Results.Select(r => new ResultEntryViewModel(r.Key, r.Value, ItemInspector.Summary(r.Value))).ToList()

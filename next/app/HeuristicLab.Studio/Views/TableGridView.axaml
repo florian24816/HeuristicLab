@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             xmlns:c="using:HeuristicLab.Studio.Controls"
+             x:Class="HeuristicLab.Studio.Views.TableGridView"
+             x:DataType="vm:TableGridViewModel">
+    <UserControl.Styles>
+        <!-- fixed cells are drawn over the cells scrolling under them -->
+        <Style Selector="ItemsControl.cells > ContentPresenter" x:DataType="vm:GridCell">
+            <Setter Property="ZIndex" Value="{Binding ZIndex}" />
+        </Style>
+        <Style Selector="c|Sticky.cell">
+            <Setter Property="Padding" Value="6,4" />
+        </Style>
+        <Style Selector="c|Sticky.cell TextBlock">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="Border.row">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </UserControl.Styles>
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <StackPanel HorizontalAlignment="Left">
+            <c:Sticky StickY="True" ZIndex="2">
+                <ItemsControl Classes="cells" ItemsSource="{Binding Header}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:GridCell">
+                            <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Width}" Background="{Binding Background}"
+                                      Tapped="HeaderTapped" ToolTip.Tip="{Binding Text}">
+                                <TextBlock Text="{Binding Text}" FontWeight="SemiBold" />
+                            </c:Sticky>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </c:Sticky>
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GridRow">
+                        <Border Classes="row" Tapped="RowTapped" Background="Transparent">
+                            <ItemsControl Classes="cells" ItemsSource="{Binding Cells}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:GridCell">
+                                        <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Width}" Background="{Binding Background}" Padding="0">
+                                            <Panel>
+                                                <TextBlock Text="{Binding Text}" Margin="6,4" ToolTip.Tip="{Binding Text}" />
+                                                <!-- the selected run -->
+                                                <Border Background="#401E78D4" BorderBrush="#1E78D4" BorderThickness="0,1.5"
+                                                        IsVisible="{Binding Row.IsSelected, FallbackValue=False}" />
+                                            </Panel>
+                                        </c:Sticky>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

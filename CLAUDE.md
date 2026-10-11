@@ -151,11 +151,17 @@
   "hl new", opened as a new experiment), Open..., Open recent (workspace RecentFiles) and Samples...
   Seeds are the algorithms' own Seed/SetSeedRandomly parameters, parallelism is the Resources tab.
   No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab
-  can still add folders written by "hl run --store"). Run tab (RunsBrowserViewModel): tree of the
+  can still add folders written by "hl run --store"). Runs tab (RunsBrowserViewModel): tree of the
   workspace's experiments and blocks, the selected block's runs (RunsViewModel table), the selected
   run's parameters and results with pictures; "Show runs" (block menu / experiment detail) jumps
-  there. Solution tab: the solutions (model, metrics, charts, tours) of the run selected in the
-  Run tab. Sweeps and walk-forward are CLI-only now (hl run --sweep, hl walkforward).
+  there. No Solution tab (removed 2026-10-11; runtime Solutions stays for the CLI). Sweeps and
+  walk-forward are CLI-only now (hl run --sweep, hl walkforward).
+  Run tables (Runs tab / algorithm Runs, Results tab Table) are TableGridViewModel/TableGridView:
+  columns alternate grey #D6D6D6 / light grey #EBEBEB, every other row at strength 0.55 (blended
+  over white, opaque); fixed columns stay in view when scrolling sideways (Controls.Sticky moves
+  them by the ScrollViewer offset, ZIndex above; the header sticks the same way vertically):
+  Results: Source #FDE5C8, Origin #FBCD96, Run #F9B462 (palest to closest to the logo orange);
+  Runs: Run #F9B462. Click a row to select it (blue overlay); Results header click sorts.
   Settings (~/.config/HeuristicLab.Studio/settings.json): recent files and resource limits.
   Own LineChart control.
   Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,

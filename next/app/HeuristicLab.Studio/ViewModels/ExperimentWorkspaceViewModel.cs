@@ -365,7 +365,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
   }
 
-  /// <summary>Shows the block's runs in the Run tab.</summary>
+  /// <summary>Shows the block's runs in the Runs tab.</summary>
   internal void ShowRuns(BlockViewModel block) {
     var optimizer = block switch {
       ContainerBlockViewModel c => c.Optimizer,

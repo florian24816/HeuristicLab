@@ -10,13 +10,13 @@ public sealed record NameValue(string Name, string Value);
 
 /// <summary>
 /// The window's tabs. Experiments are built, opened, saved and started in the Experiments tab;
-/// the other tabs look at what they hold (runs, solutions, analysis) or set what may be used.
+/// the other tabs look at what they hold (runs, analysis) or set what may be used.
 /// All HeuristicLab access goes through HeuristicLab.Next.Runtime.
 /// </summary>
 public partial class MainViewModel : ViewModelBase {
   private readonly ISettingsStore? settingsStore;
 
-  public const int ExperimentsTab = 0, RunTab = 1, SolutionTab = 2, ResultsTab = 3, ScriptsTab = 4, ResourcesTab = 5;
+  public const int ExperimentsTab = 0, RunsTab = 1, ResultsTab = 2, ScriptsTab = 3, ResourcesTab = 4;
 
   public MainViewModel() : this(null) { }
 
@@ -24,13 +24,13 @@ public partial class MainViewModel : ViewModelBase {
     this.settingsStore = settingsStore;
     var loaded = settingsStore?.Load();
     Workspace = new ExperimentWorkspaceViewModel(dialogs, fileDialogs, optimizer => {
-      SelectedTab = RunTab;
+      SelectedTab = RunsTab;
       Runs?.Select(optimizer);
     }, script => {
       Scripts.Open(script);
       SelectedTab = ScriptsTab;
     }, loaded?.RecentFiles, SaveSettings);
-    Runs = new RunsBrowserViewModel(Workspace, Solution.Show);
+    Runs = new RunsBrowserViewModel(Workspace);
     RunAnalysis = new RunAnalysisViewModel(Workspace, fileDialogs);
     Workspace.PropertyChanged += (_, e) => {
       // finished experiments bring new runs
@@ -61,11 +61,8 @@ public partial class MainViewModel : ViewModelBase {
   /// <summary>Experiments tab: building blocks of several experiments.</summary>
   public ExperimentWorkspaceViewModel Workspace { get; }
 
-  /// <summary>Run tab: the runs of the experiments in the Experiments tab.</summary>
+  /// <summary>Runs tab: the runs of the experiments in the Experiments tab.</summary>
   public RunsBrowserViewModel Runs { get; }
-
-  /// <summary>Solution tab: the solutions of the run selected in the Run tab.</summary>
-  public SolutionViewModel Solution { get; } = new();
 
   /// <summary>Results tab: the runs of the workspace and of results folders, compared in tables, charts and tests.</summary>
   public RunAnalysisViewModel RunAnalysis { get; }
@@ -80,7 +77,7 @@ public partial class MainViewModel : ViewModelBase {
   public partial int SelectedTab { get; set; }
 
   partial void OnSelectedTabChanged(int value) {
-    if (value == RunTab) Runs.Refresh();
+    if (value == RunsTab) Runs.Refresh();
     if (value == ResultsTab) RunAnalysis.RefreshSources();
   }
 

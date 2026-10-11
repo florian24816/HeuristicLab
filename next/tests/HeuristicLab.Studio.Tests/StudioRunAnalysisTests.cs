@@ -1,4 +1,5 @@
 using Avalonia.Headless;
+using Avalonia.VisualTree;
 using HeuristicLab.Next.Runtime;
 using HeuristicLab.Next.Runtime.Visuals;
 using HeuristicLab.Optimization;
@@ -18,6 +19,32 @@ public class StudioRunAnalysisTests {
 
   private static IProblem Ch130() =>
     (IProblem)Setups.Create(new SetupRequest("GeneticAlgorithm") { Problem = "TravelingSalesmanProblem", Instance = "ch130" }).Algorithm.Problem!.Clone();
+
+  private static void AssertReadable(TableGridViewModel grid) {
+    var plain = Enumerable.Range(0, grid.Columns.Count).Where(i => grid.Columns[i].Fixed == null).Take(2).ToList();
+    Assert.AreEqual(2, plain.Count);
+    var first = grid.Rows[0].Cells;
+    Assert.AreSame(TableGridViewModel.Brush(TableGridViewModel.Grey, 1), first[plain[0]].Background);
+    Assert.AreSame(TableGridViewModel.Brush(TableGridViewModel.LightGrey, 1), first[plain[1]].Background);
+    Assert.AreSame(TableGridViewModel.Brush(TableGridViewModel.Grey, TableGridViewModel.WeakRow), grid.Rows[1].Cells[plain[0]].Background);
+    Assert.AreSame(first[plain[0]].Background, grid.Rows[2].Cells[plain[0]].Background);
+  }
+
+  /// <summary>Scrolls the shown table sideways: its fixed cells move along, so they stay at the left edge.</summary>
+  private static void AssertFixedColumnsStay(MainWindow window, string shot) {
+    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+    var view = window.GetVisualDescendants().OfType<TableGridView>().First(v => v.IsEffectivelyVisible);
+    var scroll = view.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First();
+    Assert.IsTrue(scroll.Extent.Width > scroll.Viewport.Width, "the table is wider than its space");
+    scroll.Offset = new Avalonia.Vector(250, 0);
+    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+    var fixedCells = view.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Sticky>().Where(c => c.StickX).ToList();
+    Assert.IsTrue(fixedCells.Count > 0);
+    foreach (var cell in fixedCells)
+      Assert.AreEqual(scroll.Offset.X, ((Avalonia.Media.TranslateTransform)cell.RenderTransform!).X, 0.01);
+    window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, shot));
+    scroll.Offset = default;
+  }
 
   [TestMethod]
   [Timeout(300_000)]
@@ -62,6 +89,28 @@ public class StudioRunAnalysisTests {
       var best = analysis.Rows.Select(r => r.Row.Number("result:BestQuality")!.Value).ToList();
       CollectionAssert.AreEqual(best.Order().ToList(), best, "sorted by quality");
       Shot("table");
+
+      // readable table: source, origin and run in three oranges stay in view; columns grey / light grey, rows alternate
+      var grid = analysis.Grid!;
+      CollectionAssert.AreEqual(new[] { "source", "origin", "run" }, grid.Columns.Where(c => c.Fixed != null).Select(c => c.Key).ToList());
+      CollectionAssert.AreEqual(new[] { TableGridViewModel.SourceShade, TableGridViewModel.OriginShade, TableGridViewModel.RunShade },
+        grid.Columns.Take(3).Select(c => c.Fixed!.Value).ToList());
+      AssertReadable(grid);
+      AssertFixedColumnsStay(window, "studio-results-table-scrolled.png");
+
+      // Runs tab: a batch run's runs, the Run column in the Results tab's run orange, staying in view
+      vm.SelectedTab = MainViewModel.RunsTab;
+      vm.Runs.SelectedSource = vm.Runs.Sources.Single().Children.First(c => c.Kind == "Batch run");
+      var runs = vm.Runs.Runs!.Grid!;
+      Assert.AreEqual(5, runs.Rows.Count);
+      Assert.AreEqual(TableGridViewModel.RunShade, runs.Columns.Single(c => c.Fixed != null).Fixed);
+      Assert.AreEqual("Run", runs.Columns[0].Header);
+      AssertReadable(runs);
+      runs.Select(runs.Rows[2]);
+      Assert.AreSame(runs.Rows[2].Item, vm.Runs.Runs.Selected, "a click on a row selects the run");
+      Assert.IsTrue(runs.Rows[2].IsSelected && !runs.Rows[0].IsSelected);
+      AssertFixedColumnsStay(window, "studio-runs-table-scrolled.png");
+      vm.SelectedTab = MainViewModel.ResultsTab;
 
       // box plot of the best quality per group
       analysis.SelectedView = RunAnalysisViewModel.ChartsView;

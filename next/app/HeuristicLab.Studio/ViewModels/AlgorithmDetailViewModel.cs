@@ -493,12 +493,17 @@ public partial class RunsViewModel(RunCollection runs) : ViewModelBase {
 
   public bool IsEmpty => Rows.Count == 0;
 
-  /// <summary>Whether the selected run's parameters and results are listed below the table (the Run tab shows them itself).</summary>
+  /// <summary>Whether the selected run's parameters and results are listed below the table (the Runs tab shows them itself).</summary>
   public bool ShowsDetails { get; init; } = true;
 
   partial void OnRowsChanged(IReadOnlyList<RunTableRow> value) => OnPropertyChanged(nameof(IsEmpty));
 
+  /// <summary>The table as shown: the Run column stays in view.</summary>
+  [ObservableProperty]
+  public partial TableGridViewModel? Grid { get; set; }
+
   partial void OnSelectedChanged(RunTableRow? value) {
+    Grid?.Mark(value);
     if (value == null) { SelectedDetails = []; return; }
     var record = OptimizerRunner.ToRecord(value.Run);
     SelectedDetails = record.Parameters.OrderBy(p => p.Key).Select(p => new NameValue("Parameter: " + p.Key, Text(p.Value)))
@@ -525,6 +530,10 @@ public partial class RunsViewModel(RunCollection runs) : ViewModelBase {
     Columns = columns;
     Rows = records.Select(r => new RunTableRow(r.Run.Name,
       columns.Select(c => r.Record.Results.TryGetValue(c, out var v) ? Text(v) : "").ToList(), r.Run)).ToList();
+    Grid = new TableGridViewModel(
+      [new GridColumn("run", "Run", 170, TableGridViewModel.RunShade), .. columns.Select(c => new GridColumn(c, c, 140))],
+      Rows.Select(r => ((object)r, (IReadOnlyList<string>)[r.Name, .. r.Cells])), item => Selected = item as RunTableRow);
     Selected = Rows.FirstOrDefault(r => ReferenceEquals(r.Run, selected));
+    Grid.Mark(Selected);
   }
 }

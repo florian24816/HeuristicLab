@@ -22,17 +22,15 @@ public sealed class RunsSourceViewModel(string name, string kind, IOptimizer opt
 }
 
 /// <summary>
-/// Run tab: the runs of the experiments loaded in the Experiments tab. A block's runs as a table
+/// Runs tab: the runs of the experiments loaded in the Experiments tab. A block's runs as a table
 /// (HeuristicLab keeps them in the optimizer, so they are saved in its .hl file); a selected run
 /// shows its parameters and its results with their pictures.
 /// </summary>
 public partial class RunsBrowserViewModel : ViewModelBase {
   private readonly ExperimentWorkspaceViewModel workspace;
-  private readonly Action<IRun?> runSelected;
 
-  public RunsBrowserViewModel(ExperimentWorkspaceViewModel workspace, Action<IRun?>? runSelected = null) {
+  public RunsBrowserViewModel(ExperimentWorkspaceViewModel workspace) {
     this.workspace = workspace;
-    this.runSelected = runSelected ?? (_ => { });
   }
 
   public ObservableCollection<RunsSourceViewModel> Sources { get; } = [];
@@ -115,7 +113,6 @@ public partial class RunsBrowserViewModel : ViewModelBase {
     RunResults = run == null ? [] : run.Results.Select(r => new ResultEntryViewModel(r.Key, r.Value, ItemInspector.Summary(r.Value))).ToList();
     SelectedRunResult = RunResults.FirstOrDefault(r => HeuristicLab.Next.Runtime.Visuals.Visualizations.For(r.Value, r.Name).Count > 0 && r.Name.StartsWith("Best", StringComparison.Ordinal))
                         ?? RunResults.FirstOrDefault();
-    runSelected(run);
   }
 
   partial void OnSelectedRunResultChanged(ResultEntryViewModel? value) =>
