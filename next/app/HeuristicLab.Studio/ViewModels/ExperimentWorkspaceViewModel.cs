@@ -16,6 +16,9 @@ using HeuristicLab.Studio.Services;
 
 namespace HeuristicLab.Studio.ViewModels;
 
+/// <summary>A position among a container's children: Index 0 is first, Children.Count after the last.</summary>
+public sealed record DropTarget(ContainerBlockViewModel Container, int Index);
+
 /// <summary>
 /// Experiments tab: several experiments side by side, each a tree of building blocks (algorithm +
 /// problem, batch run, time-limit run) that is a plain HeuristicLab Experiment underneath.
@@ -307,6 +310,137 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
         break;
     }
     RefreshState();
+  }
+
+  // ---- moving (drag and drop) and copying
+
+  /// <summary>What moves when a block is dragged: an algorithm with its problem (also when dragged by
+  /// the problem), a batch run or time-limit run with everything inside; experiments stay.</summary>
+  public static BlockViewModel? Movable(BlockViewModel block) => block switch {
+    ProblemBlockViewModel p => p.Owner,
+    ExperimentBlockViewModel => null,
+    _ => block
+  };
+
+  /// <summary>Whether the block may go into this container: not into itself or its own content; a
+  /// time-limit run holds one algorithm.</summary>
+  public bool CanDrop(BlockViewModel block, ContainerBlockViewModel container) {
+    if (!IsEditable || Movable(block) is not { } moving) return false;
+    if (moving is ContainerBlockViewModel c && ExperimentTree.Contains(c.Optimizer, container.Optimizer)) return false;
+    return container.Optimizer is not TimeLimitRun
+      || moving is AlgorithmBlockViewModel && (container.Children.Count == 0 || container.Children[0] == moving);
+  }
+
+  /// <summary>Position after the block left its old place; null when it would stay where it is.</summary>
+  private static int? Landing(BlockViewModel block, DropTarget target) {
+    int index = Math.Clamp(target.Index, 0, target.Container.Children.Count);
+    if (block.Parent == target.Container) {
+      int old = target.Container.Children.IndexOf(block);
+      if (old < index) index--;
+      if (index == old) return null;
+    }
+    return index;
+  }
+
+  /// <summary>Moves a block (with its content) to a position in a container, in the tree and in HeuristicLab's experiment.</summary>
+  public bool Move(BlockViewModel block, ContainerBlockViewModel container, int index) {
+    if (Movable(block) is not { Parent: { } from } moving || !CanDrop(moving, container)) return false;
+    if (Landing(moving, new DropTarget(container, index)) is not int at) return false;
+    var optimizer = (IOptimizer)moving.Item;
+    from.MarkModified();
+    ExperimentTree.Remove(from.Optimizer, optimizer);
+    from.Children.Remove(moving);
+    from.ChildrenChanged();
+    ExperimentTree.Insert(container.Optimizer, at, optimizer);
+    container.Children.Insert(at, moving);
+    moving.Parent = container;
+    if (moving is AlgorithmBlockViewModel { Problem: { } problem }) problem.Parent = container;
+    container.ChildrenChanged();
+    container.MarkModified();
+    Selected = moving;
+    RefreshState();
+    return true;
+  }
+
+  /// <summary>The block being dragged (null when nothing is).</summary>
+  public BlockViewModel? Dragged { get; private set; }
+
+  /// <summary>Where the dragged block would land now (shown faded there); null: nowhere.</summary>
+  public DropTarget? DropPreview { get; private set; }
+
+  public bool BeginDrag(BlockViewModel block) {
+    EndDrag(false);
+    Dragged = IsEditable ? Movable(block) : null;
+    return Dragged != null;
+  }
+
+  /// <summary>Drop target for the pointer over a block: the upper half of a row means before it, the
+  /// lower half after it - or, for a batch / time-limit run that takes it, first inside it.</summary>
+  public DropTarget? TargetAt(BlockViewModel block, bool upperHalf) {
+    if (block is ProblemBlockViewModel p) block = p.Owner;
+    if (block is ExperimentBlockViewModel experiment) return new DropTarget(experiment, 0);
+    if (block.Parent is not { } parent) return null;
+    int index = parent.Children.IndexOf(block);
+    if (upperHalf) return new DropTarget(parent, index);
+    if (block is ContainerBlockViewModel container && Dragged != null && CanDrop(Dragged, container)) return new DropTarget(container, 0);
+    return new DropTarget(parent, index + 1);
+  }
+
+  /// <summary>Shows the dragged block faded at the target (or nowhere if it cannot or would not move there).</summary>
+  public void PreviewDrop(DropTarget? target) {
+    if (Dragged == null || target != null && (!CanDrop(Dragged, target.Container) || Landing(Dragged, target) == null)) target = null;
+    if (target == DropPreview) return;
+    DropPreview?.Container.SetPreview(null, null);
+    DropPreview = target;
+    target?.Container.SetPreview(target.Index, Dragged);
+  }
+
+  /// <summary>Ends dragging: drops the block where the preview shows it, or (cancelled) leaves it.</summary>
+  public bool EndDrag(bool drop) {
+    var target = DropPreview;
+    var block = Dragged;
+    PreviewDrop(null);
+    Dragged = null;
+    return drop && block != null && target != null && Move(block, target.Container, target.Index);
+  }
+
+  /// <summary>A copy goes next to the original: not for experiments, nor inside a time-limit run (it holds one algorithm).</summary>
+  public bool CanCopy(BlockViewModel block) => Movable(block) is { Parent: { } parent } && parent.Optimizer is not TimeLimitRun;
+
+  /// <summary>
+  /// Copies of a block right after it, each independent (own problem, parameters, content) and unrun,
+  /// named "Name (copy k)".
+  /// </summary>
+  public System.Collections.Generic.IReadOnlyList<BlockViewModel> Copy(BlockViewModel block, int count) {
+    if (!IsEditable || count < 1 || !CanCopy(block) || Movable(block) is not { Parent: { } parent } original) return [];
+    int index = parent.Children.IndexOf(original);
+    string baseName = Regex.Replace(original.Name, @" \(copy \d+\)$", "");
+    var names = parent.Children.Select(c => c.Name).ToHashSet();
+    int k = 0;
+    var copies = new System.Collections.Generic.List<BlockViewModel>();
+    for (int i = 1; i <= count; i++) {
+      var copy = ExperimentTree.Copy((IOptimizer)original.Item);
+      do k++; while (names.Contains($"{baseName} (copy {k})"));
+      copy.Name = $"{baseName} (copy {k})";
+      ExperimentTree.Insert(parent.Optimizer, index + i, copy);
+      var copyBlock = CreateBlock(copy, parent);
+      parent.Children.Insert(index + i, copyBlock);
+      copies.Add(copyBlock);
+    }
+    parent.ChildrenChanged();
+    parent.MarkModified();
+    Selected = copies[^1];
+    RefreshState();
+    Status = count == 1 ? $"Copied {original.Name}." : $"Made {count} copies of {original.Name}.";
+    return copies;
+  }
+
+  public const int MaxCopies = 1000;
+
+  internal async Task CopyManyAsync(BlockViewModel block) {
+    if (dialogs != null && CanCopy(block)
+        && await dialogs.AskNumberAsync("Copy n times", $"How many copies of {Movable(block)!.Name}?", 2, 1, MaxCopies) is int n)
+      Copy(block, n);
   }
 
   private static bool IsWithin(BlockViewModel candidate, BlockViewModel ancestor) {

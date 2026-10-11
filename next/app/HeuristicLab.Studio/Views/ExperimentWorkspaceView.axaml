@@ -21,7 +21,7 @@
         <!-- one building block: squares, name (inline rename), last field; context menu (rename/delete/...) -->
         <DataTemplate x:Key="Block" x:DataType="vm:BlockViewModel">
             <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.fixed="{Binding FixedWidth}"
-                    Tapped="BlockTapped" DoubleTapped="BlockDoubleTapped">
+                    Tapped="BlockTapped" DoubleTapped="BlockDoubleTapped" PointerPressed="BlockPressed">
                 <Border.ContextMenu>
                     <ContextMenu ItemsSource="{Binding Menu}">
                         <ContextMenu.ItemContainerTheme>
@@ -53,6 +53,26 @@
                     </Border>
                 </StackPanel>
             </Border>
+        </DataTemplate>
+
+        <!-- a child of a container; while dragging, the dragged block is shown faded above it where it would land -->
+        <DataTemplate x:Key="ChildSlot" x:DataType="vm:BlockViewModel">
+            <StackPanel Spacing="6">
+                <Border Classes="ghost" IsVisible="{Binding PreviewBefore, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <ContentControl Content="{Binding PreviewBefore}" Opacity="0.4" IsHitTestVisible="False" />
+                </Border>
+                <ContentControl Content="{Binding}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- after the last child: the faded preview there, then the add button -->
+        <DataTemplate x:Key="ChildrenEnd" x:DataType="vm:ContainerBlockViewModel">
+            <StackPanel Spacing="6">
+                <Border Classes="ghost" IsVisible="{Binding PreviewAtEnd, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <ContentControl Content="{Binding PreviewAtEnd}" Opacity="0.4" IsHitTestVisible="False" />
+                </Border>
+                <ContentControl Classes="dropend" Content="{Binding}" ContentTemplate="{StaticResource AddButton}" />
+            </StackPanel>
         </DataTemplate>
 
         <!-- add button of a container, with the building blocks it accepts -->
@@ -131,6 +151,9 @@
             <Setter Property="MinWidth" Value="64" />
             <Setter Property="Padding" Value="10,0" />
         </Style>
+        <Style Selector="Border.ghost">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
         <Style Selector="Button.toggle">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="2,0" />
@@ -147,7 +170,7 @@
         <!-- algorithm row: algorithm left, its problem (or the add-problem button) right -->
         <DataTemplate DataType="vm:AlgorithmBlockViewModel">
             <StackPanel Spacing="3">
-                <Grid ColumnDefinitions="22,Auto,20,Auto">
+                <Grid Classes="droprow" ColumnDefinitions="22,Auto,20,Auto" Background="Transparent">
                     <Button Classes="toggle" Content="&#x25B8;" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding !IsExpanded}"
                             ToolTip.Tip="Show parameters, results and runs" />
                     <Button Classes="toggle" Content="&#x25BE;" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding IsExpanded}" />
@@ -168,14 +191,14 @@
         <!-- batch run / time-limit run: heading, indented children, own add button -->
         <DataTemplate DataType="vm:ContainerBlockViewModel">
             <StackPanel Spacing="6">
-                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Block}" />
+                <ContentControl Classes="droprow" Content="{Binding}" ContentTemplate="{StaticResource Block}" HorizontalAlignment="Left" />
                 <StackPanel Margin="32,0,0,0" Spacing="6">
-                    <ItemsControl ItemsSource="{Binding Children}">
+                    <ItemsControl ItemsSource="{Binding Children}" ItemTemplate="{StaticResource ChildSlot}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
-                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AddButton}" />
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChildrenEnd}" />
                 </StackPanel>
             </StackPanel>
         </DataTemplate>
@@ -192,7 +215,7 @@
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
-            <ScrollViewer HorizontalScrollBarVisibility="Auto">
+            <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto">
                 <StackPanel Spacing="14" IsEnabled="{Binding IsEditable}">
                     <ItemsControl ItemsSource="{Binding Experiments}">
                         <ItemsControl.ItemsPanel>
@@ -200,21 +223,21 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:ExperimentBlockViewModel">
-                                <Border Padding="10" CornerRadius="0" BorderThickness="1"
+                                <Border Classes="dropend" Padding="10" CornerRadius="0" BorderThickness="1" Background="Transparent"
                                         BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
                                     <StackPanel Spacing="8">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <StackPanel Classes="droprow" Orientation="Horizontal" Spacing="10" Background="Transparent">
                                             <CheckBox IsChecked="{Binding IsChecked}" ToolTip.Tip="Include in 'Start selected experiments'" />
                                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Block}" FontWeight="SemiBold" />
                                             <TextBlock Text="{Binding RunStatus}" VerticalAlignment="Center" Opacity="0.75" />
                                         </StackPanel>
                                         <StackPanel Margin="32,0,0,0" Spacing="6">
-                                            <ItemsControl ItemsSource="{Binding Children}">
+                                            <ItemsControl ItemsSource="{Binding Children}" ItemTemplate="{StaticResource ChildSlot}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate>
                                                 </ItemsControl.ItemsPanel>
                                             </ItemsControl>
-                                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AddButton}" />
+                                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChildrenEnd}" />
                                             <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" Foreground="#B0563A"
                                                        FontSize="12" TextWrapping="Wrap" />
                                         </StackPanel>

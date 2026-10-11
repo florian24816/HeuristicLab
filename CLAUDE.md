@@ -38,6 +38,15 @@
   working, finished (also stopped by a time limit), failed. Unsaved = changed since opened/saved
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
   Click: details/parameters, double-click: rename, right-click: menu.
+  Drag and drop (own pointer handling in ExperimentWorkspaceView, logic in the workspace VM:
+  BeginDrag/TargetAt/PreviewDrop/EndDrag/Move): algorithms (also dragged by their problem), batch
+  runs and time-limit runs (with their content) move anywhere, also into other experiments; upper
+  half of a row = before it, lower half = after it or first inside a batch/time-limit run that
+  takes it; add button / experiment border = at the end. A faded copy (opacity 0.4) shows where it
+  lands; Escape cancels. Not into itself; a time-limit run holds one algorithm. Moves go through
+  ExperimentTree.Remove/Insert (HeuristicLab prepares an added optimizer; runs go with it).
+  Copy / Copy n times... (menu): ExperimentTree.Copy = deep clone without runs, inserted after the
+  original as "Name (copy k)"; not for an algorithm inside a time-limit run (copy the run).
   Parameter lists show the parameter kind's pictogram before the name (constrained = choice,
   optional = may be empty, else value). Checked operator lists (analyzers) are numbered: a
   MultiAnalyzer runs its ticked operators in list order. Nested editors below a list get a

@@ -133,7 +133,7 @@ internal static class DataAnalysis {
     var index = classes.Select((c, i) => (c, i)).ToDictionary(p => p.c, p => p.i);
     var counts = new int[classes.Count, classes.Count];
     int total = 0, correct = 0;
-    for (int row = Math.Max(0, range.Start); row < Math.Min(range.End, v.Actual.Count); row++) {
+    for (int row = Math.Max(0, range.Start); row < Math.Min(range.End, v.Actual!.Count); row++) {
       if (!index.TryGetValue(v.Actual[row], out var a) || !index.TryGetValue(v.Predicted![row], out var e)) continue;
       counts[a, e]++;
       total++;

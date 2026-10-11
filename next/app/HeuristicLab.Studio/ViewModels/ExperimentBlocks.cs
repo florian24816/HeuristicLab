@@ -25,7 +25,12 @@ public sealed record MenuChoice(string Display, System.Windows.Input.ICommand Co
 /// </summary>
 public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel workspace, ContainerBlockViewModel? parent) : ViewModelBase {
   public ExperimentWorkspaceViewModel Workspace { get; } = workspace;
-  public ContainerBlockViewModel? Parent { get; } = parent;
+  /// <summary>The container holding this block (changes when the block is moved).</summary>
+  public ContainerBlockViewModel? Parent { get; internal set; } = parent;
+
+  /// <summary>While a block is dragged: shown faded above this block, where it would land.</summary>
+  [ObservableProperty]
+  public partial BlockViewModel? PreviewBefore { get; set; }
   public abstract INamedItem Item { get; }
   /// <summary>What kind of block this is, e.g. "Batch Run" or "Traveling Salesman Problem".</summary>
   public string Kind => Item.ItemName;
@@ -100,6 +105,16 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [RelayCommand]
   private Task DeleteAsync() => Workspace.DeleteAsync(this);
 
+  [RelayCommand]
+  private void Copy() => Workspace.Copy(this, 1);
+
+  [RelayCommand]
+  private Task CopyManyAsync() => Workspace.CopyManyAsync(this);
+
+  /// <summary>"Copy" and "Copy n times..." where a copy can go next to the block.</summary>
+  protected IReadOnlyList<MenuChoice> CopyMenu =>
+    Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
+
   /// <summary>Context menu of the block.</summary>
   public virtual IReadOnlyList<MenuChoice> Menu => [new("Rename", RenameCommand), new("Delete", DeleteCommand)];
 
@@ -135,10 +150,20 @@ public partial class ContainerBlockViewModel : BlockViewModel {
 
   public void RefreshRuns() => runs?.Refresh();
   public ObservableCollection<BlockViewModel> Children { get; } = [];
+
+  /// <summary>While a block is dragged: shown faded after the last child, where it would land.</summary>
+  [ObservableProperty]
+  public partial BlockViewModel? PreviewAtEnd { get; set; }
+
+  /// <summary>Shows the dragged block faded at a position among the children (null: nowhere).</summary>
+  public void SetPreview(int? index, BlockViewModel? block) {
+    for (int i = 0; i < Children.Count; i++) Children[i].PreviewBefore = i == index ? block : null;
+    PreviewAtEnd = index == Children.Count ? block : null;
+  }
   public IReadOnlyList<MenuChoice> AddChoices { get; }
 
   public override IReadOnlyList<MenuChoice> Menu =>
-    [new("Show in Run tab", new RelayCommand(() => Workspace.ShowInRunTab(this))), .. base.Menu];
+    [new("Show in Run tab", new RelayCommand(() => Workspace.ShowInRunTab(this))), .. CopyMenu, .. base.Menu];
 
   /// <summary>A time-limit run holds one algorithm, so its add button goes away once it has one.</summary>
   public bool CanAdd => Optimizer is not TimeLimitRun || Children.Count == 0;
@@ -400,7 +425,7 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
 
   public override IReadOnlyList<MenuChoice> Menu =>
     [new(HasProblem ? "Change problem..." : "Add problem...", ChooseProblemCommand), new("Show in Run tab", ShowInRunTabCommand),
-     new("Rename", RenameCommand), new("Delete", DeleteCommand)];
+     .. CopyMenu, new("Rename", RenameCommand), new("Delete", DeleteCommand)];
 
   internal void SetProblem(IProblem? problem) {
     if (Problem?.IsSelected == true) Workspace.Selected = null;

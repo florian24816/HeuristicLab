@@ -37,12 +37,18 @@ public static class ExperimentTree {
     _ => false
   };
 
-  public static void Add(IOptimizer container, IOptimizer child) {
+  public static void Add(IOptimizer container, IOptimizer child) => Insert(container, Children(container).Count, child);
+
+  /// <summary>
+  /// Puts a child at a position among the container's children (0 = first). HeuristicLab's
+  /// experiments run their optimizers in this order, and prepare an optimizer that is added.
+  /// </summary>
+  public static void Insert(IOptimizer container, int index, IOptimizer child) {
     if (!CanAdd(container, child.GetType()))
       throw new ArgumentException($"{container.Name} cannot contain {child.Name}.");
     switch (container) {
       case Experiment e:
-        e.Optimizers.Add(child);
+        e.Optimizers.Insert(Math.Clamp(index, 0, e.Optimizers.Count), child);
         break;
       case BatchRun b:
         if (b.Optimizer is not Experiment { Name: BatchContentName } inner) {
@@ -52,7 +58,7 @@ public static class ExperimentTree {
           if (existing != null) inner.Optimizers.Add(existing);
           b.Optimizer = inner;
         }
-        inner.Optimizers.Add(child);
+        inner.Optimizers.Insert(Math.Clamp(index, 0, inner.Optimizers.Count), child);
         break;
       case TimeLimitRun t:
         t.Algorithm = (IAlgorithm)child;
@@ -66,6 +72,30 @@ public static class ExperimentTree {
       case BatchRun { Optimizer: Experiment { Name: BatchContentName } inner }: inner.Optimizers.Remove(child); break;
       case BatchRun b when b.Optimizer == child: b.Optimizer = null; break;
       case TimeLimitRun t when t.Algorithm == child: t.Algorithm = null; break;
+    }
+  }
+
+  /// <summary>Whether a container is this optimizer or lies inside it (a block cannot be moved into itself).</summary>
+  public static bool Contains(IOptimizer root, IOptimizer node) =>
+    root == node || (IsContainer(root) && Children(root).Any(c => Contains(c, node)));
+
+  /// <summary>
+  /// An independent copy of a building block with everything inside it (an algorithm with its
+  /// problem and parameters, a batch run or time-limit run with its content), without results
+  /// and runs: a copy starts unrun.
+  /// </summary>
+  public static IOptimizer Copy(IOptimizer optimizer) {
+    var copy = (IOptimizer)optimizer.Clone();
+    ClearRuns(copy);
+    return copy;
+  }
+
+  private static void ClearRuns(IOptimizer optimizer) {
+    foreach (var child in IsContainer(optimizer) ? Children(optimizer) : []) ClearRuns(child);
+    try {
+      optimizer.Prepare(clearRuns: true);
+    } catch (Exception e) when (e is InvalidOperationException or NullReferenceException) {
+      optimizer.Runs.Clear();  // e.g. an algorithm without problem
     }
   }
 
