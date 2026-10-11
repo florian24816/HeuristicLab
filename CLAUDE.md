@@ -112,7 +112,9 @@
   ancestors afterwards): every new or changed solution is a step (operator, parents, quality,
   iteration, time). Copies made by selection are recognized by content fingerprint (not new);
   crossover parents are the scope's sub-scopes. Iterations end at the algorithm's Analyzer (as
-  HeuristicLab's quality charts index them), else at the Generations/Iterations counter. Raw
+  HeuristicLab's quality charts index them), else at the Generations/Iterations counter; an iteration
+  may create nothing (local search at its local optimum keeps iterating) and still counts - the view
+  then shows the solution kept from before. Raw
   solutions are drawn with their problem via Visualizations.ForSolution (decoders run in a scope
   holding the problem's parameters) and combined by Visuals.Composition: current solution red, what
   it has beyond its ancestors from before its iteration yellow, earlier iterations blue shades,

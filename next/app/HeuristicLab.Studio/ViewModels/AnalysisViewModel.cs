@@ -248,8 +248,10 @@ public partial class AnalysisViewModel : ViewModelBase {
   /// <summary>Draws the current step's solution over the faded solutions of earlier iterations (and its parents).</summary>
   private void ShowCursor() {
     UpdateTexts();
-    if (Trace is not { } trace || IterationAt(CurrentIteration) is not { StepCount: > 0 } it) return;
-    var current = trace.Solution(it.FirstStep + Math.Clamp(CurrentStep, 0, it.StepCount - 1));
+    if (Trace is not { } trace || IterationAt(CurrentIteration) is not { } it) return;
+    // an iteration that created nothing kept the solution from before it
+    if (it.StepCount == 0 && it.FirstStep == 0) return;
+    var current = trace.Solution(it.StepCount > 0 ? it.FirstStep + Math.Clamp(CurrentStep, 0, it.StepCount - 1) : it.FirstStep - 1);
     if (current.Solution == null) {
       Visuals.Show([new TextVisual("Not kept", $"Solution #{current.Id} was recorded after the storage limit ({trace.StorageLimit:N0}); raise \"Keep\" to draw it.")]);
       return;
@@ -378,7 +380,9 @@ public partial class AnalysisViewModel : ViewModelBase {
       var s = trace.Solution(it.FirstStep + Math.Clamp(CurrentStep, 0, it.StepCount - 1));
       string from = s.Parents.Count == 0 ? "" : $" from {string.Join(", ", s.Parents.Select(p => "#" + p))}";
       StepText = $"Step {CurrentStep + 1} of {it.StepCount}: {s.Operator} created #{s.Id}{from} · quality {Q(s.Quality)} · at {Seconds(s.Seconds)}";
-    } else StepText = "No solution was created in this iteration.";
+    } else StepText = it.FirstStep > 0
+      ? $"No new solution in this iteration: #{it.FirstStep - 1} (quality {Q(trace.Solution(it.FirstStep - 1).Quality)}) stays."
+      : "No solution was created in this iteration.";
     if (Range is var (a, b)) {
       var inRange = iterations.Where(i => i.Number >= a && i.Number <= b).ToList();
       var first = inRange.FirstOrDefault();

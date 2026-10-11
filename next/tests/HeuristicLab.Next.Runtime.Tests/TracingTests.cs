@@ -60,6 +60,21 @@ public class TracingTests {
     Assert.AreEqual(Result(trace, "BestQuality"), trace.Iterations()[^1].BestSoFar);
   }
 
+  /// <summary>
+  /// HeuristicLab's local search keeps iterating at its local optimum (it stops at MaximumIterations
+  /// only): those iterations create no solution but still count, as in its own quality chart.
+  /// </summary>
+  [TestMethod]
+  public void IterationsWithoutNewSolutionsStillCount() {
+    var ls = Tsp("LocalSearch", "MaximumIterations=1000");
+    var trace = Trace(ls);
+    var iterations = trace.Iterations();
+    CollectionAssert.AreEqual(Enumerable.Range(0, 1001).ToList(), iterations.Select(i => i.Number).ToList(), "initialization and 1000 iterations");
+    Assert.IsTrue(iterations[^1].StepCount == 0, "the local optimum was reached before the last iteration");
+    Assert.IsTrue(iterations.Skip(1).All(i => i.StepCount <= 1), "at most one improving move per iteration");
+    Assert.AreEqual(Result(trace, "BestQuality"), iterations[^1].BestSoFar);
+  }
+
   [TestMethod]
   public void StorageLimitKeepsCountingWithoutCopies() {
     var trace = Trace(Tsp("GeneticAlgorithm", "PopulationSize=20", "MaximumGenerations=3"), storageLimit: 25);

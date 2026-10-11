@@ -259,8 +259,13 @@ internal sealed class Recorder(Trace trace, IProblem problem, IOperator? analyze
     if (global == null) { global = scope; while (global.Parent != null) global = global.Parent; }
     if (trace.SolutionCount == 0) trace.BeginIteration(0, clock.Elapsed.TotalSeconds);
     if (analyzer != null) {
-      // the analyzer closes an iteration; the next begins with the next solution (none after the last)
-      if (ReferenceEquals(operation.Operator, analyzer)) pendingStart ??= clock.Elapsed.TotalSeconds;
+      // the analyzer closes an iteration; the next begins with the next solution or the next
+      // analyzer call, whichever comes first - an iteration may create nothing (a local search at its
+      // local optimum keeps iterating); the analyzer after the last iteration opens none
+      if (ReferenceEquals(operation.Operator, analyzer)) {
+        if (pendingStart is double open) trace.BeginIteration(++iteration, open);
+        pendingStart = clock.Elapsed.TotalSeconds;
+      }
     } else UpdateIteration();
     // the creator may only schedule other operators (a multi-encoding creator runs one per part):
     // watch its scope until a variable appears
