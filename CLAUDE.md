@@ -164,6 +164,12 @@
   them by the ScrollViewer offset, ZIndex above; the header sticks the same way vertically):
   Results: Source #FDE5C8, Origin #FBCD96, Run #F9B462 (palest to closest to the logo orange);
   Runs: Run #F9B462. Click a row to select it (blue overlay); Results header click sorts.
+  Pickers keep one searchable list (not HeuristicLab's collapsed tree) but show its categories
+  (CatalogEntry.Category/CategoryOrder/Priority from [Creatable], Catalog.ByCategory): CatalogItem rows
+  tinted per category (CategoryColors: light tint + dark heading color, no orange), the first row of
+  a category carries its name (CatalogItemTemplate / ListBox.catalog in App.axaml). Algorithm
+  picker (CatalogPickerWindow); problem dialog (NewSetupWindow): problem list (searchable, grouped)
+  and benchmark instances (searchable, "(none)" always first) side by side.
   Settings (~/.config/HeuristicLab.Studio/settings.json): recent files and resource limits.
   Own LineChart control.
   Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,

@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="HeuristicLab.Studio.App"
              xmlns:local="using:HeuristicLab.Studio"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
@@ -31,5 +32,24 @@
             <Setter Property="BorderThickness" Value="2" />
             <Setter Property="Padding" Value="8,0,8,0" />
         </Style>
+        <!-- categorized lists (algorithms, problems): each row tinted with its category's color,
+             the first row of a category headed by the category's name -->
+        <Style Selector="ListBox.catalog > ListBoxItem" x:DataType="vm:CatalogItem">
+            <Setter Property="Background" Value="{Binding Tint}" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Margin" Value="0,0,0,1" />
+        </Style>
     </Application.Styles>
+
+    <Application.Resources>
+        <DataTemplate x:Key="CatalogItemTemplate" x:DataType="vm:CatalogItem">
+            <StackPanel Spacing="1">
+                <TextBlock Text="{Binding Category}" IsVisible="{Binding StartsGroup}" Foreground="{Binding Accent}"
+                           FontWeight="Bold" FontSize="12" Margin="0,6,0,4" />
+                <TextBlock Text="{Binding Display}" FontWeight="SemiBold" Foreground="#1E1E1E" />
+                <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" Foreground="#1E1E1E" Opacity="0.7"
+                           FontSize="12" TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
+    </Application.Resources>
 </Application>

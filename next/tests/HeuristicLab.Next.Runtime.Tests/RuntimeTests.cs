@@ -92,6 +92,21 @@ public class RuntimeTests {
   }
 
   /// <summary>Progress&lt;T&gt; posts to the thread pool; this one reports inline for deterministic tests.</summary>
+  /// <summary>HeuristicLab's "New item" categories, in its order (they group and color Studio's pickers).</summary>
+  [TestMethod]
+  public void CatalogEntriesCarryHeuristicLabsCategories() {
+    Assert.AreEqual("Algorithms / Population Based", Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!.Category);
+    Assert.AreEqual("Algorithms / Single Solution", Catalog.Find(Catalog.Algorithms(), "TabuSearch")!.Category);
+    Assert.AreEqual("Problems / Combinatorial", Catalog.Find(Catalog.Problems(), "TravelingSalesmanProblem")!.Category);
+    var algorithms = Catalog.ByCategory(Catalog.Algorithms()).Select(e => e.Category).Distinct().ToList();
+    var problems = Catalog.ByCategory(Catalog.Problems()).Select(e => e.Category).Distinct().ToList();
+    Console.WriteLine("Algorithms: " + string.Join(" | ", algorithms));
+    Console.WriteLine("Problems: " + string.Join(" | ", problems));
+    Assert.IsTrue(algorithms.IndexOf("Algorithms / Population Based") < algorithms.IndexOf("Algorithms / Single Solution") && algorithms[^1] == "Other Items", "HeuristicLab's order");
+    Assert.AreEqual(algorithms.Count, Catalog.ByCategory(Catalog.Algorithms()).Select(e => e.Category).Chunk(1).Select(c => c[0])
+      .Aggregate(new List<string>(), (l, c) => { if (l.Count == 0 || l[^1] != c) l.Add(c); return l; }).Count, "each category in one block");
+  }
+
   private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T> {
     private readonly object sync = new();
     public void Report(T value) { lock (sync) report(value); }

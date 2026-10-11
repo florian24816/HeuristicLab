@@ -26,6 +26,59 @@ public class StudioWorkflowTests {
     Problem = "TravelingSalesmanProblem", Instance = "berlin52", Settings = ["PopulationSize=20", "MaximumGenerations=10"]
   });
 
+  /// <summary>One list as before, but grouped by HeuristicLab's categories: a heading and a tint per category.</summary>
+  [TestMethod]
+  public async Task AlgorithmPickerGroupsAndTintsByCategory() {
+    await OnUiThread(() => {
+      var vm = new CatalogPickerViewModel("Add algorithm", Catalog.Algorithms());
+      var headings = vm.Visible.Where(i => i.StartsGroup).Select(i => i.Category).ToList();
+      CollectionAssert.AllItemsAreUnique(headings, "each category is one block");
+      CollectionAssert.Contains(headings, "Algorithms / Population Based");
+      CollectionAssert.Contains(headings, "Algorithms / Single Solution");
+      Assert.AreEqual(headings.Count, vm.Visible.Select(i => i.Tint).Distinct().Count(), "one color per category");
+      var ga = vm.Visible.Single(i => i.Display == "Genetic Algorithm (GA)");
+      Assert.AreEqual("Algorithms / Population Based", ga.Category);
+      Assert.AreSame(CategoryColors.For(ga.Category).Tint, ga.Tint);
+
+      var window = new CatalogPickerWindow { DataContext = vm };
+      window.Show();
+      window.CaptureRenderedFrame()!.Save(Shot("studio-algorithm-picker.png"));
+      vm.Filter = "tabu";
+      Assert.IsTrue(vm.Visible.All(i => i.Category == "Algorithms / Single Solution") && vm.Visible[0].StartsGroup, "a search keeps the headings");
+      Assert.AreEqual("Tabu Search (TS)", vm.Selected!.Name);
+      window.CaptureRenderedFrame()!.Save(Shot("studio-algorithm-picker-search.png"));
+      window.Close();
+      return 0;
+    });
+  }
+
+  /// <summary>Problem and benchmark instance side by side, both searchable; problems grouped and tinted by category.</summary>
+  [TestMethod]
+  public async Task ProblemDialogSearchesProblemsAndInstances() {
+    var (created, file) = await OnUiThread(() => {
+      var vm = new NewSetupViewModel(null, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm"));
+      Assert.IsTrue(vm.VisibleProblems.All(i => i.Category != Choice.DefaultCategory), "a GA brings no problem of its own");
+      CollectionAssert.AllItemsAreUnique(vm.VisibleProblems.Where(i => i.StartsGroup).Select(i => i.Category).ToList(), "each category is one block");
+      CollectionAssert.Contains(vm.VisibleProblems.Where(i => i.StartsGroup).Select(i => i.Category).ToList(), "Problems / Combinatorial");
+      var window = new NewSetupWindow { DataContext = vm };
+      window.Show();
+      vm.ProblemFilter = "salesman";
+      Assert.IsTrue(vm.VisibleProblems.Count >= 1 && vm.VisibleProblems.All(i => i.Display.Contains("Salesman", StringComparison.OrdinalIgnoreCase)));
+      vm.SelectedProblemItem = vm.VisibleProblems.Single(i => ((Choice)i.Value!).Entry?.Type == typeof(TravelingSalesmanProblem));
+      Assert.AreEqual(typeof(TravelingSalesmanProblem), vm.SelectedProblem!.Entry!.Type);
+      Assert.IsTrue(vm.HasInstances);
+      vm.InstanceFilter = "berlin";
+      Assert.AreEqual("(none)", vm.VisibleInstances[0], "no instance stays choosable");
+      vm.SelectedInstance = vm.VisibleInstances.Single(i => i.EndsWith("/berlin52"));
+      var path = Shot("studio-problem-dialog.png");
+      window.CaptureRenderedFrame()!.Save(path);
+      window.Close();
+      return (vm.Create() ? vm.Result : null, path);
+    });
+    Assert.AreEqual(52, ((TravelingSalesmanProblem)((GeneticAlgorithm)created!.Algorithm).Problem).Coordinates.Rows);
+    Assert.IsTrue(new FileInfo(file).Length > 10_000);
+  }
+
   [TestMethod]
   public async Task NewDialogBuildsGaForBenchmarkInstance() {
     var (created, instances, file) = await OnUiThread(() => {

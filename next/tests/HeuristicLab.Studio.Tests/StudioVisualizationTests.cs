@@ -97,7 +97,8 @@ public class StudioVisualizationTests {
       var experiment = ws.NewExperiment();
       var block = ws.AddAlgorithm(experiment, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
       ws.SetProblem(block, (IProblem)Catalog.Find(Catalog.Problems(), "HeuristicLab.Problems.GeneticProgramming.ArtificialAnt.Problem")!.CreateInstance());
-      ParameterEditor.Apply(block.Algorithm, ["MaximumGenerations=100000"]);
+      // seeded: an unlucky random run can go a minute without a better ant
+      ParameterEditor.Apply(block.Algorithm, ["MaximumGenerations=100000", "SetSeedRandomly=false", "Seed=1"]);
       ws.Selected = block;
       var detail = (AlgorithmDetailViewModel)ws.Detail!;
       Assert.AreEqual("World", detail.ProblemVisuals.Title, "the problem tab shows the ant's world");
