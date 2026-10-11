@@ -51,6 +51,18 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   public AnalysisViewModel Analysis { get; }
   public AlgorithmBlockViewModel Block => block;
 
+  /// <summary>
+  /// Shift+Enter on the field edited across algorithms: the algorithm is named after that field's
+  /// value (AutoName), e.g. "LS_maxIt300". False if this field is not the one being edited across algorithms.
+  /// </summary>
+  public bool NameAfterField(string key) {
+    if (!CanEdit || block.Workspace.MultiEditKeyFor(block) != key) return false;
+    var name = AutoName.Apply(block.Name, Algorithm, key);
+    Name = name;
+    Message = $"Named {name}";
+    return true;
+  }
+
   public string Name {
     get => block.Name;
     set { block.Name = value; OnPropertyChanged(); }

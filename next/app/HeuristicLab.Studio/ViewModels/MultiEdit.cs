@@ -32,6 +32,14 @@ public static class MultiEdit {
 
   /// <summary>Whether the algorithm has this field (an editable value or a choice) at this path.</summary>
   public static bool Resolves(IAlgorithm algorithm, string key) {
+    if (ParameterAt(algorithm, key) is not { } parameter) return false;
+    return IsChoice(key)
+      ? ItemInspector.Choices(parameter) is { Count: > 0 }
+      : ItemInspector.KindOf(ItemInspector.Value(parameter)) is ValueKind.Text or ValueKind.Bool;
+  }
+
+  /// <summary>The parameter a field key ends at (null if the algorithm has none there).</summary>
+  public static IParameter? ParameterAt(IAlgorithm algorithm, string key) {
     var steps = Steps(key);
     object? current = steps[0] switch {
       AlgorithmTab => algorithm,
@@ -45,28 +53,25 @@ public static class MultiEdit {
       switch (step[..2]) {
         case "p:":
           parameter = current is IParameterizedItem item ? ItemInspector.Parameters(item).FirstOrDefault(p => p.Name == name) : null;
-          if (parameter == null) return false;
+          if (parameter == null) return null;
           current = ItemInspector.Value(parameter);
           break;
         case "e:":
           var list = CheckedList.TryCreate(current as IItem);
           current = list == null ? null : Enumerable.Range(0, list.Count).Select(i => list[i]).FirstOrDefault(x => (x as INamedItem)?.Name == name);
-          if (current == null) return false;
+          if (current == null) return null;
           break;
         case "o:":
         case "n:":
-          if (current is not OperatorGraph graph || NodeAt(graph, name) is not { } op) return false;
+          if (current is not OperatorGraph graph || NodeAt(graph, name) is not { } op) return null;
           current = step[0] == 'o' ? ItemInspector.GraphOf(op) : op;
-          if (current == null) return false;
+          if (current == null) return null;
           break;
         default:
-          return false;
+          return null;
       }
     }
-    if (parameter == null) return false;
-    return IsChoice(key)
-      ? ItemInspector.Choices(parameter) is { Count: > 0 }
-      : ItemInspector.KindOf(ItemInspector.Value(parameter)) is ValueKind.Text or ValueKind.Bool;
+    return parameter;
   }
 
   /// <summary>"index:name" of a node in the graph's layout (the name must match too).</summary>
@@ -85,4 +90,7 @@ public sealed record MultiEditState(ExperimentBlockViewModel Root, Type Algorith
 public interface IMultiField {
   /// <summary>Shift+click on the field: starts editing it across algorithms, or ends it; false if not possible here.</summary>
   bool ToggleMulti();
+
+  /// <summary>The field's key while it is the one edited across algorithms, else null.</summary>
+  string? MultiKey { get; }
 }

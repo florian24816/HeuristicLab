@@ -61,7 +61,14 @@
   is purple (App.axaml styles, class "multi"). Clicking a purple block shows the same field there
   (AlgorithmDetailViewModel.Reveal: tab, parameter, analyzer entry, graph node) and focuses it
   (text selected; a choice's list opens: arrows + Enter or click). Shift+click on a purple block or
-  the purple field ends it. Fields are addressed by keys like a/p:Analyzer/e:Name/p:X#value or
+  the purple field ends it. Shift+Enter in the purple field takes the value and names that algorithm
+  after it (ViewModels/AutoName.cs; bubble KeyDown with handledEventsToo in AlgorithmDetailView):
+  default/copy/empty name -> "<algorithm tag>_<tag>" (LS_maxIt300), own name kept in front
+  (Randomname_LS_maxIt300), a name in this form gets the tag added or that parameter's tag replaced
+  (LS_maxIt300_MG-StochInvMultiMG). Tags: value = words cut to their first syllable, lower camel +
+  value (never starting lower case); choice = initials (one word: first syllable) + "-" + operator
+  type name shortened, its ending repeating the parameter written as the parameter's tag; algorithm
+  tag = the "(..)" of its name, else initials. Fields are addressed by keys like a/p:Analyzer/e:Name/p:X#value or
   g/o:2:MainLoop/n:5:Name/p:Y#choice (EditContext.MultiTarget/ToggleMulti; editors rebuilt when
   MultiVersion changes).
   Parameter lists show the parameter kind's pictogram before the name (constrained = choice,

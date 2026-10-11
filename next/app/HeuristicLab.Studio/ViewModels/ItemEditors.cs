@@ -101,6 +101,7 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
   public bool IsMultiTarget => context.IsMultiTarget(ChoiceKey);
 
   public bool ToggleMulti() => IsChoice && ChoiceKey != null && context.ToggleMulti?.Invoke(ChoiceKey) == true;
+  public string? MultiKey => IsMultiTarget ? ChoiceKey : null;
 
   /// <summary>
   /// Pictogram of the parameter's kind: a choice among given values (constrained), a value that may
@@ -280,6 +281,7 @@ public partial class ValueEditorViewModel : ViewModelBase, IMultiField {
   public bool IsMultiTarget => context.IsMultiTarget(ValueKey);
 
   public bool ToggleMulti() => ValueKey != null && context.ToggleMulti?.Invoke(ValueKey) == true;
+  public string? MultiKey => IsMultiTarget ? ValueKey : null;
   public ValueKind Kind { get; }
   public bool ReadOnly { get; }
   public bool IsNone => Kind == ValueKind.None;

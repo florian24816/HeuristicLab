@@ -252,4 +252,83 @@ public class StudioMultiEditTests {
     Assert.IsFalse(MultiEdit.Resolves(ls, "a/p:NoSuchParameter#value"));
     Assert.IsFalse(MultiEdit.Resolves(ls, "a/p:Analyzer/e:NoSuchAnalyzer/p:UpdateInterval#value"));
   }
+
+  /// <summary>
+  /// Shift+Enter in the purple field: the value is taken and the algorithm named after it -
+  /// "Local Search (LS)" and its copies become LS_maxIt300, a name of its own stays in front;
+  /// a later choice is added to the name instead of starting it again.
+  /// </summary>
+  [TestMethod]
+  public async Task ShiftEnterNamesTheAlgorithmAfterTheValue() {
+    var shot = await session.Dispatch(() => {
+      var (_, ws, window, first, all, _, _) = Build();
+      all[2].Name = "Randomname";
+      Assert.AreEqual("Local Search (LS) (copy 1)", all[1].Name);
+      var detail = first.Detail;
+      detail.AlgorithmParameters.Selected = detail.AlgorithmParameters.Parameters.First(p => p.Name == "MaximumIterations");
+      Pump();
+      Click(window, Visible<TextBox>(window, t => t.Classes.Contains("field") && t.DataContext is ValueEditorViewModel { Path: "a/p:MaximumIterations" }), RawInputModifiers.Shift);
+      foreach (var block in all.Take(3)) {
+        if (block != first) Click(window, BlockOf(window, block));
+        window.KeyTextInput("300");
+        window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.Shift);
+        Pump();
+        Assert.AreEqual("300", Value(block.Algorithm, "MaximumIterations"), "Shift+Enter takes the value");
+      }
+      CollectionAssert.AreEqual(new[] { "LS_maxIt300", "LS_maxIt300", "Randomname_LS_maxIt300" }, all.Take(3).Select(b => b.Name).ToList());
+      Assert.AreEqual("Local Search (LS) (copy 3)", all[3].Name, "not edited: not renamed");
+
+      // end it (Shift+click on the field), then the move generator across algorithms
+      Click(window, Visible<TextBox>(window, t => t.Classes.Contains("field") && t.Classes.Contains("multi")), RawInputModifiers.Shift);
+      Assert.IsNull(ws.MultiEditing);
+      Click(window, BlockOf(window, first));
+      var node = first.Detail.AlgorithmParameters.Parameters.First(p => p.Name == "MoveGenerator");
+      first.Detail.AlgorithmParameters.Selected = node;
+      Pump();
+      var combo = Visible<ComboBox>(window, c => c.Classes.Contains("field") && c.DataContext == node);
+      Click(window, combo, RawInputModifiers.Shift);
+      Assert.AreEqual("a/p:MoveGenerator#choice", ws.MultiEditing?.Key);
+      window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+      node.SelectedChoice = node.Choices.Single(c => c.Item.GetType().Name == "StochasticInversionMultiMoveGenerator");
+      combo.Focus();
+      window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.Shift);
+      Pump();
+      Assert.AreEqual("LS_maxIt300_MG-StochInvMultiMG", first.Name, "added to the name already in this form");
+      var file = Path.Combine(AppContext.BaseDirectory, "studio-auto-name.png");
+      window.CaptureRenderedFrame()!.Save(file);
+      window.Close();
+      return Task.FromResult(file);
+    }, CancellationToken.None);
+    Assert.IsTrue(new FileInfo(shot).Length > 5_000);
+  }
+
+  [TestMethod]
+  public void AutoNamesShortenEveryParameter() {
+    var ls = Setups.Create(new SetupRequest("LocalSearch") { Problem = "TravelingSalesmanProblem", Instance = "berlin52" }).Algorithm;
+    const string iterations = "a/p:MaximumIterations#value", generator = "a/p:MoveGenerator#choice";
+    ParameterEditor.Apply(ls, ["MaximumIterations=300"]);
+    Assert.AreEqual("LS", AutoName.AlgorithmTag(ls));
+    Assert.AreEqual("LS_maxIt300", AutoName.Apply("", ls, iterations), "no name");
+    Assert.AreEqual("LS_maxIt300", AutoName.Apply("Local Search (LS)", ls, iterations));
+    Assert.AreEqual("LS_maxIt300", AutoName.Apply("Local Search (LS) (copy 4)", ls, iterations));
+    Assert.AreEqual("Randomname_LS_maxIt300", AutoName.Apply("Randomname", ls, iterations));
+    // the same parameter again: its tag is replaced, the others stay
+    ParameterEditor.Apply(ls, ["MaximumIterations=500"]);
+    Assert.AreEqual("LS_maxIt500_MG-StochInvMultiMG", AutoName.Apply("LS_maxIt300_MG-StochInvMultiMG", ls, iterations));
+    Assert.AreEqual("Randomname_LS_maxIt500", AutoName.Apply("Randomname_LS_maxIt300 (copy 1)", ls, iterations));
+    Assert.AreEqual("MG", AutoName.ParameterTag("MoveGenerator", choice: true));
+    Assert.AreEqual("StochInvMultiMG", AutoName.ChoiceTag("StochasticInversionMultiMoveGenerator", "MoveGenerator"));
+
+    // every parameter of every algorithm gets a tag: words in it, distinct within the algorithm
+    var failures = new List<string>();
+    foreach (var entry in Catalog.Algorithms()) {
+      IAlgorithm algorithm;
+      try { algorithm = (IAlgorithm)entry.CreateInstance(); } catch (Exception) { continue; }
+      var tags = HeuristicLab.Next.Runtime.ItemInspector.Parameters(algorithm).Select(p => (p.Name, Tag: AutoName.ParameterTag(p.Name, false))).ToList();
+      failures.AddRange(tags.Where(t => t.Tag.Length == 0 || t.Tag.Contains('_') || t.Tag.Any(char.IsWhiteSpace)).Select(t => $"{entry.Name}: {t.Name} -> '{t.Tag}'"));
+      failures.AddRange(tags.GroupBy(t => t.Tag).Where(g => g.Count() > 1).Select(g => $"{entry.Name}: {string.Join(", ", g.Select(t => t.Name))} -> {g.Key}"));
+      if (AutoName.AlgorithmTag(algorithm) is var a && (a.Length == 0 || a.Contains('_'))) failures.Add($"{entry.Name}: algorithm tag '{a}'");
+    }
+    Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures));
+  }
 }
