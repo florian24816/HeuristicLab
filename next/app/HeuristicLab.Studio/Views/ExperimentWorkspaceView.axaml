@@ -61,7 +61,7 @@
                 <Border Classes="ghost" IsVisible="{Binding PreviewBefore, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <ContentControl Content="{Binding PreviewBefore}" Opacity="0.4" IsHitTestVisible="False" />
                 </Border>
-                <ContentControl Content="{Binding}" />
+                <ContentControl Content="{Binding}" IsVisible="{Binding !IsMoving}" />
             </StackPanel>
         </DataTemplate>
 

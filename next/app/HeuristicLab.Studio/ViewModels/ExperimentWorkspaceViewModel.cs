@@ -393,6 +393,8 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     DropPreview?.Container.SetPreview(null, null);
     DropPreview = target;
     target?.Container.SetPreview(target.Index, Dragged);
+    // only one of the two at a time: the faded preview at the new place, or the block at its old place
+    if (Dragged != null) Dragged.IsMoving = target != null;
   }
 
   /// <summary>Ends dragging: drops the block where the preview shows it, or (cancelled) leaves it.</summary>
@@ -400,6 +402,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     var target = DropPreview;
     var block = Dragged;
     PreviewDrop(null);
+    if (block != null) block.IsMoving = false;
     Dragged = null;
     return drop && block != null && target != null && Move(block, target.Container, target.Index);
   }

@@ -130,8 +130,10 @@ public class StudioDragDropTests {
       // lower half of the batch header: first inside the batch
       var target = ws.TargetAt(batch, upperHalf: false)!;
       Assert.AreEqual(new DropTarget(batch, 0), target);
+      Assert.IsFalse(a.IsMoving, "no preview yet: the block stays visible");
       ws.PreviewDrop(target);
       Assert.AreSame(a, b1.PreviewBefore, "shown faded above B1");
+      Assert.IsTrue(a.IsMoving, "with a preview the original is hidden");
       // lower half of B1: after it, at the batch's end
       ws.PreviewDrop(ws.TargetAt(b1, upperHalf: false));
       Assert.IsNull(b1.PreviewBefore);
@@ -140,6 +142,7 @@ public class StudioDragDropTests {
       ws.PreviewDrop(ws.TargetAt(batch, upperHalf: true));
       Assert.IsNull(ws.DropPreview);
       Assert.IsNull(batch.PreviewAtEnd);
+      Assert.IsFalse(a.IsMoving, "no preview: the block shows at its place again");
       // an empty time-limit run takes it
       ws.PreviewDrop(ws.TargetAt(timeLimit, upperHalf: false));
       Assert.AreEqual(new DropTarget(timeLimit, 0), ws.DropPreview);
@@ -148,6 +151,7 @@ public class StudioDragDropTests {
       // cancelled: nothing moves, the preview goes away
       Assert.IsFalse(ws.EndDrag(drop: false));
       Assert.IsNull(timeLimit.PreviewAtEnd);
+      Assert.IsFalse(a.IsMoving);
       CollectionAssert.AreEqual(new[] { "A", batch.Name, timeLimit.Name }, Names(experiment));
 
       // dropped: it lands where the preview was
@@ -200,6 +204,8 @@ public class StudioDragDropTests {
       Assert.AreSame(a, b2.PreviewBefore, "the preview sits between B1 and B2");
       var ghost = window.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("ghost") && b.IsVisible);
       Assert.AreEqual(0.4, ghost.GetVisualDescendants().OfType<ContentControl>().First().Opacity, 1e-9, "faded");
+      Assert.IsFalse(window.GetVisualDescendants().OfType<Border>().Any(b => b.Classes.Contains("block") && b.DataContext == a && b.IsEffectivelyVisible
+        && !b.GetVisualAncestors().OfType<Border>().Any(g => g.Classes.Contains("ghost"))), "the original is hidden while the preview shows");
       var file = Path.Combine(AppContext.BaseDirectory, "studio-drag-preview.png");
       window.CaptureRenderedFrame()!.Save(file);
       window.MouseUp(over, MouseButton.Left);
@@ -207,6 +213,7 @@ public class StudioDragDropTests {
       CollectionAssert.AreEqual(new[] { batch.Name }, Names(experiment));
       CollectionAssert.AreEqual(new[] { "B1", "A", "B2" }, Names(batch));
       Assert.IsNull(b2.PreviewBefore);
+      Assert.IsTrue(BlockOf(window, a).IsEffectivelyVisible, "shown again after the drop");
 
       // drag the batch run by its header to after... nowhere else in this experiment; into a new one instead
       var second = ws.NewExperiment();

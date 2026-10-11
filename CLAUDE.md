@@ -43,7 +43,8 @@
   runs and time-limit runs (with their content) move anywhere, also into other experiments; upper
   half of a row = before it, lower half = after it or first inside a batch/time-limit run that
   takes it; add button / experiment border = at the end. A faded copy (opacity 0.4) shows where it
-  lands; Escape cancels. Not into itself; a time-limit run holds one algorithm. Moves go through
+  lands, and the original is hidden meanwhile (BlockViewModel.IsMoving; shown again when there is
+  no valid target); Escape cancels. Not into itself; a time-limit run holds one algorithm. Moves go through
   ExperimentTree.Remove/Insert (HeuristicLab prepares an added optimizer; runs go with it).
   Copy / Copy n times... (menu): ExperimentTree.Copy = deep clone without runs, inserted after the
   original as "Name (copy k)"; not for an algorithm inside a time-limit run (copy the run).

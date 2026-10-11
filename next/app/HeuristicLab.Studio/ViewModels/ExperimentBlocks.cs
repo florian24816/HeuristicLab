@@ -31,6 +31,10 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   /// <summary>While a block is dragged: shown faded above this block, where it would land.</summary>
   [ObservableProperty]
   public partial BlockViewModel? PreviewBefore { get; set; }
+
+  /// <summary>Dragged and shown faded at its new place: hidden at its old place meanwhile.</summary>
+  [ObservableProperty]
+  public partial bool IsMoving { get; set; }
   public abstract INamedItem Item { get; }
   /// <summary>What kind of block this is, e.g. "Batch Run" or "Traveling Salesman Problem".</summary>
   public string Kind => Item.ItemName;
