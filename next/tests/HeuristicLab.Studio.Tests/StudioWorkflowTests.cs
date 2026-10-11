@@ -259,9 +259,17 @@ public class StudioWorkflowTests {
         var area = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("experiment"));
         Assert.AreEqual(Avalonia.Media.Color.Parse("#3E474D"), ((Avalonia.Media.ISolidColorBrush)area.Background!).Color, "filled gunmetal grey");
         Assert.AreEqual(0, area.BorderThickness.Left, "no border");
+        // HeuristicLab's logo at the top right
+        var logo = window.GetVisualDescendants().OfType<Image>().Single(i => i.Source is Avalonia.Media.Imaging.Bitmap && i.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Right);
+        Assert.IsTrue(((Avalonia.Media.Imaging.Bitmap)logo.Source!).PixelSize.Width >= 16, "the .ico decodes");
+        Assert.IsTrue(logo.IsEffectivelyVisible && logo.Bounds.Right > window.Bounds.Width - 60, "at the top right");
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var path = Shot("studio-experiments-gunmetal.png");
         window.CaptureRenderedFrame()!.Save(path);
+        vm.SelectedTab = MainViewModel.ResultsTab;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.IsFalse(window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Runs from"), "no 'Runs from' label");
+        window.CaptureRenderedFrame()!.Save(Shot("studio-results-tab.png"));
         window.Close();
         return path;
       });
