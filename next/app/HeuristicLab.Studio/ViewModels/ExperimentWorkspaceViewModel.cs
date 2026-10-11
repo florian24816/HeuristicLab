@@ -282,7 +282,14 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   [RelayCommand]
   private async Task OpenExperimentAsync() {
-    if (fileDialogs != null && await fileDialogs.OpenHlFileAsync() is string path) await OpenExperimentAsync(path);
+    // several files can be chosen at once: each opens as its own experiment
+    if (fileDialogs == null) return;
+    var paths = await fileDialogs.OpenHlFilesAsync();
+    int opened = 0;
+    foreach (var path in paths)
+      if (await OpenExperimentAsync(path) != null) opened++;
+    if (paths.Count > 1 && opened == paths.Count) Status = $"Opened {opened} files";
+    else if (paths.Count > 1) Status = $"Opened {opened} of {paths.Count} files; last message: {Status}";
   }
 
   /// <summary>Opens a .hl file: an experiment as it is, any other optimizer inside a new experiment.</summary>

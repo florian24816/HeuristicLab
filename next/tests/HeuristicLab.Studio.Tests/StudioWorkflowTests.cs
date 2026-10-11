@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Headless;
 using HeuristicLab.Algorithms.GeneticAlgorithm;
 using HeuristicLab.Next.Runtime;
@@ -222,6 +223,49 @@ public class StudioWorkflowTests {
         window.Close();
         return 0;
       });
+    } finally {
+      Directory.Delete(folder, recursive: true);
+    }
+  }
+
+  private sealed class ManyFiles(params string[] paths) : HeuristicLab.Studio.Services.IFileDialogService {
+    public Task<string?> OpenHlFileAsync() => Task.FromResult<string?>(paths.FirstOrDefault());
+    public Task<IReadOnlyList<string>> OpenHlFilesAsync() => Task.FromResult<IReadOnlyList<string>>(paths);
+    public Task<string?> SaveHlFileAsync(string suggestedName) => Task.FromResult<string?>(null);
+    public Task<string?> OpenDataFileAsync() => Task.FromResult<string?>(null);
+    public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
+    public Task<string?> SaveCsvFileAsync(string suggestedName) => Task.FromResult<string?>(null);
+  }
+
+  /// <summary>"Open..." takes several .hl files at once; each becomes an experiment (shown in a gunmetal area).</summary>
+  [TestMethod]
+  public async Task OpenTakesSeveralFilesAtOnce() {
+    var folder = Path.Combine(Path.GetTempPath(), $"studio-open-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(folder);
+    try {
+      var files = new[] { "a", "b", "c" }.Select(n => {
+        var path = Path.Combine(folder, n + ".hl");
+        HeuristicLab.Next.Runtime.Documents.Save(new HeuristicLab.Optimization.Experiment { Name = "Experiment " + n }, path);
+        return path;
+      }).ToArray();
+      var shot = await OnUiThread(async () => {
+        var vm = new MainViewModel(new ManyFiles(files));
+        var window = new MainWindow { DataContext = vm, Width = 1300, Height = 800 };
+        window.Show();
+        await vm.Workspace.OpenExperimentCommand.ExecuteAsync(null);
+        CollectionAssert.AreEqual(new[] { "Experiment a", "Experiment b", "Experiment c" }, vm.Workspace.Experiments.Select(e => e.Name).ToList());
+        CollectionAssert.AreEqual(files, vm.Workspace.Experiments.Select(e => e.FilePath).ToList());
+        Assert.AreEqual("Opened 3 files", vm.Workspace.Status);
+        var area = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("experiment"));
+        Assert.AreEqual(Avalonia.Media.Color.Parse("#3E474D"), ((Avalonia.Media.ISolidColorBrush)area.Background!).Color, "filled gunmetal grey");
+        Assert.AreEqual(0, area.BorderThickness.Left, "no border");
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var path = Shot("studio-experiments-gunmetal.png");
+        window.CaptureRenderedFrame()!.Save(path);
+        window.Close();
+        return path;
+      });
+      Assert.IsTrue(new FileInfo(shot).Length > 10_000);
     } finally {
       Directory.Delete(folder, recursive: true);
     }

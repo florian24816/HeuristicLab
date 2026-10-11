@@ -42,6 +42,9 @@
   events: no problem, not run / stopped by the user, waiting (in a running experiment, paused),
   working, finished (also stopped by a time limit), failed. Unsaved = changed since opened/saved
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
+  Each experiment's area is filled gunmetal grey (#3E474D, Border.experiment, no border) with light
+  writing (checkbox, arrows, links, missing-text in #F2A27E). "Open..." takes several .hl files at once
+  (IFileDialogService.OpenHlFilesAsync, AllowMultiple): each opens as its own experiment.
   Clicking the unsaved disk saves (SaveChangesAsync): to its file, or "Save as..." without one.
   "Rename file..." (experiment detail next to "Save as...", experiment menu; only with a file): renames
   the .hl file in its folder (TextWindow / IDialogService.AskTextAsync; never over another file; the

@@ -17,6 +17,9 @@
         <SolidColorBrush x:Key="DisabledBrush" Color="#F0F0F0" />
         <SolidColorBrush x:Key="LineBrush" Color="#9E9E9E" />
         <SolidColorBrush x:Key="InkBrush" Color="#1E1E1E" />
+        <!-- an experiment's area: filled gunmetal grey (no border), light writing on it -->
+        <SolidColorBrush x:Key="ExperimentBrush" Color="#3E474D" />
+        <SolidColorBrush x:Key="ExperimentInkBrush" Color="#EDEDED" />
 
         <!-- one building block: squares, name (inline rename), last field; context menu (rename/delete/...) -->
         <DataTemplate x:Key="Block" x:DataType="vm:BlockViewModel">
@@ -116,6 +119,27 @@
         <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource DisabledBrush}" />
             <Setter Property="Foreground" Value="#9A9A9A" />
+        </Style>
+        <Style Selector="Border.experiment">
+            <Setter Property="Background" Value="{StaticResource ExperimentBrush}" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource ExperimentInkBrush}" />
+        </Style>
+        <Style Selector="Border.experiment Button.toggle, Border.experiment Button.link">
+            <Setter Property="Foreground" Value="{StaticResource ExperimentInkBrush}" />
+        </Style>
+        <Style Selector="Border.experiment Button.toggle:pointerover /template/ ContentPresenter#PART_ContentPresenter, Border.experiment Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#55606A" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Border.experiment CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource ExperimentInkBrush}" />
+        </Style>
+        <Style Selector="Border.experiment CheckBox /template/ Border#NormalRectangle">
+            <Setter Property="BorderBrush" Value="{StaticResource ExperimentInkBrush}" />
+        </Style>
+        <Style Selector="Border.experiment TextBlock.missing">
+            <Setter Property="Foreground" Value="#F2A27E" />
         </Style>
         <Style Selector="Button.plain">
             <Setter Property="CornerRadius" Value="0" />
@@ -236,8 +260,7 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:ExperimentBlockViewModel">
-                                <Border Classes="dropend" Padding="10" CornerRadius="0" BorderThickness="1" Background="Transparent"
-                                        BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+                                <Border Classes="dropend experiment" Padding="10">
                                     <StackPanel Spacing="8">
                                         <StackPanel Classes="droprow" Orientation="Horizontal" Spacing="10" Background="Transparent">
                                             <CheckBox IsChecked="{Binding IsChecked}" ToolTip.Tip="Include in 'Start selected experiments'" />
@@ -251,7 +274,7 @@
                                                 </ItemsControl.ItemsPanel>
                                             </ItemsControl>
                                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChildrenEnd}" />
-                                            <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" Foreground="#B0563A"
+                                            <TextBlock Classes="missing" Text="{Binding Missing}" IsVisible="{Binding !IsReady}"
                                                        FontSize="12" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </StackPanel>
