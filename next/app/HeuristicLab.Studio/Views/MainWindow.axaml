@@ -11,41 +11,17 @@
         x:DataType="vm:MainViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Width="1440" Height="880" MinWidth="900" MinHeight="560"
-        Title="{Binding Title}">
+        Title="HeuristicLab Studio">
 
     <Design.DataContext>
         <vm:MainViewModel />
     </Design.DataContext>
 
     <DockPanel>
-        <!-- toolbar -->
-        <Border DockPanel.Dock="Top" Padding="10,8" BorderThickness="0,0,0,1"
-                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="New..." Command="{Binding NewCommand}" />
-                <Button Content="Open..." Command="{Binding OpenCommand}" />
-                <ComboBox ItemsSource="{Binding RecentFiles}" SelectedItem="{Binding SelectedRecentFile}" PlaceholderText="Recent"
-                          Width="110" IsEnabled="{Binding RecentFiles.Count}" ToolTip.Tip="Recently opened or saved files" />
-                <Button Content="Save as..." Command="{Binding SaveCommand}" />
-                <Separator Width="1" Margin="4,2" />
-                <TextBlock Text="Seed" VerticalAlignment="Center" />
-                <TextBox Text="{Binding SeedText}" Width="90" PlaceholderText="random" />
-                <TextBlock Text="Runs" VerticalAlignment="Center" />
-                <TextBox Text="{Binding RepetitionsText}" Width="50" />
-                <TextBlock Text="Parallel" VerticalAlignment="Center" />
-                <TextBox Text="{Binding ParallelText}" Width="50" />
-                <Button Content="Run" Command="{Binding RunCommand}" Classes="accent" />
-                <Button Content="Stop" Command="{Binding RunCancelCommand}" />
-                <Separator Width="1" Margin="4,2" />
-                <Button Content="Results folder..." Command="{Binding ChooseResultsFolderCommand}" />
-                <TextBlock Text="{Binding ResultsFolder}" VerticalAlignment="Center" Opacity="0.7" MaxWidth="260" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-        </Border>
-
         <!-- status bar -->
         <Border DockPanel.Dock="Bottom" Padding="10,4" BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
-            <TextBlock Text="{Binding Status}" />
+            <TextBlock Text="{Binding Workspace.Status}" />
         </Border>
 
         <TabControl Padding="0" SelectedIndex="{Binding SelectedTab}">
@@ -53,69 +29,7 @@
                 <views:ExperimentWorkspaceView DataContext="{Binding Workspace}" />
             </TabItem>
             <TabItem Header="Run">
-                <Grid ColumnDefinitions="340,4,*" Margin="0">
-                    <!-- document and parameters -->
-                    <DockPanel Grid.Column="0" Margin="12">
-                        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,10">
-                            <TextBlock Text="{Binding DocumentName}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding DocumentDetails}" TextWrapping="Wrap" Opacity="0.75" />
-                        </StackPanel>
-                        <Expander DockPanel.Dock="Bottom" Header="Sweep / walk-forward" Margin="0,10,0,0" HorizontalAlignment="Stretch">
-                    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
-                        <TextBlock Text="Sweep" VerticalAlignment="Center" />
-                        <TextBox Grid.Column="1" Text="{Binding SweepText}" TextWrapping="Wrap"
-                                 PlaceholderText="PopulationSize=50,200; Selector=TournamentSelector,ProportionalSelector" />
-                        <TextBlock Grid.Row="1" Text="Walk-forward" VerticalAlignment="Center" />
-                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                            <TextBox Text="{Binding WalkTrainText}" Width="64" PlaceholderText="train" />
-                            <TextBox Text="{Binding WalkTestText}" Width="64" PlaceholderText="test" />
-                            <TextBox Text="{Binding WalkStepText}" Width="64" PlaceholderText="step" />
-                        </StackPanel>
-                        <CheckBox Grid.Row="2" Grid.Column="1" Content="Expanding training window" IsChecked="{Binding WalkExpanding}" />
-                        <TextBlock Grid.Row="3" Grid.ColumnSpan="2" TextWrapping="Wrap" Opacity="0.7" FontSize="12"
-                                   Text="Run uses walk-forward if training rows are set, else the sweep (each configuration with Runs seeds), else single or repeated runs." />
-                    </Grid>
-                </Expander>
-                <TextBlock DockPanel.Dock="Top" Text="Parameters" FontWeight="SemiBold" Margin="0,4,0,4" />
-                        <ScrollViewer>
-                            <ItemsControl ItemsSource="{Binding Parameters}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:ParameterRowViewModel">
-                                        <Grid ColumnDefinitions="150,*" Margin="0,1" ToolTip.Tip="{Binding Description}">
-                                            <TextBlock Text="{Binding Name}" Opacity="0.75" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                                            <TextBox Grid.Column="1" Text="{Binding Value, UpdateSourceTrigger=LostFocus}" IsVisible="{Binding IsText}"
-                                                     IsReadOnly="{Binding !Editable}" MinHeight="26" Padding="6,2" />
-                                            <ComboBox Grid.Column="1" ItemsSource="{Binding Choices}" SelectedItem="{Binding Value}" IsVisible="{Binding IsChoice}"
-                                                      HorizontalAlignment="Stretch" MinHeight="26" Padding="6,2" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </DockPanel>
-
-                    <GridSplitter Grid.Column="1" ResizeDirection="Columns"
-                                  Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
-
-                    <!-- progress chart and results -->
-                    <Grid Grid.Column="2" RowDefinitions="*,Auto,220" Margin="12">
-                        <controls:LineChart Grid.Row="0" Series="{Binding Series}" XAxisTitle="{Binding ChartXAxisTitle}"
-                                            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                        <TextBlock Grid.Row="1" Text="Results" FontWeight="SemiBold" Margin="0,10,0,4" />
-                        <ScrollViewer Grid.Row="2">
-                            <ItemsControl ItemsSource="{Binding Results}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:NameValue">
-                                        <Grid ColumnDefinitions="260,*" Margin="0,2">
-                                            <TextBlock Text="{Binding Name}" Opacity="0.75" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Value}" FontFamily="monospace" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
-                </Grid>
+                <ContentControl Content="{Binding Runs}" />
             </TabItem>
             <TabItem Header="Solution">
                 <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*" ColumnDefinitions="*,320" DataContext="{Binding Solution}" x:DataType="vm:SolutionViewModel">

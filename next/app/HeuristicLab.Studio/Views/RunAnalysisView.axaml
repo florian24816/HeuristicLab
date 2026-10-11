@@ -10,7 +10,7 @@
             <TextBlock DockPanel.Dock="Top" Text="Runs from" FontWeight="SemiBold" Margin="0,0,0,6" />
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
                 <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
-                <Button Content="+ Results folder..." Command="{Binding AddFolderCommand}" ToolTip.Tip="Runs stored by the Run tab or 'hl run --store'" />
+                <Button Content="+ Results folder..." Command="{Binding AddFolderCommand}" ToolTip.Tip="Runs stored by 'hl run --store'" />
             </StackPanel>
             <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
                        Text="Tick one source to look at its runs, several to compare them. A run reached from two ticked sources counts once." />
@@ -82,7 +82,7 @@
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
                             <CheckBox Content="All parameters" IsChecked="{Binding ShowAllParameters}" ToolTip.Tip="Else only the parameters that differ between the runs" />
                             <Button Content="Export CSV..." Command="{Binding ExportCommand}" ToolTip.Tip="The table as shown: filtered, sorted, these columns" />
-                            <TextBlock Text="Click a column title to sort; select a run to see it in the Run tab." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
+                            <TextBlock Text="Click a column title to sort; select a run to see it under Run." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
                         </StackPanel>
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                             <DockPanel>

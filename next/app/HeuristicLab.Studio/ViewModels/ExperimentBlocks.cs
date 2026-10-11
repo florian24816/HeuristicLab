@@ -16,7 +16,7 @@ namespace HeuristicLab.Studio.ViewModels;
 public enum AlgorithmStatus { NotRun, ProblemMissing, Waiting, Working, Finished, Failed }
 
 /// <summary>Entry of an add menu or a block's context menu.</summary>
-public sealed record MenuChoice(string Display, System.Windows.Input.ICommand Command);
+public sealed record MenuChoice(string Display, System.Windows.Input.ICommand Command, string? Tip = null);
 
 /// <summary>
 /// An existing building block (green in the mockups): experiment, batch run, time-limit run,
@@ -194,7 +194,7 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   public IReadOnlyList<MenuChoice> AddChoices { get; }
 
   public override IReadOnlyList<MenuChoice> Menu =>
-    [new("Show in Run tab", new RelayCommand(() => Workspace.ShowInRunTab(this))), .. CopyMenu, .. EditMenu];
+    [new("Show runs", new RelayCommand(() => Workspace.ShowRuns(this))), .. CopyMenu, .. EditMenu];
 
   /// <summary>A time-limit run holds one algorithm, so its add button goes away once it has one.</summary>
   public bool CanAdd => Optimizer is not TimeLimitRun || Children.Count == 0;
@@ -327,11 +327,11 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   private Task SaveAsync() => Workspace.SaveAsync(this);
 
   public override IReadOnlyList<MenuChoice> Menu => Workspace.IsEditable
-    ? [new("Save as...", SaveCommand), new("Show in Run tab", ShowInRunTabCommand), new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)]
-    : [new("Show in Run tab", ShowInRunTabCommand)];
+    ? [new("Save as...", SaveCommand), new("Show runs", ShowRunsCommand), new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)]
+    : [new("Show runs", ShowRunsCommand)];
 
   [RelayCommand]
-  private void ShowInRunTab() => Workspace.ShowInRunTab(this);
+  private void ShowRuns() => Workspace.ShowRuns(this);
 }
 
 /// <summary>An algorithm and, on the same row, its problem (or the "+ Add problem" button).</summary>
@@ -459,11 +459,11 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
   }
 
   [RelayCommand]
-  private void ShowInRunTab() => Workspace.ShowInRunTab(this);
+  private void ShowRuns() => Workspace.ShowRuns(this);
 
   public override IReadOnlyList<MenuChoice> Menu =>
     [.. Workspace.IsEditable ? [new MenuChoice(HasProblem ? "Change problem..." : "Add problem...", ChooseProblemCommand)] : Array.Empty<MenuChoice>(),
-     new("Show in Run tab", ShowInRunTabCommand), .. CopyMenu, .. EditMenu];
+     new("Show runs", ShowRunsCommand), .. CopyMenu, .. EditMenu];
 
   internal void SetProblem(IProblem? problem) {
     if (Problem?.IsSelected == true) Workspace.Selected = null;

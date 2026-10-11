@@ -42,7 +42,7 @@
                 </ListBox>
             </DockPanel>
         </ScrollViewer>
-        <ItemsControl Grid.Row="2" ItemsSource="{Binding SelectedDetails}" Margin="0,10,0,0">
+        <ItemsControl Grid.Row="2" ItemsSource="{Binding SelectedDetails}" Margin="0,10,0,0" IsVisible="{Binding ShowsDetails}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:NameValue">
                     <Grid ColumnDefinitions="300,*" Margin="0,1">

@@ -8,10 +8,6 @@ namespace HeuristicLab.Studio.Services;
 /// <summary>What Studio remembers between sessions.</summary>
 public sealed class StudioSettings {
   public List<string> RecentFiles { get; set; } = [];
-  public string Seed { get; set; } = "";
-  public string Runs { get; set; } = "1";
-  public string Parallel { get; set; } = "1";
-  public string? ResultsFolder { get; set; }
   /// <summary>Resources tab; 0 cores means all.</summary>
   public int ResourceCores { get; set; }
   public int ResourceThreads { get; set; } = 1;

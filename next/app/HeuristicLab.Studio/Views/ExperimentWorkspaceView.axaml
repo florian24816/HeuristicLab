@@ -263,7 +263,18 @@
                         <Button.Flyout>
                             <MenuFlyout>
                                 <MenuItem Header="New experiment" Command="{Binding CreateExperimentCommand}" />
+                                <MenuItem Header="New from data or benchmark..." Command="{Binding NewFromSetupCommand}"
+                                          ToolTip.Tip="An algorithm with its problem: a benchmark instance or a CSV/Parquet data file" />
                                 <MenuItem Header="Open..." Command="{Binding OpenExperimentCommand}" />
+                                <MenuItem Header="Open recent" ItemsSource="{Binding RecentMenu}" IsEnabled="{Binding HasRecentFiles}">
+                                    <MenuItem.ItemContainerTheme>
+                                        <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
+                                            <Setter Property="Header" Value="{Binding Display}" />
+                                            <Setter Property="Command" Value="{Binding Command}" />
+                                            <Setter Property="ToolTip.Tip" Value="{Binding Tip}" />
+                                        </ControlTheme>
+                                    </MenuItem.ItemContainerTheme>
+                                </MenuItem>
                                 <MenuItem Header="Samples..." Command="{Binding ShowSamplesCommand}" />
                             </MenuFlyout>
                         </Button.Flyout>
@@ -286,7 +297,7 @@
                             <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" TextWrapping="Wrap" Foreground="#B0563A" />
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="Save as..." Command="{Binding SaveCommand}" />
-                                <Button Content="Show in Run tab" Command="{Binding ShowInRunTabCommand}" />
+                                <Button Content="Show runs" Command="{Binding ShowRunsCommand}" ToolTip.Tip="Show its runs in the Run tab" />
                             </StackPanel>
                             <TextBlock Text="Runs keep their own seed settings (random by default), so repetitions differ."
                                        TextWrapping="Wrap" FontSize="12" Opacity="0.7" />

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
@@ -28,22 +29,22 @@ public sealed record DropTarget(ContainerBlockViewModel Container, int Index);
 public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   private readonly IDialogService? dialogs;
   private readonly IFileDialogService? fileDialogs;
-  private readonly Func<string?> resultsFolder;
-  private readonly Func<bool> busyElsewhere;
-  private readonly Action<IOptimizer, string?> showInRunTab;
+  private readonly Action<IOptimizer> showRuns;
   private readonly Action<CSharpScript> openScript;
+  private readonly Action recentFilesChanged;
+  private const int MaxRecentFiles = 10;
   private CancellationTokenSource? stopSource;
   private int experimentCounter, batchCounter, timeLimitCounter;
 
   public ExperimentWorkspaceViewModel(IDialogService? dialogs = null, IFileDialogService? fileDialogs = null,
-      Func<string?>? resultsFolder = null, Func<bool>? busyElsewhere = null, Action<IOptimizer, string?>? showInRunTab = null,
-      Action<CSharpScript>? openScript = null) {
+      Action<IOptimizer>? showRuns = null, Action<CSharpScript>? openScript = null,
+      IEnumerable<string>? recentFiles = null, Action? recentFilesChanged = null) {
     this.dialogs = dialogs;
     this.fileDialogs = fileDialogs;
-    this.resultsFolder = resultsFolder ?? (() => null);
-    this.busyElsewhere = busyElsewhere ?? (() => false);
-    this.showInRunTab = showInRunTab ?? ((_, _) => { });
+    this.showRuns = showRuns ?? (_ => { });
     this.openScript = openScript ?? (_ => { });
+    this.recentFilesChanged = recentFilesChanged ?? (() => { });
+    foreach (var file in (recentFiles ?? []).Where(File.Exists).Take(MaxRecentFiles)) RecentFiles.Add(file);
     Samples = new SamplesViewModel(OpenSampleAsync);
     Detail = Samples;
     _ = Samples.LoadAsync();
@@ -248,6 +249,37 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     return AddExperiment(experiment, null);
   }
 
+  /// <summary>Most recently opened or saved files, newest first.</summary>
+  public ObservableCollection<string> RecentFiles { get; } = [];
+
+  public bool HasRecentFiles => RecentFiles.Count > 0;
+
+  /// <summary>"Open recent" menu: file names, the full path as tooltip.</summary>
+  public IReadOnlyList<MenuChoice> RecentMenu =>
+    RecentFiles.Select(f => new MenuChoice(Path.GetFileName(f), new AsyncRelayCommand(() => OpenExperimentAsync(f)), f)).ToList();
+
+  private void Remember(string path) {
+    var full = Path.GetFullPath(path);
+    RecentFiles.Remove(full);
+    RecentFiles.Insert(0, full);
+    while (RecentFiles.Count > MaxRecentFiles) RecentFiles.RemoveAt(RecentFiles.Count - 1);
+    OnPropertyChanged(nameof(HasRecentFiles));
+    OnPropertyChanged(nameof(RecentMenu));
+    recentFilesChanged();
+  }
+
+  /// <summary>HeuristicLab's "new" setup (algorithm, problem, benchmark instance or CSV/Parquet data) as a new experiment.</summary>
+  [RelayCommand]
+  private async Task NewFromSetupAsync() {
+    if (dialogs != null && await dialogs.NewSetupAsync() is SetupResult setup) OpenSetup(setup);
+  }
+
+  public ExperimentBlockViewModel? OpenSetup(SetupResult setup) {
+    var block = Open(setup.Algorithm, setup.Algorithm.Name, null);
+    if (setup.Messages.Count > 0) Status += " " + string.Join("; ", setup.Messages);
+    return block;
+  }
+
   [RelayCommand]
   private async Task OpenExperimentAsync() {
     if (fileDialogs != null && await fileDialogs.OpenHlFileAsync() is string path) await OpenExperimentAsync(path);
@@ -257,6 +289,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   public async Task<ExperimentBlockViewModel?> OpenExperimentAsync(string path) {
     try {
       var content = await Task.Run(() => Documents.Load(path));
+      Remember(path);
       return Open(content, Path.GetFileName(path), path);
     } catch (Exception e) {
       Status = $"Could not open {Path.GetFileName(path)}: {e.Message}";
@@ -305,6 +338,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     await Task.Run(() => Documents.Save(block.Experiment, path));
     block.FilePath = path;
     block.IsModified = false;
+    Remember(path);
     Status = $"Saved {block.Name} to {Path.GetFileName(path)}";
   }
 
@@ -324,20 +358,21 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     try {
       await Task.Run(() => Documents.Save(block.Experiment, block.FilePath));
       block.IsModified = false;
+      Remember(block.FilePath);
       Status = $"Saved {block.Name} to {Path.GetFileName(block.FilePath)}";
     } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
       Status = $"Could not save {block.Name}: {e.Message}";
     }
   }
 
-  internal void ShowInRunTab(BlockViewModel block) {
+  /// <summary>Shows the block's runs in the Run tab.</summary>
+  internal void ShowRuns(BlockViewModel block) {
     var optimizer = block switch {
-      ExperimentBlockViewModel e => (IOptimizer)e.Experiment,
       ContainerBlockViewModel c => c.Optimizer,
-      AlgorithmBlockViewModel a => a.Algorithm,
+      AlgorithmBlockViewModel a => (IOptimizer)a.Algorithm,
       _ => null
     };
-    if (optimizer != null) showInRunTab(optimizer, (block as ExperimentBlockViewModel)?.FilePath);
+    if (optimizer != null) showRuns(optimizer);
   }
 
   // ---- building blocks
@@ -584,7 +619,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   private bool CanStartSelected() => CanStart(Experiments.Where(e => e.IsChecked).ToList());
 
   private bool CanStart(System.Collections.Generic.IReadOnlyList<ExperimentBlockViewModel> experiments) =>
-    !IsRunning && !busyElsewhere() && experiments.Count > 0 && experiments.All(e => e.IsReady);
+    !IsRunning && experiments.Count > 0 && experiments.All(e => e.IsReady);
 
   [RelayCommand(CanExecute = nameof(IsRunningExperiments))]
   private void Stop() {
@@ -602,8 +637,6 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     IsRunningExperiments = true;
     IsRunning = true;
     stopSource = new CancellationTokenSource();
-    var folder = resultsFolder();
-    var store = folder == null ? null : new ResultStore(folder);
     Status = experiments.Count == 1 ? $"Running {experiments[0].Name} ..." : $"Running {experiments.Count} experiments ...";
     try {
       // the Resources tab may limit how many experiments run at the same time
@@ -630,7 +663,6 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
           var report = await OptimizerRunner.RunAsync(e.Experiment,
             new RunOptions { ProgressInterval = TimeSpan.FromMilliseconds(500), Labels = new System.Collections.Generic.Dictionary<string, string> { ["experiment"] = e.Name } },
             e.FilePath, progress, token);
-          store?.Add(report);
           e.RunStatus = report.Outcome switch {
             RunOutcome.Completed => $"Completed: {report.Runs.Count} runs in {TimeSpan.FromSeconds(report.ExecutionSeconds):hh\\:mm\\:ss}",
             RunOutcome.Stopped => $"Stopped: {report.Runs.Count} runs",
@@ -645,7 +677,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       }));
       var reports = started.OfType<RunReport>().ToArray();
       Status = $"{reports.Count(r => r.Outcome == RunOutcome.Completed)} of {reports.Length} experiments completed, " +
-               $"{reports.Sum(r => r.Runs.Count)} runs" + (store != null ? $", stored in {store.Directory}" : "");
+               $"{reports.Sum(r => r.Runs.Count)} runs";
     } finally {
       IsRunningExperiments = false;
       IsRunning = algorithmRunning;

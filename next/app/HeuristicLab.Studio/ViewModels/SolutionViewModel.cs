@@ -19,7 +19,7 @@ public partial class SolutionViewModel : ViewModelBase {
   public partial SolutionView? Selected { get; set; }
 
   [ObservableProperty]
-  public partial string Heading { get; set; } = "Run an algorithm (or open a .hl file that has run) to see its solutions.";
+  public partial string Heading { get; set; } = "Select a run in the Run tab to see the solutions it found.";
 
   [ObservableProperty]
   public partial string? Model { get; set; }
@@ -38,8 +38,15 @@ public partial class SolutionViewModel : ViewModelBase {
 
   public ObservableCollection<NameValue> Metrics { get; } = [];
 
-  public void Show(IOptimizer? optimizer) {
-    Solutions = optimizer == null ? [] : HeuristicLab.Next.Runtime.Solutions.Find(optimizer);
+  public void Show(IOptimizer? optimizer) =>
+    Show(optimizer == null ? [] : HeuristicLab.Next.Runtime.Solutions.Find(optimizer));
+
+  /// <summary>The solutions among a run's results (the run selected in the Run tab).</summary>
+  public void Show(IRun? run) =>
+    Show(run == null ? [] : HeuristicLab.Next.Runtime.Solutions.Find(run.Results.Select(r => (r.Key, (HeuristicLab.Core.IItem?)r.Value))));
+
+  private void Show(IReadOnlyList<SolutionView> solutions) {
+    Solutions = solutions;
     Selected = Solutions.FirstOrDefault();
     if (Selected == null) Clear();
   }
@@ -81,7 +88,7 @@ public partial class SolutionViewModel : ViewModelBase {
   }
 
   private void Clear() {
-    Heading = "No solutions yet. Run the algorithm to see what it finds.";
+    Heading = "No solutions in this run (models, trading strategies or tours are shown here).";
     Model = null;
     Metrics.Clear();
     Series = [];

@@ -145,13 +145,19 @@
   HeuristicLab facts behind it: only the Debug Engine honors breakpoints; Prepare() gives an
   algorithm a new Results collection (never cache it); an algorithm's valid operators (move
   generators, ...) come from its problem, so rebuild parameter views after a problem change.
-  New dialog (algorithm -> compatible problem -> benchmark instance or CSV/Parquet data, via
-  Setups.Create like "hl new"), open/save .hl, editable parameters (text or operator choice,
-  via ParameterEditor; invalid input reverted), run with seed or batches (runs, parallel,
-  optional results folder) with live chart / per-run points and statistics, Results tab
-  (results folder: runs + statistics grouped by any column), Solution tab (model, metrics,
-  charts), sweep / walk-forward section. Remembers recent files, seed/runs/parallel and the
-  results folder (~/.config/HeuristicLab.Studio/settings.json). Own LineChart control.
+  No toolbar (removed 2026-10-11, user's request): everything starts in the Experiments tab -
+  "+ New experiment / open..." offers New experiment, New from data or benchmark... (the New dialog:
+  algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like
+  "hl new", opened as a new experiment), Open..., Open recent (workspace RecentFiles) and Samples...
+  Seeds are the algorithms' own Seed/SetSeedRandomly parameters, parallelism is the Resources tab.
+  No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab
+  can still add folders written by "hl run --store"). Run tab (RunsBrowserViewModel): tree of the
+  workspace's experiments and blocks, the selected block's runs (RunsViewModel table), the selected
+  run's parameters and results with pictures; "Show runs" (block menu / experiment detail) jumps
+  there. Solution tab: the solutions (model, metrics, charts, tours) of the run selected in the
+  Run tab. Sweeps and walk-forward are CLI-only now (hl run --sweep, hl walkforward).
+  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files and resource limits.
+  Own LineChart control.
   Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,
   launchers hl and hl-studio in ~/.local/bin, desktop entry; needs the .NET 10 runtime).
   DataFiles.Read/Write block on Parquet.Net's async API: keep that work on the thread pool

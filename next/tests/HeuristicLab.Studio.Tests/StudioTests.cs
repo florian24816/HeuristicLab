@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.VisualTree;
+using HeuristicLab.Next.Runtime;
 using HeuristicLab.Studio.ViewModels;
 using HeuristicLab.Studio.Views;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -30,67 +32,41 @@ public class StudioTests {
 
   private static Task<T> OnUiThread<T>(Func<Task<T>> action) => session.Dispatch(action, CancellationToken.None);
 
+  /// <summary>
+  /// No toolbar: a file opens in the Experiments tab, runs with the seed in its own parameters
+  /// (Start all), and its runs show in the Run tab, the run's tour in the Solution tab.
+  /// </summary>
   [TestMethod]
-  public async Task LoadAndRunLegacyFileWithSeed() {
-    var (results, parameters, series, status) = await OnUiThread(async () => {
+  public async Task OpenedFileRunsWithItsOwnSeedAndShowsInTheRunTab() {
+    var (best, runsShown, solutions, buttons, shot) = await OnUiThread(async () => {
       var vm = new MainViewModel();
-      await vm.LoadAsync(LegacyGaTsp);
-      vm.SeedText = "0";
-      await vm.RunCommand.ExecuteAsync(null);
-      return (vm.Results.ToList(), vm.Parameters.ToList(), vm.Series, vm.Status);
-    });
-
-    StringAssert.StartsWith(status, "Completed");
-    Assert.AreEqual("12332", results.Single(r => r.Name == "CurrentBestQuality").Value);
-    Assert.AreEqual("100", parameters.Single(p => p.Name == "PopulationSize").Value);
-    Assert.IsTrue(series.Count >= 2, "expected quality curves");
-    // after the run the chart shows the algorithm's quality table: one point per generation
-    Assert.AreEqual(1001, series.Single(s => s.Name == "BestQuality").Points.Count);
-    Assert.AreEqual(12332.0, series.Single(s => s.Name == "BestQuality").Points[^1].Y);
-  }
-
-  [TestMethod]
-  public async Task InvalidSeedIsRejected() {
-    var (status, report) = await OnUiThread(async () => {
-      var vm = new MainViewModel();
-      await vm.LoadAsync(LegacyGaTsp);
-      vm.SeedText = "abc";
-      await vm.RunCommand.ExecuteAsync(null);
-      return (vm.Status, vm.LastReport);
-    });
-    StringAssert.Contains(status, "whole number");
-    Assert.IsNull(report);
-  }
-
-  [TestMethod]
-  public async Task CommandsFollowTheDocumentState() {
-    var (runBefore, runAfter) = await OnUiThread(async () => {
-      var vm = new MainViewModel();
-      bool before = vm.RunCommand.CanExecute(null);
-      await vm.LoadAsync(LegacyGaTsp);
-      return (before, vm.RunCommand.CanExecute(null));
-    });
-    Assert.IsFalse(runBefore);
-    Assert.IsTrue(runAfter);
-  }
-
-  [TestMethod]
-  public async Task MainWindowRendersAfterARun() {
-    // Renders the real window after a seeded run and keeps a screenshot for visual review.
-    var path = await OnUiThread(async () => {
-      var vm = new MainViewModel();
-      var window = new MainWindow { DataContext = vm, Width = 1100, Height = 700 };
+      var window = new MainWindow { DataContext = vm, Width = 1440, Height = 880 };
       window.Show();
-      await vm.LoadAsync(LegacyGaTsp);
-      vm.SeedText = "0";
-      await vm.RunCommand.ExecuteAsync(null);
-      var frame = window.CaptureRenderedFrame();
-      Assert.IsNotNull(frame, "headless rendering produced no frame");
-      var file = Path.Combine(AppContext.BaseDirectory, "studio-after-run.png");
-      frame!.Save(file);
+      var experiment = (await vm.Workspace.OpenExperimentAsync(LegacyGaTsp))!;
+      var block = (AlgorithmBlockViewModel)experiment.Children.Single();
+      ParameterEditor.Apply(block.Algorithm, ["SetSeedRandomly=false", "Seed=0"]);
+      await vm.Workspace.StartAllCommand.ExecuteAsync(null);
+
+      // "Show runs" on the algorithm: the Run tab with its newest run selected
+      block.ShowRunsCommand.Execute(null);
+      Assert.AreEqual(MainViewModel.RunTab, vm.SelectedTab);
+      Assert.AreSame(block.Algorithm, vm.Runs.SelectedSource!.Optimizer);
+      var run = vm.Runs.SelectedRun!;
+      Assert.AreSame(block.Algorithm.Runs.Last(), run);
+      Assert.IsTrue(vm.Runs.RunParameters.Any(p => p.Name == "PopulationSize" && p.Value == "100"));
+      var result = vm.Runs.RunResults.Single(r => r.Name == "CurrentBestQuality");
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var file = Path.Combine(AppContext.BaseDirectory, "studio-run-tab.png");
+      window.CaptureRenderedFrame()!.Save(file);
+      var buttons = window.GetVisualDescendants().OfType<Avalonia.Controls.Button>().Select(b => b.Content as string).OfType<string>().ToList();
       window.Close();
-      return file;
+      return (result.Summary, vm.Runs.Runs!.Rows.Count, vm.Solution.Solutions.Count, buttons, file);
     });
-    Assert.IsTrue(new FileInfo(path).Length > 10_000, "screenshot looks empty");
+    Assert.AreEqual("12332", best, "seed 0 gives what HeuristicLab gives");
+    Assert.IsTrue(runsShown >= 1);
+    Assert.AreEqual(1, solutions, "the run's best tour");
+    CollectionAssert.DoesNotContain(buttons, "Results folder...", "no toolbar");
+    CollectionAssert.DoesNotContain(buttons, "Open...");
+    Assert.IsTrue(new FileInfo(shot).Length > 10_000, "screenshot looks empty");
   }
 }

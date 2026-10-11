@@ -493,6 +493,9 @@ public partial class RunsViewModel(RunCollection runs) : ViewModelBase {
 
   public bool IsEmpty => Rows.Count == 0;
 
+  /// <summary>Whether the selected run's parameters and results are listed below the table (the Run tab shows them itself).</summary>
+  public bool ShowsDetails { get; init; } = true;
+
   partial void OnRowsChanged(IReadOnlyList<RunTableRow> value) => OnPropertyChanged(nameof(IsEmpty));
 
   partial void OnSelectedChanged(RunTableRow? value) {

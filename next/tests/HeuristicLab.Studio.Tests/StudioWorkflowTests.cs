@@ -88,15 +88,15 @@ public class StudioWorkflowTests {
   [TestMethod]
   public async Task ParametersAreEditableAndInvalidValuesAreReverted() {
     var (population, selector, status, shown) = await OnUiThread(() => {
-      var vm = new MainViewModel();
       var setup = SmallGaTsp();
-      vm.ShowNew(setup);
-      vm.Parameters.Single(p => p.Name == "PopulationSize").Value = "35";
-      vm.Parameters.Single(p => p.Name == "Selector").Value = "TournamentSelector";
-      var bad = vm.Parameters.Single(p => p.Name == "MaximumGenerations");
-      bad.Value = "lots";
       var ga = (GeneticAlgorithm)setup.Algorithm;
-      return (ga.PopulationSize.Value, ga.Selector.GetType().Name, vm.Status, bad.Value);
+      string status = "";
+      var rows = ParameterEditor.Describe(ga).Select(p => new ParameterRowViewModel(ga, p, m => status = m)).ToList();
+      rows.Single(p => p.Name == "PopulationSize").Value = "35";
+      rows.Single(p => p.Name == "Selector").Value = "TournamentSelector";
+      var bad = rows.Single(p => p.Name == "MaximumGenerations");
+      bad.Value = "lots";
+      return (ga.PopulationSize.Value, ga.Selector.GetType().Name, status, bad.Value);
     });
     Assert.AreEqual(35, population);
     Assert.AreEqual("TournamentSelector", selector);
@@ -105,43 +105,15 @@ public class StudioWorkflowTests {
   }
 
   [TestMethod]
-  public async Task BatchRunStoresResultsAndBrowserSummarizesThem() {
-    var folder = Path.Combine(Path.GetTempPath(), $"studio-store-{Guid.NewGuid():N}");
-    try {
-      var (completed, stored, results, runs, summary, mainShot, resultsShot) = await OnUiThread(async () => {
-        var vm = new MainViewModel();
-        vm.ShowNew(SmallGaTsp());
-        vm.SeedText = "3";
-        vm.RepetitionsText = "4";
-        vm.ParallelText = "2";
-        vm.ResultsFolder = folder;
-        var window = new MainWindow { DataContext = vm, Width = 1150, Height = 720 };
-        window.Show();
-        await vm.RunCommand.ExecuteAsync(null);
-        var main = Shot("studio-batch.png");
-        window.CaptureRenderedFrame()!.Save(main);
-
-        vm.ResultsBrowser.Load(folder);
-        window.GetVisualDescendantsOfType<TabControl>().Single().SelectedIndex = 1;
-        var browser = Shot("studio-results.png");
-        window.CaptureRenderedFrame()!.Save(browser);
-        window.Close();
-        return (vm.LastBatch!.Completed, Directory.GetFiles(folder, "*.json").Length, vm.Results.Select(r => r.Name).ToList(),
-                vm.ResultsBrowser.Runs.Count, vm.ResultsBrowser.Summary.ToList(), main, browser);
-      });
-      Assert.AreEqual(4, completed);
-      Assert.AreEqual(4, stored);
-      CollectionAssert.Contains(results, "BestQuality");
-      Assert.AreEqual(4, runs);
-      Assert.AreEqual(4, summary.Single().Count);
-      Assert.IsTrue(new FileInfo(mainShot).Length > 10_000 && new FileInfo(resultsShot).Length > 10_000);
-    } finally {
-      if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
-    }
+  public async Task NewSetupOpensAsAnExperiment() {
+    var (name, algorithm, problem) = await OnUiThread(() => {
+      var ws = new ExperimentWorkspaceViewModel();
+      var experiment = ws.OpenSetup(SmallGaTsp())!;
+      var block = (AlgorithmBlockViewModel)experiment.Children.Single();
+      return (experiment.Name, block.Algorithm.GetType().Name, block.Algorithm.Problem?.GetType().Name);
+    });
+    Assert.IsFalse(string.IsNullOrEmpty(name));
+    Assert.AreEqual("GeneticAlgorithm", algorithm);
+    Assert.AreEqual("TravelingSalesmanProblem", problem);
   }
-}
-
-internal static class VisualExtensions {
-  public static IEnumerable<T> GetVisualDescendantsOfType<T>(this Avalonia.Visual root) where T : Avalonia.Visual =>
-    Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(root).OfType<T>();
 }

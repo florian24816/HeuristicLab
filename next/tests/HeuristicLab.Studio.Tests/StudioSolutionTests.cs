@@ -16,16 +16,18 @@ public class StudioSolutionTests {
 
   private static string Temp(string ext) => Path.Combine(Path.GetTempPath(), $"studio-sol-{Guid.NewGuid():N}{ext}");
 
-  /// <summary>Runs the setup in the real window and captures the Solution tab.</summary>
+  /// <summary>Runs the setup as an experiment in the real window and captures the Solution tab.</summary>
   private static Task<(SolutionKind? Kind, string? Model, int Metrics, int Markers, string Shot)> RunAndShow(SetupResult setup, string shotName) =>
     session.Dispatch(async () => {
       var vm = new MainViewModel();
-      vm.ShowNew(setup);
-      vm.SeedText = "1";
+      vm.Workspace.OpenSetup(setup);
+      if (setup.Algorithm.Parameters.ContainsKey("Seed")) ParameterEditor.Apply(setup.Algorithm, ["SetSeedRandomly=false", "Seed=1"]);
       var window = new MainWindow { DataContext = vm, Width = 1150, Height = 720 };
       window.Show();
-      await vm.RunCommand.ExecuteAsync(null);
-      window.GetVisualDescendantsOfType<TabControl>().Single().SelectedIndex = 1;
+      await vm.Workspace.StartAllCommand.ExecuteAsync(null);
+      // finished experiments refresh the Run tab, which selects the newest run: its solutions are shown
+      vm.SelectedTab = MainViewModel.SolutionTab;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       var shot = Path.Combine(AppContext.BaseDirectory, shotName);
       window.CaptureRenderedFrame()!.Save(shot);
       window.Close();
