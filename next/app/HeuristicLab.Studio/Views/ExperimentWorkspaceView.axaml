@@ -297,6 +297,8 @@
                             <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" TextWrapping="Wrap" Foreground="#B0563A" />
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="Save as..." Command="{Binding SaveCommand}" />
+                                <Button Content="Rename file..." Command="{Binding RenameFileCommand}"
+                                        ToolTip.Tip="Rename the experiment's .hl file on disk (in its folder)" />
                                 <Button Content="Show runs" Command="{Binding ShowRunsCommand}" ToolTip.Tip="Show its runs in the Runs tab" />
                             </StackPanel>
                             <TextBlock Text="Runs keep their own seed settings (random by default), so repetitions differ."

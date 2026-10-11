@@ -11,6 +11,10 @@
     </Application.DataTemplates>
 
     <Application.Styles>
+        <!-- every window (dialogs too) shows HeuristicLab's icon -->
+        <Style Selector=":is(Window)">
+            <Setter Property="Icon" Value="/Assets/HeuristicLab.ico" />
+        </Style>
         <FluentTheme />
         <!-- a field edited across algorithms (Shift+click): purple -->
         <Style Selector="TextBox.multi /template/ Border#PART_BorderElement">

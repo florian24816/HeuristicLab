@@ -365,6 +365,49 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
   }
 
+  /// <summary>
+  /// Renames an experiment's .hl file on disk (same folder); the experiment keeps its name. Not while
+  /// anything runs, not over another file.
+  /// </summary>
+  internal async Task RenameFileAsync(ExperimentBlockViewModel block) {
+    if (block.FilePath is not { } path || dialogs == null) return;
+    if (!IsEditable) {
+      Status = "A file can be renamed when nothing runs.";
+      return;
+    }
+    var answer = await dialogs.AskTextAsync("Rename file", $"New name of {Path.GetFileName(path)} (in {Path.GetDirectoryName(path)}):", Path.GetFileName(path));
+    if (string.IsNullOrWhiteSpace(answer)) return;
+    RenameFile(block, answer.Trim());
+  }
+
+  /// <summary>Renames the file to this name (".hl" added if missing); false (with a status) if that is not possible.</summary>
+  public bool RenameFile(ExperimentBlockViewModel block, string newName) {
+    if (block.FilePath is not { } path) return false;
+    if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || newName is "." or "..") {
+      Status = $"'{newName}' is not a file name.";
+      return false;
+    }
+    if (!newName.EndsWith(".hl", StringComparison.OrdinalIgnoreCase)) newName += ".hl";
+    var target = Path.Combine(Path.GetDirectoryName(path) ?? "", newName);
+    if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(path), StringComparison.Ordinal)) return false;
+    if (File.Exists(target)) {
+      Status = $"{newName} already exists; choose another name.";
+      return false;
+    }
+    try {
+      File.Move(path, target);
+    } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+      Status = $"Could not rename {Path.GetFileName(path)}: {e.Message}";
+      return false;
+    }
+    block.FilePath = target;
+    var full = Path.GetFullPath(path);
+    if (RecentFiles.Remove(full)) OnPropertyChanged(nameof(HasRecentFiles));
+    Remember(target);
+    Status = $"Renamed {Path.GetFileName(path)} to {newName}";
+    return true;
+  }
+
   /// <summary>Shows the block's runs in the Runs tab.</summary>
   internal void ShowRuns(BlockViewModel block) {
     var optimizer = block switch {

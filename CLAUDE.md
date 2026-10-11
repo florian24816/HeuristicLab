@@ -43,6 +43,10 @@
   working, finished (also stopped by a time limit), failed. Unsaved = changed since opened/saved
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
   Clicking the unsaved disk saves (SaveChangesAsync): to its file, or "Save as..." without one.
+  "Rename file..." (experiment detail next to "Save as...", experiment menu; only with a file): renames
+  the .hl file in its folder (TextWindow / IDialogService.AskTextAsync; never over another file; the
+  experiment keeps its name; recent files follow). Icon: HeuristicLab/3.3/HeuristicLab.ico, linked
+  into the app (window icon via a :is(Window) style, ApplicationIcon, desktop entry).
   Click: details/parameters, double-click: rename, right-click: menu.
   Drag and drop (own pointer handling in ExperimentWorkspaceView, logic in the workspace VM:
   BeginDrag/TargetAt/PreviewDrop/EndDrag/Move): algorithms (also dragged by their problem), batch

@@ -169,4 +169,61 @@ public class StudioWorkflowTests {
     Assert.AreEqual("GeneticAlgorithm", algorithm);
     Assert.AreEqual("TravelingSalesmanProblem", problem);
   }
+
+  private sealed class TextDialogs(string answer) : HeuristicLab.Studio.Services.IDialogService {
+    public string? Asked { get; private set; }
+    public Task<SetupResult?> NewSetupAsync() => Task.FromResult<SetupResult?>(null);
+    public Task<CatalogEntry?> PickAlgorithmAsync() => Task.FromResult<CatalogEntry?>(null);
+    public Task<HeuristicLab.Optimization.IProblem?> PickProblemAsync(HeuristicLab.Optimization.IAlgorithm algorithm) => Task.FromResult<HeuristicLab.Optimization.IProblem?>(null);
+    public Task<bool> ConfirmAsync(string title, string message) => Task.FromResult(true);
+    public Task<string?> AskTextAsync(string title, string message, string initial) { Asked = initial; return Task.FromResult<string?>(answer); }
+  }
+
+  /// <summary>"Rename file..." next to "Save as...": the experiment's .hl file gets a new name in its folder.</summary>
+  [TestMethod]
+  public async Task RenameFileRenamesTheExperimentsFile() {
+    var folder = Path.Combine(Path.GetTempPath(), $"studio-rename-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(folder);
+    try {
+      var original = Path.Combine(folder, "first.hl");
+      HeuristicLab.Next.Runtime.Documents.Save(new HeuristicLab.Optimization.Experiment { Name = "My experiment" }, original);
+      File.WriteAllText(Path.Combine(folder, "taken.hl"), "");
+      await OnUiThread(async () => {
+        var dialogs = new TextDialogs("second");
+        var ws = new ExperimentWorkspaceViewModel(dialogs);
+        var unsaved = ws.NewExperiment();
+        Assert.IsFalse(unsaved.RenameFileCommand.CanExecute(null), "no file yet");
+        var block = (await ws.OpenExperimentAsync(original))!;
+        Assert.IsTrue(block.RenameFileCommand.CanExecute(null));
+        Assert.IsTrue(block.Menu.Any(m => m.Display == "Rename file..."));
+        await block.RenameFileCommand.ExecuteAsync(null);
+        Assert.AreEqual("first.hl", dialogs.Asked, "the dialog starts with the current file name");
+        var renamed = Path.Combine(folder, "second.hl");
+        Assert.AreEqual(renamed, block.FilePath);
+        Assert.IsTrue(File.Exists(renamed) && !File.Exists(original), ws.Status);
+        Assert.AreEqual("My experiment", block.Name, "the experiment keeps its name");
+        Assert.AreEqual(Path.GetFullPath(renamed), ws.RecentFiles[0]);
+        CollectionAssert.DoesNotContain(ws.RecentFiles.ToList(), Path.GetFullPath(original));
+
+        Assert.IsFalse(ws.RenameFile(block, "taken"), "never over another file");
+        StringAssert.Contains(ws.Status, "already exists");
+        Assert.IsFalse(ws.RenameFile(block, "a/b"), "a name, not a path");
+        Assert.AreEqual(renamed, block.FilePath);
+        Assert.IsTrue(((HeuristicLab.Core.IItem)HeuristicLab.Next.Runtime.Documents.Load(renamed)) is HeuristicLab.Optimization.Experiment, "the file is intact");
+
+        // HeuristicLab's icon on the main window and on dialogs
+        var window = new MainWindow { DataContext = new MainViewModel() };
+        var dialog = new CatalogPickerWindow { DataContext = new CatalogPickerViewModel("Add algorithm", Catalog.Algorithms()) };
+        window.Show();
+        dialog.Show();
+        Assert.IsNotNull(window.Icon);
+        Assert.IsNotNull(dialog.Icon, "dialogs too");
+        dialog.Close();
+        window.Close();
+        return 0;
+      });
+    } finally {
+      Directory.Delete(folder, recursive: true);
+    }
+  }
 }

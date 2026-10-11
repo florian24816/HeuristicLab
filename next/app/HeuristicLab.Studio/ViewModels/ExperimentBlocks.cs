@@ -283,7 +283,8 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   public Experiment Experiment { get; } = experiment;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsSaved), nameof(StatePictogram), nameof(StateTip), nameof(IsStateClickable))]
+  [NotifyPropertyChangedFor(nameof(IsSaved), nameof(StatePictogram), nameof(StateTip), nameof(IsStateClickable), nameof(HasFile), nameof(Menu))]
+  [NotifyCanExecuteChangedFor(nameof(RenameFileCommand))]
   public partial string? FilePath { get; set; } = filePath;
 
   /// <summary>Changed since it was opened or saved (opened from a file: unchanged).</summary>
@@ -326,8 +327,14 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   [RelayCommand]
   private Task SaveAsync() => Workspace.SaveAsync(this);
 
+  /// <summary>Renames the experiment's .hl file on disk (only once it has one).</summary>
+  [RelayCommand(CanExecute = nameof(HasFile))]
+  private Task RenameFileAsync() => Workspace.RenameFileAsync(this);
+  public bool HasFile => FilePath != null;
+
   public override IReadOnlyList<MenuChoice> Menu => Workspace.IsEditable
-    ? [new("Save as...", SaveCommand), new("Show runs", ShowRunsCommand), new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)]
+    ? [new("Save as...", SaveCommand), .. FilePath != null ? [new MenuChoice("Rename file...", RenameFileCommand)] : Array.Empty<MenuChoice>(),
+       new("Show runs", ShowRunsCommand), new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)]
     : [new("Show runs", ShowRunsCommand)];
 
   [RelayCommand]

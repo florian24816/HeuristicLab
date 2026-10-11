@@ -61,6 +61,7 @@ Type=Application
 Name=HeuristicLab Studio
 Comment=Optimization and data analysis experiments
 Exec=$bin_dir/hl-studio %f
+Icon=$app_dir/studio/HeuristicLab.ico
 Terminal=false
 Categories=Science;Education;Development;
 MimeType=application/x-heuristiclab;

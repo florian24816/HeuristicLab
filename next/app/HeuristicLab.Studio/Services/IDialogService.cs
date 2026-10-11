@@ -19,6 +19,8 @@ public interface IDialogService {
   Task<bool> ConfirmAsync(string title, string message);
   /// <summary>Asks for a whole number between min and max; null if cancelled.</summary>
   Task<int?> AskNumberAsync(string title, string message, int initial, int min, int max) => Task.FromResult<int?>(null);
+  /// <summary>Asks for a line of text; null if cancelled.</summary>
+  Task<string?> AskTextAsync(string title, string message, string initial) => Task.FromResult<string?>(null);
 }
 
 public sealed class DialogService(Window owner, IFileDialogService fileDialogs) : IDialogService {
@@ -50,4 +52,7 @@ public sealed class DialogService(Window owner, IFileDialogService fileDialogs) 
 
   public async Task<int?> AskNumberAsync(string title, string message, int initial, int min, int max) =>
     await new NumberWindow(title, message, initial, min, max).ShowDialog<int?>(owner);
+
+  public async Task<string?> AskTextAsync(string title, string message, string initial) =>
+    await new TextWindow(title, message, initial).ShowDialog<string?>(owner);
 }
