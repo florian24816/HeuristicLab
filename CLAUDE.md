@@ -42,6 +42,7 @@
   events: no problem, not run / stopped by the user, waiting (in a running experiment, paused),
   working, finished (also stopped by a time limit), failed. Unsaved = changed since opened/saved
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
+  Clicking the unsaved disk saves (SaveChangesAsync): to its file, or "Save as..." without one.
   Click: details/parameters, double-click: rename, right-click: menu.
   Drag and drop (own pointer handling in ExperimentWorkspaceView, logic in the workspace VM:
   BeginDrag/TargetAt/PreviewDrop/EndDrag/Move): algorithms (also dragged by their problem), batch

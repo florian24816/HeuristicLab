@@ -308,6 +308,28 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     Status = $"Saved {block.Name} to {Path.GetFileName(path)}";
   }
 
+  /// <summary>
+  /// Saves an experiment's changes: to the file it was opened from or last saved to, or - if it has
+  /// none yet - to a file chosen as with "Save as...".
+  /// </summary>
+  public async Task SaveChangesAsync(ExperimentBlockViewModel block) {
+    if (block.FilePath == null) {
+      await SaveAsync(block);
+      return;
+    }
+    if (!IsEditable) {
+      Status = "An experiment can be saved when nothing runs.";
+      return;
+    }
+    try {
+      await Task.Run(() => Documents.Save(block.Experiment, block.FilePath));
+      block.IsModified = false;
+      Status = $"Saved {block.Name} to {Path.GetFileName(block.FilePath)}";
+    } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+      Status = $"Could not save {block.Name}: {e.Message}";
+    }
+  }
+
   internal void ShowInRunTab(BlockViewModel block) {
     var optimizer = block switch {
       ExperimentBlockViewModel e => (IOptimizer)e.Experiment,

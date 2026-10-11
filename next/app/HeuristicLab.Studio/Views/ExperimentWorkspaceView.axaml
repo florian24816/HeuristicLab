@@ -37,7 +37,8 @@
                     <Border Classes="square logo" ToolTip.Tip="{Binding Kind}">
                         <c:Pictogram Symbol="{Binding Pictogram}" Foreground="{StaticResource InkBrush}" />
                     </Border>
-                    <Border Classes="square state" IsVisible="{Binding HasState}" ToolTip.Tip="{Binding StateTip}">
+                    <Border Classes="square state" Classes.clickable="{Binding IsStateClickable}" IsVisible="{Binding HasState}"
+                            ToolTip.Tip="{Binding StateTip}" Tapped="StateTapped" DoubleTapped="StateDoubleTapped">
                         <c:Pictogram Symbol="{Binding StatePictogram}" Foreground="White" />
                     </Border>
                     <Border Classes="name">
@@ -156,6 +157,9 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="MinWidth" Value="64" />
             <Setter Property="Padding" Value="10,0" />
+        </Style>
+        <Style Selector="Border.state.clickable">
+            <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style Selector="Border.ghost">
             <Setter Property="Background" Value="Transparent" />

@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Headless;
 using HeuristicLab.Next.Runtime;
 using HeuristicLab.Optimization;
@@ -140,6 +141,75 @@ public class StudioBlockDesignTests {
       return file;
     }, CancellationToken.None);
     Assert.IsTrue(new FileInfo(shot).Length > 5_000);
+  }
+
+  private sealed class SaveDialogs(string path) : HeuristicLab.Studio.Services.IFileDialogService {
+    public int SaveAsked { get; private set; }
+    public Task<string?> OpenHlFileAsync() => Task.FromResult<string?>(null);
+    public Task<string?> SaveHlFileAsync(string suggestedName) { SaveAsked++; return Task.FromResult<string?>(path); }
+    public Task<string?> OpenDataFileAsync() => Task.FromResult<string?>(null);
+    public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
+    public Task<string?> SaveCsvFileAsync(string suggestedName) => Task.FromResult<string?>(null);
+  }
+
+  [TestMethod]
+  public async Task ClickingTheUnsavedDiskSaves() {
+    var path = Path.Combine(Path.GetTempPath(), $"studio-quick-save-{Guid.NewGuid():N}.hl");
+    try {
+      await session.Dispatch(async () => {
+        var files = new SaveDialogs(path);
+        var vm = new MainViewModel(files);
+        var ws = vm.Workspace;
+        var window = new MainWindow { DataContext = vm, Width = 1200, Height = 700 };
+        window.Show();
+        var experiment = ws.NewExperiment();
+        var block = ws.AddAlgorithm(experiment, TabuSearch);
+        ws.SetProblem(block, Tsp());
+        ws.Selected = null;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Avalonia.Point Disk() {
+          var square = window.GetVisualDescendantsOf<Avalonia.Controls.Border>()
+            .First(b => b.Classes.Contains("state") && b.DataContext == experiment && b.IsEffectivelyVisible);
+          return square.TranslatePoint(new Avalonia.Point(square.Bounds.Width / 2, square.Bounds.Height / 2), window)!.Value;
+        }
+        async Task Click(Avalonia.Point at) {
+          window.MouseDown(at, Avalonia.Input.MouseButton.Left);
+          window.MouseUp(at, Avalonia.Input.MouseButton.Left);
+          for (int i = 0; i < 50 && !File.Exists(path) | experiment.IsModified; i++) {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+          }
+        }
+
+        // never saved: the click asks for a file, as "Save as..." does
+        Assert.IsTrue(experiment.IsStateClickable);
+        StringAssert.Contains(experiment.StateTip, "click to save as");
+        await Click(Disk());
+        Assert.AreEqual(1, files.SaveAsked);
+        Assert.AreEqual(path, experiment.FilePath);
+        Assert.IsTrue(experiment.IsSaved);
+        Assert.AreEqual("experiment_saved", experiment.StatePictogram);
+        Assert.IsFalse(experiment.IsStateClickable, "saved: nothing to do");
+        Assert.IsFalse(block.IsEditingName, "a click on the disk is not a rename");
+
+        // changed since: the click saves to the same file, without asking
+        block.Name = "Changed";
+        Assert.IsFalse(experiment.IsSaved);
+        StringAssert.Contains(experiment.StateTip, "click to save");
+        var before = File.GetLastWriteTimeUtc(path);
+        await Task.Delay(30);
+        await Click(Disk());
+        Assert.AreEqual(1, files.SaveAsked, "no file dialog the second time");
+        Assert.IsTrue(experiment.IsSaved);
+        Assert.IsTrue(File.GetLastWriteTimeUtc(path) > before, "written again");
+        var reopened = (Experiment)Documents.Load(path);
+        Assert.AreEqual("Changed", reopened.Optimizers.Single().Name, "the change is in the file");
+        window.Close();
+      }, CancellationToken.None);
+    } finally {
+      File.Delete(path);
+    }
   }
 
   [TestMethod]

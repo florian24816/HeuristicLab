@@ -156,6 +156,18 @@ public partial class ExperimentWorkspaceView : UserControl {
     if ((sender as Control)?.DataContext is BlockViewModel block) block.SelectCommand.Execute(null);
   }
 
+  // an unsaved experiment's disk: save (or "Save as..." if it has no file yet)
+  private async void StateTapped(object? sender, TappedEventArgs e) {
+    if ((sender as Control)?.DataContext is not BlockViewModel { IsStateClickable: true } block) return;
+    e.Handled = true;
+    await block.ClickStateAsync();
+  }
+
+  // a quick second click on the disk is not a rename
+  private void StateDoubleTapped(object? sender, TappedEventArgs e) {
+    if ((sender as Control)?.DataContext is ExperimentBlockViewModel) e.Handled = true;
+  }
+
   private void BlockDoubleTapped(object? sender, TappedEventArgs e) {
     if ((sender as Control)?.DataContext is BlockViewModel block) block.RenameCommand.Execute(null);
   }

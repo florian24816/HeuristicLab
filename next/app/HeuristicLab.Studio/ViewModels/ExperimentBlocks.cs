@@ -90,6 +90,12 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   public virtual string StateTip => "";
   public bool HasState => StatePictogram != null;
 
+  /// <summary>The state square does something when clicked (an unsaved experiment saves).</summary>
+  public virtual bool IsStateClickable => false;
+
+  /// <summary>Click on the state square.</summary>
+  public virtual Task ClickStateAsync() => Task.CompletedTask;
+
   /// <summary>Last field (batch runs and time-limit runs): repetitions / time limit, counting while running.</summary>
   public virtual bool HasBadge => false;
   public virtual string Badge => "";
@@ -277,17 +283,24 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   public Experiment Experiment { get; } = experiment;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsSaved), nameof(StatePictogram), nameof(StateTip))]
+  [NotifyPropertyChangedFor(nameof(IsSaved), nameof(StatePictogram), nameof(StateTip), nameof(IsStateClickable))]
   public partial string? FilePath { get; set; } = filePath;
 
   /// <summary>Changed since it was opened or saved (opened from a file: unchanged).</summary>
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsSaved), nameof(StatePictogram), nameof(StateTip))]
+  [NotifyPropertyChangedFor(nameof(IsSaved), nameof(StatePictogram), nameof(StateTip), nameof(IsStateClickable))]
   public partial bool IsModified { get; set; }
 
   public bool IsSaved => FilePath != null && !IsModified;
   public override string? StatePictogram => IsSaved ? "experiment_saved" : "experiment_unsaved";
-  public override string StateTip => IsSaved ? $"Saved: {FilePath}" : FilePath == null ? "Not saved yet" : $"Changed since saved to {FilePath}";
+  public override string StateTip => IsSaved ? $"Saved: {FilePath}"
+    : FilePath == null ? "Not saved yet - click to save as..."
+    : $"Changed since saved to {FilePath} - click to save";
+
+  /// <summary>Unsaved: a click saves it (to its file, or asks for one if it has none yet).</summary>
+  public override bool IsStateClickable => !IsSaved;
+
+  public override Task ClickStateAsync() => IsSaved ? Task.CompletedTask : Workspace.SaveChangesAsync(this);
 
   /// <summary>Checked experiments are started by "Start selected experiments".</summary>
   [ObservableProperty]
