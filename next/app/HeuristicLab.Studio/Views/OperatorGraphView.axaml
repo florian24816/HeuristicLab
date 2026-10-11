@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             xmlns:c="using:HeuristicLab.Studio.Controls"
              x:Class="HeuristicLab.Studio.Views.OperatorGraphView"
              x:DataType="vm:OperatorGraphViewModel">
     <UserControl.Styles>
@@ -12,20 +13,39 @@
             <Setter Property="Canvas.Left" Value="{Binding LabelX}" />
             <Setter Property="Canvas.Top" Value="{Binding LabelY}" />
         </Style>
-        <Style Selector="Border.node">
-            <Setter Property="Background" Value="#DCEBDD" />
-            <Setter Property="BorderBrush" Value="#6F9F72" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="TextElement.Foreground" Value="#1E2A1F" />
+        <!-- an operator: orange square with its pictogram, then a rounded block shading from the name
+             rectangles' light grey (top right) to the orange (bottom left) -->
+        <Style Selector="Border.opsquare">
+            <Setter Property="Background" Value="#F7931D" />
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="9" />
         </Style>
-        <Style Selector="Border.node.initial">
+        <Style Selector="Border.node">
+            <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Width" Value="213" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="12,3" />
+            <Setter Property="TextElement.Foreground" Value="#1E1E1E" />
         </Style>
         <Style Selector="Border.node.selected">
-            <Setter Property="BorderBrush" Value="#2E7D32" />
-            <Setter Property="BorderThickness" Value="3" />
+            <Setter Property="BorderBrush" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Path.edge">
+            <Setter Property="Stroke" Value="#6E6E6E" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+        </Style>
+        <Style Selector="Path.edge.back">
+            <Setter Property="Stroke" Value="#9A9A9A" />
+            <Setter Property="StrokeDashArray" Value="5,3" />
+        </Style>
+        <Style Selector="Path.arrow">
+            <Setter Property="Fill" Value="#6E6E6E" />
+        </Style>
+        <Style Selector="Path.arrow.back">
+            <Setter Property="Fill" Value="#9A9A9A" />
         </Style>
     </UserControl.Styles>
     <Grid RowDefinitions="Auto,3*,4,2*">
@@ -50,7 +70,10 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:GraphEdgeView">
-                                    <Line StartPoint="{Binding Start}" EndPoint="{Binding End}" Stroke="#8A8A8A" StrokeThickness="1.5" />
+                                    <Panel>
+                                        <Path Classes="edge" Classes.back="{Binding IsBack}" Data="{Binding Line}" />
+                                        <Path Classes="arrow" Classes.back="{Binding IsBack}" Data="{Binding Arrow}" />
+                                    </Panel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -60,7 +83,7 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:GraphEdgeView">
-                                    <TextBlock Text="{Binding Label}" FontSize="10" Opacity="0.6" />
+                                    <TextBlock Text="{Binding Label}" FontSize="11" Opacity="0.7" IsVisible="{Binding HasLabel}" />
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -70,13 +93,25 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:GraphNodeView">
-                                    <Border Classes="node" Classes.initial="{Binding IsInitial}" Width="190" Height="44" Padding="8,3"
-                                            Tapped="NodeTapped" DoubleTapped="NodeDoubleTapped" ToolTip.Tip="{Binding Kind}">
-                                        <StackPanel VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding Kind}" FontSize="10" Opacity="0.7" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </Border>
+                                    <StackPanel Orientation="Horizontal" Spacing="3" Background="Transparent" Cursor="Hand"
+                                                Tapped="NodeTapped" DoubleTapped="NodeDoubleTapped" ToolTip.Tip="{Binding Kind}">
+                                        <Border Classes="opsquare">
+                                            <c:Pictogram Symbol="{Binding Pictogram}" Foreground="#1E1E1E" />
+                                        </Border>
+                                        <!-- the gradient per block (a brush in a style would be shared between windows) -->
+                                        <Border Classes="node">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="100%,0%" EndPoint="0%,100%">
+                                                    <GradientStop Offset="0" Color="#EDEDED" />
+                                                    <GradientStop Offset="1" Color="#F7931D" />
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Kind}" FontSize="10" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

@@ -188,6 +188,18 @@ public class StudioAlgorithmDetailTests {
       graph.OpenCommand.Execute(null);
       Assert.IsTrue(graph.CanGoBack);
       Assert.IsTrue(graph.Nodes.Count > 5, "main loop graph");
+      // arrows: the loop goes back up (along the right side), branches are labelled, "Successor" is not
+      Assert.IsTrue(graph.Edges.Any(e => e.IsBack), "the main loop has an arrow back to its start");
+      Assert.IsTrue(graph.Edges.Any(e => e.HasLabel && e.Label != "Start"), "branches say which branch");
+      Assert.IsFalse(graph.Edges.Any(e => e.Label == "Successor"));
+      Assert.AreEqual(1, graph.Edges.Count(e => e.Label == "Start"));
+      Assert.IsTrue(graph.Nodes.Any(n => n.Pictogram == "operator_multiple") || graph.Nodes.All(n => n.Pictogram == "operator_single"));
+      foreach (var a in graph.Nodes)
+        foreach (var b in graph.Nodes.Where(b => b != a))
+          Assert.IsFalse(Math.Abs(a.X - b.X) < OperatorGraphViewModel.NodeWidth && Math.Abs(a.Y - b.Y) < OperatorGraphViewModel.NodeHeight, $"{a.Name} overlaps {b.Name}");
+      graph.Zoom = 0.4;  // the whole main loop in the picture
+      Shot("graph-main-loop");
+      graph.Zoom = 1;
       graph.BackCommand.Execute(null);
       Assert.IsFalse(graph.CanGoBack);
 

@@ -76,7 +76,11 @@
   detaching them; "Remove problem" tolerates exactly that crash.
   Algorithm detail (click an algorithm or its problem): tabs Problem (library/instance, typed
   parameters, coordinates + best known tour), Algorithm, Results (live, tables as charts), Runs,
-  Operator Graph (layered from the initial operator, nested graphs, breakpoints), Engine (choice,
+  Operator Graph (layered from the initial operator, nested graphs, breakpoints; blocks = orange
+  square with operator_single/operator_multiple (own graph inside) + rounded block with a gradient
+  #EDEDED top right -> #F7931D bottom left; layers centered, ordered by predecessors; curved arrows
+  with arrowheads, loops dashed along the right side, labels only when not "Successor", a "Start"
+  arrow; node list order = ItemInspector.Layout order, which MultiEdit keys rely on), Engine (choice,
   log); Start/Pause/Stop/Prepare. Parameter editing via runtime ItemInspector/CheckedList:
   bool, text, choices with nested parameters, arrays/matrices, checked lists (analyzers), Show in
   Run (GetsCollected). Views are found by ViewLocator (XyzViewModel -> XyzView), so nested
