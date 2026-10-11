@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             xmlns:local="using:HeuristicLab.Studio.Views"
+             x:Class="HeuristicLab.Studio.Views.AnalysisView"
+             x:DataType="vm:AnalysisViewModel">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,6">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="▶ Start detailed analysis run" Command="{Binding StartCommand}" Background="#F2C94C" Foreground="#1E2A1F" />
+                <Button Content="■ Stop" Command="{Binding StopCommand}" />
+                <TextBlock Text="Keep up to" VerticalAlignment="Center" />
+                <TextBox Text="{Binding StorageLimitText}" Width="90" ToolTip.Tip="Solutions kept as copies for drawing (memory); later steps are still recorded and charted." />
+                <TextBlock Text="solutions" VerticalAlignment="Center" />
+                <Button Content="⛶ Fullscreen" Click="OnFullscreen" IsEnabled="{Binding HasTrace}" ToolTip.Tip="Picture fullscreen, controls in a movable window (F11; Esc or F11 to leave)" />
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="10,0,0,0" />
+            </StackPanel>
+            <TextBlock Text="{Binding Unsupported}" Foreground="#B0563A" TextWrapping="Wrap" IsVisible="{Binding !IsSupported}" />
+            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.7" IsVisible="{Binding !HasTrace}"
+                       Text="Runs a copy of this algorithm and records every solution it creates: by which operator, from which parents, with which quality, in which iteration and when. Afterwards (and while it runs) select iterations in the chart and step through them." />
+        </StackPanel>
+        <Grid RowDefinitions="*,4,340" IsVisible="{Binding HasTrace}">
+            <ContentControl Content="{Binding Visuals}" />
+            <GridSplitter Grid.Row="1" ResizeDirection="Rows" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+            <local:AnalysisControlsView Grid.Row="2" />
+        </Grid>
+    </DockPanel>
+</UserControl>

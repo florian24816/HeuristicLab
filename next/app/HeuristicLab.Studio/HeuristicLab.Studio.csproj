@@ -4,11 +4,16 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- HeuristicLab's own icon (linked from the legacy tree) -->
+    <ApplicationIcon>..\..\..\HeuristicLab\3.3\HeuristicLab.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+    <AvaloniaResource Include="..\..\..\HeuristicLab\3.3\HeuristicLab.ico" Link="Assets\HeuristicLab.ico" />
+    <!-- next to the program, for the desktop entry -->
+    <Content Include="..\..\..\HeuristicLab\3.3\HeuristicLab.ico" Link="HeuristicLab.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

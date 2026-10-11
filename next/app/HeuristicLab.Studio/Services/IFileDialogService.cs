@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -7,9 +8,12 @@ namespace HeuristicLab.Studio.Services;
 /// <summary>File dialogs behind an interface, so view models can be tested without a window.</summary>
 public interface IFileDialogService {
   Task<string?> OpenHlFileAsync();
+  /// <summary>Several .hl files at once (an empty list if cancelled).</summary>
+  async Task<System.Collections.Generic.IReadOnlyList<string>> OpenHlFilesAsync() => await OpenHlFileAsync() is string path ? [path] : [];
   Task<string?> SaveHlFileAsync(string suggestedName);
   Task<string?> OpenDataFileAsync();
   Task<string?> PickFolderAsync(string title);
+  Task<string?> SaveCsvFileAsync(string suggestedName);
 }
 
 public sealed class FileDialogService(TopLevel topLevel) : IFileDialogService {
@@ -28,11 +32,26 @@ public sealed class FileDialogService(TopLevel topLevel) : IFileDialogService {
     return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
   }
 
+  public async Task<System.Collections.Generic.IReadOnlyList<string>> OpenHlFilesAsync() {
+    var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions {
+      Title = "Open HeuristicLab files", AllowMultiple = true, FileTypeFilter = [HlFiles]
+    });
+    return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+  }
+
   public async Task<string?> OpenHlFileAsync() {
     var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions {
       Title = "Open HeuristicLab file", AllowMultiple = false, FileTypeFilter = [HlFiles]
     });
     return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+  }
+
+  public async Task<string?> SaveCsvFileAsync(string suggestedName) {
+    var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions {
+      Title = "Export table", SuggestedFileName = suggestedName, DefaultExtension = "csv",
+      FileTypeChoices = [new FilePickerFileType("CSV files") { Patterns = ["*.csv"] }]
+    });
+    return file?.TryGetLocalPath();
   }
 
   public async Task<string?> SaveHlFileAsync(string suggestedName) {

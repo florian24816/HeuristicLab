@@ -7,7 +7,9 @@
   explicitly says so. New work lives in next/.
 
 ## Branches and safety
-- Never touch main. Work on feature branches off deepseek-development.
+- main is the integration branch (the user merges feature branches via pull requests).
+  Never commit to main directly; start feature branches from origin/main.
+  (deepseek-development is historical: it predates the port.)
 - Never push without the user's explicit approval. The user has authorized committing
   finished ports in next/ on feature branches without asking (one commit per project).
 - No destructive git commands (reset --hard, clean -fd) or rm -rf, ever.
@@ -23,11 +25,177 @@
 
 ## Current state
 - next/app/HeuristicLab.Studio (Avalonia 12 MVVM, CommunityToolkit) on the runtime:
-  New dialog (algorithm -> compatible problem -> benchmark instance or CSV/Parquet data, via
-  Setups.Create like "hl new"), open/save .hl, editable parameters (text or operator choice,
-  via ParameterEditor; invalid input reverted), run with seed or batches (runs, parallel,
-  optional results folder) with live chart / per-run points and statistics, Results tab
-  (results folder: runs + statistics grouped by any column). Own LineChart control.
+  Experiments tab (first): several experiments in one workspace, each a tree of building blocks
+  (algorithm + its problem, batch run, time-limit run) over plain HeuristicLab objects via
+  runtime ExperimentTree (a batch run with several children wraps them in an inner Experiment
+  named "Batch content"; a time-limit run is HeuristicLab's TimeLimitRun and takes one algorithm -
+  kept that way on purpose so .hl files stay compatible with HeuristicLab 3.3 (user's decision
+  2026-10-11; a multi-block time-limit container was built and reverted).
+  While anything runs, blocks stay clickable (details shown) but nothing changes: menus offer no
+  edits, names/limits/repetitions are ignored, add buttons disabled, no saving, dragging, copying
+  or editing across algorithms; value and choice parameters show parameter_currently_not_editable. Block design (user's request,
+  no rounded corners, no green/yellow): orange (#F7931D) square with the kind's pictogram, a dark
+  square with the state (experiment: saved/unsaved; algorithm: status), the name; batch/time-limit
+  runs end in an orange field (repetitions / time limit; while running "3 / 10" or "01:23 / 05:00").
+  Pictograms are the user's SVGs in Assets/Pictograms (Controls.Pictogram reads the paths; the
+  working status turns as its animateTransform says). Algorithm status from the algorithm's
+  events: no problem, not run / stopped by the user, waiting (in a running experiment, paused),
+  working, finished (also stopped by a time limit), failed. Unsaved = changed since opened/saved
+  (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
+  Start all / Start selected / Stop are drawn like blocks (Button.picto: orange square with
+  Experiment_run_all / Experiment_run_selected / experiment_stop, then a grey rectangle).
+  Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment (ChooseWindow: pick it
+  in a list, the delete button is disabled until then; ExperimentTree.DeleteRuns clears every
+  optimizer's runs without Prepare; never single runs, never while running; marks it unsaved).
+  Each experiment's area is filled gunmetal grey (#3E474D, Border.experiment, no border) with light
+  writing (checkbox, arrows, links, missing-text in #F2A27E). "Open..." takes several .hl files at once
+  (IFileDialogService.OpenHlFilesAsync, AllowMultiple): each opens as its own experiment.
+  Clicking the unsaved disk saves (SaveChangesAsync): to its file, or "Save as..." without one.
+  "Rename file..." (experiment detail next to "Save as...", experiment menu; only with a file): renames
+  the .hl file in its folder (TextWindow / IDialogService.AskTextAsync; never over another file; the
+  experiment keeps its name; recent files follow). Icon: HeuristicLab/3.3/HeuristicLab.ico, linked
+  into the app (window icon via a :is(Window) style, ApplicationIcon, desktop entry; also drawn at the
+  top right of the tab row in MainWindow).
+  Click: details/parameters, double-click: rename, right-click: menu.
+  Drag and drop (own pointer handling in ExperimentWorkspaceView, logic in the workspace VM:
+  BeginDrag/TargetAt/PreviewDrop/EndDrag/Move): algorithms (also dragged by their problem), batch
+  runs and time-limit runs (with their content) move anywhere, also into other experiments; upper
+  half of a row = before it, lower half = after it or first inside a batch/time-limit run that
+  takes it; add button / experiment border = at the end. A faded copy (opacity 0.4) shows where it
+  lands, and the original is hidden meanwhile (BlockViewModel.IsMoving; shown again when there is
+  no valid target); Escape cancels. Not into itself; a time-limit run holds one algorithm. Moves go through
+  ExperimentTree.Remove/Insert (HeuristicLab prepares an added optimizer; runs go with it).
+  Copy / Copy n times... (menu): ExperimentTree.Copy = deep clone without runs, inserted after the
+  original as "Name (copy k)"; not for an algorithm inside a time-limit run (copy the run).
+  Edit across algorithms (ViewModels/MultiEdit.cs): Shift+click on a value (text/checkbox) or a
+  choice (ComboBox) in the Algorithm or Operator Graph tab (tunnel handler in AlgorithmDetailView,
+  fields carry class "field") -> every algorithm block of the same type in the same experiment that
+  has that field gets a purple overlay (shown one stronger; problem blocks untouched) and the field
+  is purple (App.axaml styles, class "multi"). Clicking a purple block shows the same field there
+  (AlgorithmDetailViewModel.Reveal: tab, parameter, analyzer entry, graph node) and focuses it
+  (text selected; a choice's list opens: arrows + Enter or click). Shift+click on a purple block or
+  the purple field ends it. Shift+Enter in the purple field takes the value and names that algorithm
+  after it (ViewModels/AutoName.cs; bubble KeyDown with handledEventsToo in AlgorithmDetailView):
+  default/copy/empty name -> "<algorithm tag>_<tag>" (LS_maxIt300), own name kept in front
+  (Randomname_LS_maxIt300), a name in this form gets the tag added or that parameter's tag replaced
+  (LS_maxIt300_MG-StochInvMultiMG). Tags: value = words cut to their first syllable, lower camel +
+  value (never starting lower case); choice = initials (one word: first syllable) + "-" + operator
+  type name shortened, its ending repeating the parameter written as the parameter's tag; algorithm
+  tag = the "(..)" of its name, else initials. Fields are addressed by keys like a/p:Analyzer/e:Name/p:X#value or
+  g/o:2:MainLoop/n:5:Name/p:Y#choice (EditContext.MultiTarget/ToggleMulti; editors rebuilt when
+  MultiVersion changes).
+  Parameter lists show the parameter kind's pictogram before the name (constrained = choice,
+  optional = may be empty, else value). Checked operator lists (analyzers) are numbered: a
+  MultiAnalyzer runs its ticked operators in list order. Nested editors below a list get a
+  "<name> selected. Details/Options:" heading. Result lists (algorithm Results tab, Results tab's
+  Run view) show the result's kind first: chart (result_diagram_logo: first visualization is a
+  ChartVisual), picture (result_visualisation_logo: any other visualization), value (the optional
+  value parameter's pictogram); decided once per value type. Start all / start selected (ticked) experiments, enabled only
+  when complete; no seed is imposed (a fixed seed would make batch repetitions identical).
+  Legacy algorithms crash on Problem = null (OnProblemChanged): clone problems instead of
+  detaching them; "Remove problem" tolerates exactly that crash.
+  Algorithm detail (click an algorithm or its problem): tabs Problem (library/instance, typed
+  parameters, coordinates + best known tour), Algorithm, Results (live, tables as charts), Runs,
+  Operator Graph (layered from the initial operator, nested graphs, breakpoints; blocks = orange
+  square with operator_single/operator_multiple (own graph inside), corners rounded like the block (10) + rounded block with a gradient
+  #EDEDED top right -> #F7931D bottom left; layers centered, ordered by predecessors; curved arrows
+  with arrowheads, loops dashed along the right side, labels only when not "Successor", a "Start"
+  arrow; node list order = ItemInspector.Layout order, which MultiEdit keys rely on), Engine (choice,
+  log); Start/Pause/Stop/Prepare. Parameter editing via runtime ItemInspector/CheckedList:
+  bool, text, choices with nested parameters, arrays/matrices, checked lists (analyzers), Show in
+  Run (GetsCollected). Views are found by ViewLocator (XyzViewModel -> XyzView), so nested
+  editors recurse.
+  Live monitoring: while anything runs (experiments or a single algorithm), a workspace timer
+  (500 ms, ExperimentWorkspaceViewModel.RefreshLive) refreshes the shown detail: results in place
+  (selection stays), the selected result's quality/visualization/value (tours via
+  ItemInspector.TourOf, tables as charts, structured values via ItemInspector.Members), runs
+  tables and tree counters. Reads tolerate the running algorithm changing the data.
+  Visualizations (results and the Problem tab) come from runtime Visuals.Visualizations, a toolkit-
+  free picture model mirroring HeuristicLab's default views: ChartVisual (DataTable chart types incl.
+  histograms with HeuristicLab's binning, second y axis, scatter plots), SceneVisual (2D: tours, VRP
+  routes, orienteering, QAP via multidimensional scaling, LAP, knapsack, 2D packing, Gantt charts,
+  test function landscapes, expression trees, ant trail replayed with the ant interpreter, lawn),
+  BoxesVisual (3D packing) and TextVisual (formulas, robot code). Studio renders them with LineChart,
+  SceneView (zoom/pan) and BoxesView (software 3D, drag to rotate) in VisualsView; a picker chooses
+  among several pictures and keeps the choice while results update. Orienteering has no crossover or
+  mutation: run it with Variable Neighborhood Search.
+  Samples (HeuristicLab's start page): runtime Samples embeds the 37 .hl files of
+  HeuristicLab.Optimizer/3.3/Documents (linked) in the start page's groups; Studio lists them on the
+  Experiments tab when nothing is selected ("Samples..."): algorithms open as experiments, scripts in
+  the Scripts tab (code, run on a thread, output, compile errors, variables drawn like results; no
+  kill - .NET has no thread abort). All run except SGP_Robocode (needs Robocode) and
+  GUI_Automation_Script (WinForms MainForm, does not compile). Older .hl files lost the tree
+  length analyzer's lookup on load (upstream #3139): fixed by a replacement
+  SymbolicExpressionTreeLengthAnalyzer.cs in next/core (keeps the parameter's ActualName).
+  Detailed analysis (algorithm detail tab): runtime Tracing.DetailedRun runs a copy of an operator-
+  based algorithm on a RecordingEngine (sequential engine + a look at each operator's scope and its
+  ancestors afterwards): every new or changed solution is a step (operator, parents, quality,
+  iteration, time). Copies made by selection are recognized by content fingerprint (not new);
+  crossover parents are the scope's sub-scopes. Iterations end at the algorithm's Analyzer (as
+  HeuristicLab's quality charts index them), else at the Generations/Iterations counter; an iteration
+  may create nothing (local search at its local optimum keeps iterating) and still counts - the view
+  then shows the solution kept from before. Raw
+  solutions are drawn with their problem via Visualizations.ForSolution (decoders run in a scope
+  holding the problem's parameters) and combined by Visuals.Composition: current solution red, what
+  it has beyond its ancestors from before its iteration yellow, earlier iterations blue shades,
+  later ones (finished runs) green shades, a selected range's start/end as wide/medium strokes
+  under it; no transparency. Only shapes marked IsSolution are recolored (builders mark them;
+  trees and the lawn are not layered). A selected range plays as an animation (iterations/s);
+  "Earlier/Later iterations" inputs always apply (within a range too). Every chart, picture and 3D
+  view has a clickable legend: series / shape groups (Shape.Group, else by kind) / items can be
+  hidden; the hidden set can be shared via HiddenSet (VisualsViewModel.Hidden, analysis series).
+  Fullscreen (button or F11; Esc or F11 leaves): AnalysisFullscreenWindow, picture fills the
+  screen, AnalysisControlsView (navigation + chart) in a movable, resizable floating panel. Not for
+  BasicAlgorithms or data analysis (GPR): no candidate solutions in scopes. HeuristicLab's GA
+  default crossover for real vectors is CopyCrossover: only mutations create new solutions there.
+  Results tab (RunAnalysisView, runtime Runs.*): ticked sources (any experiment / batch run /
+  time-limit run / algorithm of the workspace, results folders) -> RunTable (source, origin
+  relative to the source, run, param:*, result:*; numbers or text; a run from two sources once),
+  filters (column op value), grouping by any combination of columns (numbers in N ranges),
+  Table (varying parameters or all, sort, CSV export), Charts (box plot, scatter, histogram,
+  cumulative distribution, curves of a DataTable row per run + group mean; NaN = line gap),
+  Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
+  Bonferroni-Holm, t-test, Cohen's d, Hedges' g), Run (one run's results with visualizations).
+  Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
+  process affinity (hard limit, Linux/Windows), threads per algorithm (1 = HeuristicLab's default
+  SequentialEngine; more = ParallelEngine with that DegreeOfParallelism, set by Resources.Configure
+  before a start, only on prepared algorithms, Debug Engine kept), experiments at the same time
+  (semaphore in StartAsync), memory limit (monitor stops running work), priority. Nothing in
+  HeuristicLab uses the GPU. Runs get "Resources: ..." parameters (Resources.Tag) to compare in the
+  Results tab. Same seed, same result on any threads: the parallel engine only parallelizes
+  evaluation (tested).
+  HeuristicLab facts behind it: only the Debug Engine honors breakpoints; Prepare() gives an
+  algorithm a new Results collection (never cache it); an algorithm's valid operators (move
+  generators, ...) come from its problem, so rebuild parameter views after a problem change.
+  No toolbar (removed 2026-10-11, user's request): everything starts in the Experiments tab -
+  "+ New experiment / open..." offers New experiment, New from data or benchmark... (the New dialog:
+  algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like
+  "hl new", opened as a new experiment), Open..., Open recent (workspace RecentFiles) and Samples...
+  Seeds are the algorithms' own Seed/SetSeedRandomly parameters, parallelism is the Resources tab.
+  No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab
+  can still add folders written by "hl run --store"). Runs tab (RunsBrowserViewModel): tree of the
+  workspace's experiments and blocks, the selected block's runs (RunsViewModel table), the selected
+  run's parameters and results with pictures; "Show runs" (block menu / experiment detail) jumps
+  there. No Solution tab (removed 2026-10-11; runtime Solutions stays for the CLI). Sweeps and
+  walk-forward are CLI-only now (hl run --sweep, hl walkforward).
+  Run tables (Runs tab / algorithm Runs, Results tab Table) are TableGridViewModel/TableGridView:
+  columns alternate grey #D6D6D6 / light grey #EBEBEB, every other row at strength 0.55 (blended
+  over white, opaque); fixed columns stay in view when scrolling sideways (Controls.Sticky moves
+  them by the ScrollViewer offset, ZIndex above; the header sticks the same way vertically):
+  Results: Source #FDE5C8, Origin #FBCD96, Run #F9B462 (palest to closest to the logo orange);
+  Runs: Run #F9B462. Click a row to select it (blue overlay); Results header click sorts.
+  Pickers keep one searchable list (not HeuristicLab's collapsed tree) but show its categories
+  (CatalogEntry.Category/CategoryOrder/Priority from [Creatable], Catalog.ByCategory): CatalogItem rows
+  tinted per category (CategoryColors: light tint + dark heading color, no orange), the first row of
+  a category carries its name (CatalogItemTemplate / ListBox.catalog in App.axaml). Algorithm
+  picker (CatalogPickerWindow); problem dialog (NewSetupWindow): problem list (searchable, grouped)
+  and benchmark instances (searchable, "(none)" always first) side by side.
+  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files and resource limits.
+  Own LineChart control.
+  Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,
+  launchers hl and hl-studio in ~/.local/bin, desktop entry; needs the .NET 10 runtime).
+  DataFiles.Read/Write block on Parquet.Net's async API: keep that work on the thread pool
+  (Task.Run), else it deadlocks on the UI thread.
   Tests (next/tests/HeuristicLab.Studio.Tests) run headless (Avalonia.Headless + Skia) and
   save screenshots (studio-*.png in the test bin folder) for visual review.
   Note: HeadlessUnitTestSession.Dispose() hangs (12.1.3) - never dispose it in tests.
@@ -38,17 +206,30 @@
   DataProblems (table -> regression/classification/time series/trading; kind decided by exactly
   consumed data types, never by contravariant pattern matching), Features (return, logreturn,
   diff, lag, lead, rolling mean/std/min/max, zscore; composable), OptimizerRunner, BatchRunner,
-  ResultStore, ItemValues, Provenance. Front ends must not use WinForms-era APIs (ItemImage).
+  ResultStore (label:/param:/result: columns), ItemValues, Provenance, Solutions (models,
+  metrics, predictions, trading equity, tours), WalkForward (rolling/expanding windows; also sets
+  a symbolic problem's FitnessCalculationPartition), Sweeps (full factorial, common seeds, runs
+  labelled "config"). Run labels (RunOptions.Labels) end up in reports and store rows.
+  Front ends must not use WinForms-era APIs (ItemImage).
 - next/app/HeuristicLab.Cli ("hl"), research workflow on the runtime:
   hl list algorithms|problems; hl instances <problem>;
   hl new <algorithm> [--problem P] [--instance I | --data f --target y] [--set N=V]... --out f.hl;
   hl data info f; hl data derive f --add EXPR... [--dropna] --out f2 (CSV or Parquet);
   hl new ... --data f --target y [--inputs a,lag(x,1..3)] [--training 66 --training-start 3];
+  hl walkforward f.hl --train N --test M [--step --expanding --start --seed --parallel --store --out];
+  hl show f.hl [--solution NAME] [--predictions out.csv] [--json];
+  hl run f.hl --sweep "Name=v1,v2" [--sweep ...] --repeat N (full factorial, same seeds per config);
   hl info f.hl; hl run f.hl [--seed S] [--set N=V]... [--repeat N --parallel K] [--timeout] [--out report.json]
   [--store DIR] [--save f.hl]; hl store list|summary [--metric M --by param:X]|export [--csv f] DIR.
   Exit 0 completed, 1 failed, 2 usage, 3 stopped (timeout/Ctrl+C; reports still written).
   Batches: explicit seeds S..S+N-1 (base seed drawn and recorded if not given), deep clones per
   run; parallel and sequential give identical results. Results store = folder of JSON reports.
+- next/tools/HeuristicLab.Examples: builds the course's example experiments (HEU5 exercises 3-6)
+  as .hl files (dotnet run --project next/tools/HeuristicLab.Examples -- <folder>; "probe" lists an
+  algorithm's choices, "show f.hl" what a file holds). Each configuration gets a tiny trial run first.
+  Batch runs hold the algorithm directly (as HeuristicLab builds them; Studio's ExperimentTree wraps
+  in "Batch content"). HeuristicLab's TSP has no swap2 move evaluator: a swap2 tabu search "completes"
+  evaluating nothing; the tabu search uses inversion (2-opt) moves instead.
 - Not ported yet: Problems.ExternalEvaluation* (protobuf 2.4 / Matlab COM / Scilab),
   ExactOptimization (OR-Tools, Windows-only native runtime), all Views/GUI, Hive/OKB/Services.
 - next/tests/HeuristicLab.Tests: legacy tests linked unchanged incl. samples, run on
@@ -59,7 +240,10 @@
   thread-safe caches/type registry. Same assembly identity as the NuGet package, same format.
 - HEAL.Attic does not know .NET 5+'s StringEqualityComparer (default comparer of
   Dictionary<string,T>/HashSet<string>); next/core/HeuristicLab.Common/AtticRuntimeTypes.cs
-  registers it in a module initializer. StringComparer.Ordinal(IgnoreCase) dictionaries
+  registers it in a module initializer.
+  It is written as GenericEqualityComparer<string> (vendored Attic patch 3, PortableComparers.cs),
+  so files saved here open in HeuristicLab 3.3 on .NET Framework (test
+  SavedFilesContainNoModernDotNetOnlyTypes); files written before still load. StringComparer.Ordinal(IgnoreCase) dictionaries
   still cannot be persisted on .NET Core (Attic re-creates comparers via Activator).
 - Item.ItemImage and VSImageLibrary throw PlatformNotSupportedException off Windows
   (System.Drawing.Common). Front-end code must never touch ItemImage until decoupled.
@@ -74,6 +258,9 @@
 - Plugin type discovery (LightweightApplicationManager replacement) scans assemblies in
   name order: AppDomain order differs between runtimes, and defaults are picked from the
   first discovered type.
+- Trading (symbolic): the target (price change) must be among the inputs, but the grammar only
+  allows lagged variables with lag <= -1, so models cannot read the present (tested). Signals
+  are path-dependent: HeuristicLab evaluates training and test each from a fresh start.
 - Autoregressive Modeling reads y[row - offset] without checking: set a training start
   (--training-start / DataProblems trainingStart) of at least its maximum time offset.
 - Seeded runs are reproducible per runtime and platform, not across them: .NET Framework,

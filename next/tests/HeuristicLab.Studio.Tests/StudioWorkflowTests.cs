@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Headless;
 using HeuristicLab.Algorithms.GeneticAlgorithm;
 using HeuristicLab.Next.Runtime;
@@ -25,6 +26,59 @@ public class StudioWorkflowTests {
   private static SetupResult SmallGaTsp() => Setups.Create(new SetupRequest("GeneticAlgorithm") {
     Problem = "TravelingSalesmanProblem", Instance = "berlin52", Settings = ["PopulationSize=20", "MaximumGenerations=10"]
   });
+
+  /// <summary>One list as before, but grouped by HeuristicLab's categories: a heading and a tint per category.</summary>
+  [TestMethod]
+  public async Task AlgorithmPickerGroupsAndTintsByCategory() {
+    await OnUiThread(() => {
+      var vm = new CatalogPickerViewModel("Add algorithm", Catalog.Algorithms());
+      var headings = vm.Visible.Where(i => i.StartsGroup).Select(i => i.Category).ToList();
+      CollectionAssert.AllItemsAreUnique(headings, "each category is one block");
+      CollectionAssert.Contains(headings, "Algorithms / Population Based");
+      CollectionAssert.Contains(headings, "Algorithms / Single Solution");
+      Assert.AreEqual(headings.Count, vm.Visible.Select(i => i.Tint).Distinct().Count(), "one color per category");
+      var ga = vm.Visible.Single(i => i.Display == "Genetic Algorithm (GA)");
+      Assert.AreEqual("Algorithms / Population Based", ga.Category);
+      Assert.AreSame(CategoryColors.For(ga.Category).Tint, ga.Tint);
+
+      var window = new CatalogPickerWindow { DataContext = vm };
+      window.Show();
+      window.CaptureRenderedFrame()!.Save(Shot("studio-algorithm-picker.png"));
+      vm.Filter = "tabu";
+      Assert.IsTrue(vm.Visible.All(i => i.Category == "Algorithms / Single Solution") && vm.Visible[0].StartsGroup, "a search keeps the headings");
+      Assert.AreEqual("Tabu Search (TS)", vm.Selected!.Name);
+      window.CaptureRenderedFrame()!.Save(Shot("studio-algorithm-picker-search.png"));
+      window.Close();
+      return 0;
+    });
+  }
+
+  /// <summary>Problem and benchmark instance side by side, both searchable; problems grouped and tinted by category.</summary>
+  [TestMethod]
+  public async Task ProblemDialogSearchesProblemsAndInstances() {
+    var (created, file) = await OnUiThread(() => {
+      var vm = new NewSetupViewModel(null, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm"));
+      Assert.IsTrue(vm.VisibleProblems.All(i => i.Category != Choice.DefaultCategory), "a GA brings no problem of its own");
+      CollectionAssert.AllItemsAreUnique(vm.VisibleProblems.Where(i => i.StartsGroup).Select(i => i.Category).ToList(), "each category is one block");
+      CollectionAssert.Contains(vm.VisibleProblems.Where(i => i.StartsGroup).Select(i => i.Category).ToList(), "Problems / Combinatorial");
+      var window = new NewSetupWindow { DataContext = vm };
+      window.Show();
+      vm.ProblemFilter = "salesman";
+      Assert.IsTrue(vm.VisibleProblems.Count >= 1 && vm.VisibleProblems.All(i => i.Display.Contains("Salesman", StringComparison.OrdinalIgnoreCase)));
+      vm.SelectedProblemItem = vm.VisibleProblems.Single(i => ((Choice)i.Value!).Entry?.Type == typeof(TravelingSalesmanProblem));
+      Assert.AreEqual(typeof(TravelingSalesmanProblem), vm.SelectedProblem!.Entry!.Type);
+      Assert.IsTrue(vm.HasInstances);
+      vm.InstanceFilter = "berlin";
+      Assert.AreEqual("(none)", vm.VisibleInstances[0], "no instance stays choosable");
+      vm.SelectedInstance = vm.VisibleInstances.Single(i => i.EndsWith("/berlin52"));
+      var path = Shot("studio-problem-dialog.png");
+      window.CaptureRenderedFrame()!.Save(path);
+      window.Close();
+      return (vm.Create() ? vm.Result : null, path);
+    });
+    Assert.AreEqual(52, ((TravelingSalesmanProblem)((GeneticAlgorithm)created!.Algorithm).Problem).Coordinates.Rows);
+    Assert.IsTrue(new FileInfo(file).Length > 10_000);
+  }
 
   [TestMethod]
   public async Task NewDialogBuildsGaForBenchmarkInstance() {
@@ -88,15 +142,15 @@ public class StudioWorkflowTests {
   [TestMethod]
   public async Task ParametersAreEditableAndInvalidValuesAreReverted() {
     var (population, selector, status, shown) = await OnUiThread(() => {
-      var vm = new MainViewModel();
       var setup = SmallGaTsp();
-      vm.ShowNew(setup);
-      vm.Parameters.Single(p => p.Name == "PopulationSize").Value = "35";
-      vm.Parameters.Single(p => p.Name == "Selector").Value = "TournamentSelector";
-      var bad = vm.Parameters.Single(p => p.Name == "MaximumGenerations");
-      bad.Value = "lots";
       var ga = (GeneticAlgorithm)setup.Algorithm;
-      return (ga.PopulationSize.Value, ga.Selector.GetType().Name, vm.Status, bad.Value);
+      string status = "";
+      var rows = ParameterEditor.Describe(ga).Select(p => new ParameterRowViewModel(ga, p, m => status = m)).ToList();
+      rows.Single(p => p.Name == "PopulationSize").Value = "35";
+      rows.Single(p => p.Name == "Selector").Value = "TournamentSelector";
+      var bad = rows.Single(p => p.Name == "MaximumGenerations");
+      bad.Value = "lots";
+      return (ga.PopulationSize.Value, ga.Selector.GetType().Name, status, bad.Value);
     });
     Assert.AreEqual(35, population);
     Assert.AreEqual("TournamentSelector", selector);
@@ -105,43 +159,209 @@ public class StudioWorkflowTests {
   }
 
   [TestMethod]
-  public async Task BatchRunStoresResultsAndBrowserSummarizesThem() {
-    var folder = Path.Combine(Path.GetTempPath(), $"studio-store-{Guid.NewGuid():N}");
-    try {
-      var (completed, stored, results, runs, summary, mainShot, resultsShot) = await OnUiThread(async () => {
-        var vm = new MainViewModel();
-        vm.ShowNew(SmallGaTsp());
-        vm.SeedText = "3";
-        vm.RepetitionsText = "4";
-        vm.ParallelText = "2";
-        vm.ResultsFolder = folder;
-        var window = new MainWindow { DataContext = vm, Width = 1150, Height = 720 };
-        window.Show();
-        await vm.RunCommand.ExecuteAsync(null);
-        var main = Shot("studio-batch.png");
-        window.CaptureRenderedFrame()!.Save(main);
+  public async Task NewSetupOpensAsAnExperiment() {
+    var (name, algorithm, problem) = await OnUiThread(() => {
+      var ws = new ExperimentWorkspaceViewModel();
+      var experiment = ws.OpenSetup(SmallGaTsp())!;
+      var block = (AlgorithmBlockViewModel)experiment.Children.Single();
+      return (experiment.Name, block.Algorithm.GetType().Name, block.Algorithm.Problem?.GetType().Name);
+    });
+    Assert.IsFalse(string.IsNullOrEmpty(name));
+    Assert.AreEqual("GeneticAlgorithm", algorithm);
+    Assert.AreEqual("TravelingSalesmanProblem", problem);
+  }
 
-        vm.ResultsBrowser.Load(folder);
-        window.GetVisualDescendantsOfType<TabControl>().Single().SelectedIndex = 1;
-        var browser = Shot("studio-results.png");
-        window.CaptureRenderedFrame()!.Save(browser);
+  private sealed class TextDialogs(string answer) : HeuristicLab.Studio.Services.IDialogService {
+    public string? Asked { get; private set; }
+    public Task<SetupResult?> NewSetupAsync() => Task.FromResult<SetupResult?>(null);
+    public Task<CatalogEntry?> PickAlgorithmAsync() => Task.FromResult<CatalogEntry?>(null);
+    public Task<HeuristicLab.Optimization.IProblem?> PickProblemAsync(HeuristicLab.Optimization.IAlgorithm algorithm) => Task.FromResult<HeuristicLab.Optimization.IProblem?>(null);
+    public Task<bool> ConfirmAsync(string title, string message) => Task.FromResult(true);
+    public Task<string?> AskTextAsync(string title, string message, string initial) { Asked = initial; return Task.FromResult<string?>(answer); }
+  }
+
+  /// <summary>"Rename file..." next to "Save as...": the experiment's .hl file gets a new name in its folder.</summary>
+  [TestMethod]
+  public async Task RenameFileRenamesTheExperimentsFile() {
+    var folder = Path.Combine(Path.GetTempPath(), $"studio-rename-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(folder);
+    try {
+      var original = Path.Combine(folder, "first.hl");
+      HeuristicLab.Next.Runtime.Documents.Save(new HeuristicLab.Optimization.Experiment { Name = "My experiment" }, original);
+      File.WriteAllText(Path.Combine(folder, "taken.hl"), "");
+      await OnUiThread(async () => {
+        var dialogs = new TextDialogs("second");
+        var ws = new ExperimentWorkspaceViewModel(dialogs);
+        var unsaved = ws.NewExperiment();
+        Assert.IsFalse(unsaved.RenameFileCommand.CanExecute(null), "no file yet");
+        var block = (await ws.OpenExperimentAsync(original))!;
+        Assert.IsTrue(block.RenameFileCommand.CanExecute(null));
+        Assert.IsTrue(block.Menu.Any(m => m.Display == "Rename file..."));
+        await block.RenameFileCommand.ExecuteAsync(null);
+        Assert.AreEqual("first.hl", dialogs.Asked, "the dialog starts with the current file name");
+        var renamed = Path.Combine(folder, "second.hl");
+        Assert.AreEqual(renamed, block.FilePath);
+        Assert.IsTrue(File.Exists(renamed) && !File.Exists(original), ws.Status);
+        Assert.AreEqual("My experiment", block.Name, "the experiment keeps its name");
+        Assert.AreEqual(Path.GetFullPath(renamed), ws.RecentFiles[0]);
+        CollectionAssert.DoesNotContain(ws.RecentFiles.ToList(), Path.GetFullPath(original));
+
+        Assert.IsFalse(ws.RenameFile(block, "taken"), "never over another file");
+        StringAssert.Contains(ws.Status, "already exists");
+        Assert.IsFalse(ws.RenameFile(block, "a/b"), "a name, not a path");
+        Assert.AreEqual(renamed, block.FilePath);
+        Assert.IsTrue(((HeuristicLab.Core.IItem)HeuristicLab.Next.Runtime.Documents.Load(renamed)) is HeuristicLab.Optimization.Experiment, "the file is intact");
+
+        // HeuristicLab's icon on the main window and on dialogs
+        var window = new MainWindow { DataContext = new MainViewModel() };
+        var dialog = new CatalogPickerWindow { DataContext = new CatalogPickerViewModel("Add algorithm", Catalog.Algorithms()) };
+        window.Show();
+        dialog.Show();
+        Assert.IsNotNull(window.Icon);
+        Assert.IsNotNull(dialog.Icon, "dialogs too");
+        dialog.Close();
         window.Close();
-        return (vm.LastBatch!.Completed, Directory.GetFiles(folder, "*.json").Length, vm.Results.Select(r => r.Name).ToList(),
-                vm.ResultsBrowser.Runs.Count, vm.ResultsBrowser.Summary.ToList(), main, browser);
+        return 0;
       });
-      Assert.AreEqual(4, completed);
-      Assert.AreEqual(4, stored);
-      CollectionAssert.Contains(results, "BestQuality");
-      Assert.AreEqual(4, runs);
-      Assert.AreEqual(4, summary.Single().Count);
-      Assert.IsTrue(new FileInfo(mainShot).Length > 10_000 && new FileInfo(resultsShot).Length > 10_000);
     } finally {
-      if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+      Directory.Delete(folder, recursive: true);
     }
   }
-}
 
-internal static class VisualExtensions {
-  public static IEnumerable<T> GetVisualDescendantsOfType<T>(this Avalonia.Visual root) where T : Avalonia.Visual =>
-    Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(root).OfType<T>();
+  private sealed class ManyFiles(params string[] paths) : HeuristicLab.Studio.Services.IFileDialogService {
+    public Task<string?> OpenHlFileAsync() => Task.FromResult<string?>(paths.FirstOrDefault());
+    public Task<IReadOnlyList<string>> OpenHlFilesAsync() => Task.FromResult<IReadOnlyList<string>>(paths);
+    public Task<string?> SaveHlFileAsync(string suggestedName) => Task.FromResult<string?>(null);
+    public Task<string?> OpenDataFileAsync() => Task.FromResult<string?>(null);
+    public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
+    public Task<string?> SaveCsvFileAsync(string suggestedName) => Task.FromResult<string?>(null);
+  }
+
+  /// <summary>"Open..." takes several .hl files at once; each becomes an experiment (shown in a gunmetal area).</summary>
+  [TestMethod]
+  public async Task OpenTakesSeveralFilesAtOnce() {
+    var folder = Path.Combine(Path.GetTempPath(), $"studio-open-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(folder);
+    try {
+      var files = new[] { "a", "b", "c" }.Select(n => {
+        var path = Path.Combine(folder, n + ".hl");
+        HeuristicLab.Next.Runtime.Documents.Save(new HeuristicLab.Optimization.Experiment { Name = "Experiment " + n }, path);
+        return path;
+      }).ToArray();
+      var shot = await OnUiThread(async () => {
+        var vm = new MainViewModel(new ManyFiles(files));
+        var window = new MainWindow { DataContext = vm, Width = 1300, Height = 800 };
+        window.Show();
+        await vm.Workspace.OpenExperimentCommand.ExecuteAsync(null);
+        CollectionAssert.AreEqual(new[] { "Experiment a", "Experiment b", "Experiment c" }, vm.Workspace.Experiments.Select(e => e.Name).ToList());
+        CollectionAssert.AreEqual(files, vm.Workspace.Experiments.Select(e => e.FilePath).ToList());
+        Assert.AreEqual("Opened 3 files", vm.Workspace.Status);
+        var area = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("experiment"));
+        Assert.AreEqual(Avalonia.Media.Color.Parse("#3E474D"), ((Avalonia.Media.ISolidColorBrush)area.Background!).Color, "filled gunmetal grey");
+        Assert.AreEqual(0, area.BorderThickness.Left, "no border");
+        // HeuristicLab's logo at the top right
+        var logo = window.GetVisualDescendants().OfType<Image>().Single(i => i.Source is Avalonia.Media.Imaging.Bitmap && i.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Right);
+        Assert.IsTrue(((Avalonia.Media.Imaging.Bitmap)logo.Source!).PixelSize.Width >= 16, "the .ico decodes");
+        Assert.IsTrue(logo.IsEffectivelyVisible && logo.Bounds.Right > window.Bounds.Width - 60, "at the top right");
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var path = Shot("studio-experiments-gunmetal.png");
+        window.CaptureRenderedFrame()!.Save(path);
+        vm.SelectedTab = MainViewModel.ResultsTab;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.IsFalse(window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Runs from"), "no 'Runs from' label");
+        window.CaptureRenderedFrame()!.Save(Shot("studio-results-tab.png"));
+        window.Close();
+        return path;
+      });
+      Assert.IsTrue(new FileInfo(shot).Length > 10_000);
+    } finally {
+      Directory.Delete(folder, recursive: true);
+    }
+  }
+
+  private sealed class ChooseDialogs : HeuristicLab.Studio.Services.IDialogService {
+    public int? Answer { get; set; }
+    public IReadOnlyList<string> Offered { get; private set; } = [];
+    public Task<SetupResult?> NewSetupAsync() => Task.FromResult<SetupResult?>(null);
+    public Task<CatalogEntry?> PickAlgorithmAsync() => Task.FromResult<CatalogEntry?>(null);
+    public Task<HeuristicLab.Optimization.IProblem?> PickProblemAsync(HeuristicLab.Optimization.IAlgorithm algorithm) => Task.FromResult<HeuristicLab.Optimization.IProblem?>(null);
+    public Task<bool> ConfirmAsync(string title, string message) => Task.FromResult(true);
+    public Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string> items, string action) { Offered = items; return Task.FromResult(Answer); }
+  }
+
+  /// <summary>
+  /// Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment, chosen in a list
+  /// and confirmed; never single runs. The start/stop buttons carry pictograms like the blocks.
+  /// </summary>
+  [TestMethod]
+  public async Task DeleteRunsDeletesAllRunsOfTheChosenExperiment() {
+    await OnUiThread(async () => {
+      var dialogs = new ChooseDialogs();
+      var vm = new MainViewModel(null, dialogs);
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1300, Height = 800 };
+      window.Show();
+      HeuristicLab.Optimization.IProblem Problem() => (HeuristicLab.Optimization.IProblem)SmallGaTsp().Algorithm.Problem!.Clone();
+      var first = ws.NewExperiment();
+      var batch = ws.AddContainer(first, HeuristicLab.Next.Runtime.ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(HeuristicLab.Optimization.BatchRun)));
+      batch.RepetitionsText = "2";
+      var inBatch = ws.AddAlgorithm(batch, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
+      ws.SetProblem(inBatch, Problem());
+      var single = ws.AddAlgorithm(first, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
+      ws.SetProblem(single, Problem());
+      var second = ws.NewExperiment();
+      var other = ws.AddAlgorithm(second, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
+      ws.SetProblem(other, Problem());
+      foreach (var a in new[] { inBatch, single, other }) ParameterEditor.Apply(a.Algorithm, ["MaximumGenerations=3", "PopulationSize=10"]);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("picto")).ToList();
+      Assert.AreEqual(3, buttons.Count, "start all, start selected, stop");
+      var symbols = buttons.Select(b => b.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().Single().Symbol).ToList();
+      CollectionAssert.AreEqual(new[] { "Experiment_run_all", "Experiment_run_selected", "experiment_stop" }, symbols);
+      window.CaptureRenderedFrame()!.Save(Shot("studio-start-buttons.png"));
+      await ws.StartAllCommand.ExecuteAsync(null);
+      Assert.AreEqual(3, first.Experiment.Runs.Count, "two from the batch run, one from the algorithm");
+      Assert.AreEqual(1, second.Experiment.Runs.Count);
+
+      vm.SelectedTab = MainViewModel.RunsTab;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsTrue(window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Delete runs..."));
+      Assert.IsFalse(window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Runs of"));
+
+      // cancelled: nothing happens
+      dialogs.Answer = null;
+      await vm.Runs.DeleteRunsCommand.ExecuteAsync(null);
+      CollectionAssert.AreEqual(new[] { "New experiment 1  (3 runs)", "New experiment 2  (1 run)" }, dialogs.Offered.ToList());
+      Assert.AreEqual(3, first.Experiment.Runs.Count);
+
+      // the first experiment chosen and confirmed: all its runs go, the other experiment keeps its
+      first.IsModified = false;
+      dialogs.Answer = 0;
+      await vm.Runs.DeleteRunsCommand.ExecuteAsync(null);
+      Assert.AreEqual(0, first.Experiment.Runs.Count);
+      Assert.AreEqual(0, inBatch.Algorithm.Runs.Count);
+      Assert.AreEqual(0, ((HeuristicLab.Optimization.BatchRun)batch.Optimizer).Runs.Count);
+      Assert.AreEqual(0, single.Algorithm.Runs.Count);
+      Assert.AreEqual(1, second.Experiment.Runs.Count, "another experiment keeps its runs");
+      Assert.IsTrue(first.IsModified, "a change to save");
+      Assert.AreEqual("Runs (0)", single.RunsText);
+      Assert.AreEqual(0, vm.Runs.Sources[0].RunCount, "the Runs tab shows it");
+      StringAssert.StartsWith(ws.Status, "Deleted 3 runs");
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      window.CaptureRenderedFrame()!.Save(Shot("studio-runs-deleted.png"));
+
+      // the dialog: the delete button stays disabled until an experiment is selected
+      var chooser = new ChooseWindow("Delete runs", "Choose the experiment whose runs are all deleted.", ["New experiment 1  (0 runs)", "New experiment 2  (1 run)"], "Delete runs");
+      chooser.Show();
+      var delete = chooser.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Delete runs");
+      Assert.IsFalse(delete.IsEnabled, "nothing selected yet");
+      chooser.GetVisualDescendants().OfType<ListBox>().Single().SelectedIndex = 1;
+      Assert.IsTrue(delete.IsEnabled);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      chooser.CaptureRenderedFrame()!.Save(Shot("studio-delete-runs-dialog.png"));
+      chooser.Close();
+      window.Close();
+      return 0;
+    });
+  }
 }

@@ -92,6 +92,50 @@ public class RuntimeTests {
   }
 
   /// <summary>Progress&lt;T&gt; posts to the thread pool; this one reports inline for deterministic tests.</summary>
+  /// <summary>
+  /// Files saved here open in HeuristicLab 3.3 (.NET Framework): no type that only modern .NET has,
+  /// such as the default string comparer of Dictionary&lt;string, T&gt; (StringEqualityComparer), is written.
+  /// </summary>
+  [TestMethod]
+  public void SavedFilesContainNoModernDotNetOnlyTypes() {
+    var algorithm = Setups.Create(new SetupRequest("GeneticAlgorithm") { Problem = "TravelingSalesmanProblem", Instance = "berlin52", Settings = ["MaximumGenerations=3"] }).Algorithm;
+    OptimizerRunner.RunAsync(algorithm, new RunOptions { Seed = 1 }).GetAwaiter().GetResult();  // a run brings result dictionaries
+    var experiment = new Experiment();
+    experiment.Optimizers.Add(new BatchRun { Optimizer = algorithm, Repetitions = 2 });
+    var path = Path.Combine(Path.GetTempPath(), $"portable-{Guid.NewGuid():N}.hl");
+    try {
+      Documents.Save(experiment, path);
+      byte[] raw;
+      using (var inflate = new System.IO.Compression.DeflateStream(File.OpenRead(path), System.IO.Compression.CompressionMode.Decompress))
+      using (var buffer = new MemoryStream()) { inflate.CopyTo(buffer); raw = buffer.ToArray(); }
+      bool Contains(string guid) {
+        var bytes = new Guid(guid).ToByteArray();
+        return raw.AsSpan().IndexOf(bytes) >= 0;
+      }
+      Assert.IsFalse(Contains("93DE6707-4FCE-4CA7-95DA-FE9DD891BB7B"), "StringEqualityComparer (.NET 5+ only) must not be written");
+      Assert.IsTrue(Contains("FB247FE0-9203-4196-B4D3-71AB18CD12C5"), "written as GenericEqualityComparer<string>, as .NET Framework does");
+      var loaded = (Experiment)Documents.Load(path);
+      var runs = ((IAlgorithm)((BatchRun)loaded.Optimizers.Single()).Optimizer!).Runs;
+      Assert.AreEqual(1, runs.Count);
+      Assert.IsTrue(runs.Single().Results.ContainsKey("BestQuality"), "dictionaries read back");
+    } finally { File.Delete(path); }
+  }
+
+  /// <summary>HeuristicLab's "New item" categories, in its order (they group and color Studio's pickers).</summary>
+  [TestMethod]
+  public void CatalogEntriesCarryHeuristicLabsCategories() {
+    Assert.AreEqual("Algorithms / Population Based", Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!.Category);
+    Assert.AreEqual("Algorithms / Single Solution", Catalog.Find(Catalog.Algorithms(), "TabuSearch")!.Category);
+    Assert.AreEqual("Problems / Combinatorial", Catalog.Find(Catalog.Problems(), "TravelingSalesmanProblem")!.Category);
+    var algorithms = Catalog.ByCategory(Catalog.Algorithms()).Select(e => e.Category).Distinct().ToList();
+    var problems = Catalog.ByCategory(Catalog.Problems()).Select(e => e.Category).Distinct().ToList();
+    Console.WriteLine("Algorithms: " + string.Join(" | ", algorithms));
+    Console.WriteLine("Problems: " + string.Join(" | ", problems));
+    Assert.IsTrue(algorithms.IndexOf("Algorithms / Population Based") < algorithms.IndexOf("Algorithms / Single Solution") && algorithms[^1] == "Other Items", "HeuristicLab's order");
+    Assert.AreEqual(algorithms.Count, Catalog.ByCategory(Catalog.Algorithms()).Select(e => e.Category).Chunk(1).Select(c => c[0])
+      .Aggregate(new List<string>(), (l, c) => { if (l.Count == 0 || l[^1] != c) l.Add(c); return l; }).Count, "each category in one block");
+  }
+
   private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T> {
     private readonly object sync = new();
     public void Report(T value) { lock (sync) report(value); }

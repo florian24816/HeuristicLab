@@ -1,0 +1,396 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             xmlns:c="using:HeuristicLab.Studio.Controls"
+             x:Class="HeuristicLab.Studio.Views.ExperimentWorkspaceView"
+             x:DataType="vm:ExperimentWorkspaceViewModel">
+    <!-- Building blocks: orange square with the kind's pictogram, a dark square with the state (an
+         experiment saved or not, an algorithm's status), the name; batch runs and time-limit runs end in
+         an orange field with their repetitions / time limit that counts while they run. No rounded corners. -->
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="LogoBrush" Color="#F7931D" />
+        <SolidColorBrush x:Key="StateBrush" Color="#3A3A3A" />
+        <SolidColorBrush x:Key="NameBrush" Color="#EDEDED" />
+        <SolidColorBrush x:Key="SelectedBrush" Color="#1E1E1E" />
+        <SolidColorBrush x:Key="ButtonBrush" Color="#E0E0E0" />
+        <SolidColorBrush x:Key="ButtonHoverBrush" Color="#CDCDCD" />
+        <SolidColorBrush x:Key="DisabledBrush" Color="#F0F0F0" />
+        <SolidColorBrush x:Key="LineBrush" Color="#9E9E9E" />
+        <SolidColorBrush x:Key="InkBrush" Color="#1E1E1E" />
+        <!-- an experiment's area: filled gunmetal grey (no border), light writing on it -->
+        <SolidColorBrush x:Key="ExperimentBrush" Color="#3E474D" />
+        <SolidColorBrush x:Key="ExperimentInkBrush" Color="#EDEDED" />
+
+        <!-- one building block: squares, name (inline rename), last field; context menu (rename/delete/...) -->
+        <DataTemplate x:Key="Block" x:DataType="vm:BlockViewModel">
+            <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.fixed="{Binding FixedWidth}"
+                    Tapped="BlockTapped" DoubleTapped="BlockDoubleTapped" PointerPressed="BlockPressed">
+                <Border.ContextMenu>
+                    <ContextMenu ItemsSource="{Binding Menu}">
+                        <ContextMenu.ItemContainerTheme>
+                            <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
+                                <Setter Property="Header" Value="{Binding Display}" />
+                                <Setter Property="Command" Value="{Binding Command}" />
+                            </ControlTheme>
+                        </ContextMenu.ItemContainerTheme>
+                    </ContextMenu>
+                </Border.ContextMenu>
+                <Panel>
+                <StackPanel Orientation="Horizontal" Spacing="3">
+                    <Border Classes="square logo" ToolTip.Tip="{Binding Kind}">
+                        <c:Pictogram Symbol="{Binding Pictogram}" Foreground="{StaticResource InkBrush}" />
+                    </Border>
+                    <Border Classes="square state" Classes.clickable="{Binding IsStateClickable}" IsVisible="{Binding HasState}"
+                            ToolTip.Tip="{Binding StateTip}" Tapped="StateTapped" DoubleTapped="StateDoubleTapped">
+                        <c:Pictogram Symbol="{Binding StatePictogram}" Foreground="White" />
+                    </Border>
+                    <Border Classes="name">
+                        <Panel>
+                            <TextBlock Text="{Binding Label}" IsVisible="{Binding !IsEditingName}" TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" ToolTip.Tip="{Binding Label}" />
+                            <TextBox Text="{Binding Name}" IsVisible="{Binding IsEditingName}" MinHeight="24" Padding="4,1"
+                                     CornerRadius="0" VerticalAlignment="Center"
+                                     KeyDown="NameKeyDown" LostFocus="NameLostFocus" PropertyChanged="NameBoxPropertyChanged" />
+                        </Panel>
+                    </Border>
+                    <Border Classes="badge" IsVisible="{Binding HasBadge}" ToolTip.Tip="{Binding BadgeTip}">
+                        <TextBlock Text="{Binding Badge}" VerticalAlignment="Center" HorizontalAlignment="Center" FontWeight="SemiBold" />
+                    </Border>
+                </StackPanel>
+                <!-- editing a field across algorithms: purple over the algorithms taking part (stronger: the shown one) -->
+                <Border Classes="multi" Background="#8E44AD" Opacity="{Binding MultiOpacity}" IsVisible="{Binding IsMultiMember}"
+                        IsHitTestVisible="False" />
+                </Panel>
+            </Border>
+        </DataTemplate>
+
+        <!-- a child of a container; while dragging, the dragged block is shown faded above it where it would land -->
+        <DataTemplate x:Key="ChildSlot" x:DataType="vm:BlockViewModel">
+            <StackPanel Spacing="6">
+                <Border Classes="ghost" IsVisible="{Binding PreviewBefore, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <ContentControl Content="{Binding PreviewBefore}" Opacity="0.4" IsHitTestVisible="False" />
+                </Border>
+                <ContentControl Content="{Binding}" IsVisible="{Binding !IsMoving}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- after the last child: the faded preview there, then the add button -->
+        <DataTemplate x:Key="ChildrenEnd" x:DataType="vm:ContainerBlockViewModel">
+            <StackPanel Spacing="6">
+                <Border Classes="ghost" IsVisible="{Binding PreviewAtEnd, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <ContentControl Content="{Binding PreviewAtEnd}" Opacity="0.4" IsHitTestVisible="False" />
+                </Border>
+                <ContentControl Classes="dropend" Content="{Binding}" ContentTemplate="{StaticResource AddButton}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- add button of a container, with the building blocks it accepts -->
+        <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
+            <Button Classes="action" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
+                    IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}">
+                <Button.Flyout>
+                    <MenuFlyout ItemsSource="{Binding AddChoices}">
+                        <MenuFlyout.ItemContainerTheme>
+                            <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
+                                <Setter Property="Header" Value="{Binding Display}" />
+                                <Setter Property="Command" Value="{Binding Command}" />
+                            </ControlTheme>
+                        </MenuFlyout.ItemContainerTheme>
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Button.action">
+            <Setter Property="Background" Value="{StaticResource ButtonBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="12,6" />
+        </Style>
+        <Style Selector="Button.action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="Button.action:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
+        </Style>
+        <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource DisabledBrush}" />
+            <Setter Property="Foreground" Value="#9A9A9A" />
+        </Style>
+        <Style Selector="Border.experiment">
+            <Setter Property="Background" Value="{StaticResource ExperimentBrush}" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource ExperimentInkBrush}" />
+        </Style>
+        <Style Selector="Border.experiment Button.toggle, Border.experiment Button.link">
+            <Setter Property="Foreground" Value="{StaticResource ExperimentInkBrush}" />
+        </Style>
+        <Style Selector="Border.experiment Button.toggle:pointerover /template/ ContentPresenter#PART_ContentPresenter, Border.experiment Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#55606A" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Border.experiment CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource ExperimentInkBrush}" />
+        </Style>
+        <Style Selector="Border.experiment CheckBox /template/ Border#NormalRectangle">
+            <Setter Property="BorderBrush" Value="{StaticResource ExperimentInkBrush}" />
+        </Style>
+        <Style Selector="Border.experiment TextBlock.missing">
+            <Setter Property="Foreground" Value="#F2A27E" />
+        </Style>
+        <Style Selector="Button.picto">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+        <Style Selector="Button.picto:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.picto:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.picto Border.label">
+            <Setter Property="Background" Value="{StaticResource ButtonBrush}" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="Button.picto Border.label TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.picto:pointerover Border.label">
+            <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
+        </Style>
+        <Style Selector="Button.picto:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <Style Selector="Button.plain">
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+        <Style Selector="Border.block">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="Border.square">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="6" />
+        </Style>
+        <Style Selector="Border.logo">
+            <Setter Property="Background" Value="{StaticResource LogoBrush}" />
+        </Style>
+        <Style Selector="Border.state">
+            <Setter Property="Background" Value="{StaticResource StateBrush}" />
+        </Style>
+        <Style Selector="Border.name">
+            <Setter Property="Background" Value="{StaticResource NameBrush}" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="200" />
+            <Setter Property="MaxWidth" Value="320" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="BorderBrush" Value="{StaticResource NameBrush}" />
+        </Style>
+        <Style Selector="Border.block.fixed Border.name">
+            <Setter Property="Width" Value="200" />
+        </Style>
+        <Style Selector="Border.block.selected Border.name">
+            <Setter Property="BorderBrush" Value="{StaticResource SelectedBrush}" />
+        </Style>
+        <Style Selector="Border.badge">
+            <Setter Property="Background" Value="{StaticResource LogoBrush}" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="64" />
+            <Setter Property="Padding" Value="10,0" />
+        </Style>
+        <Style Selector="Border.state.clickable">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Border.ghost">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.toggle">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="2,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="4,1" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.DataTemplates>
+        <!-- algorithm row: algorithm left, its problem (or the add-problem button) right -->
+        <DataTemplate DataType="vm:AlgorithmBlockViewModel">
+            <StackPanel Spacing="3">
+                <Grid Classes="droprow" ColumnDefinitions="22,Auto,20,Auto" Background="Transparent">
+                    <Button Classes="toggle" Content="&#x25B8;" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding !IsExpanded}"
+                            ToolTip.Tip="Show parameters, results and runs" />
+                    <Button Classes="toggle" Content="&#x25BE;" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding IsExpanded}" />
+                    <ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource Block}" />
+                    <Rectangle Grid.Column="2" Height="2" Fill="{StaticResource LineBrush}" VerticalAlignment="Center" />
+                    <ContentControl Grid.Column="3" Content="{Binding Problem}" ContentTemplate="{StaticResource Block}"
+                                    IsVisible="{Binding HasProblem}" />
+                    <Button Grid.Column="3" Classes="action" Content="+ Add problem" Command="{Binding ChooseProblemCommand}"
+                            IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}"
+                            IsVisible="{Binding !HasProblem}" Height="32" />
+                </Grid>
+                <StackPanel Margin="40,0,0,2" Spacing="0" IsVisible="{Binding IsExpanded}">
+                    <Button Classes="link" Content="{Binding ParametersText}" Command="{Binding OpenTabCommand}" CommandParameter="1" />
+                    <Button Classes="link" Content="{Binding ResultsText}" Command="{Binding OpenTabCommand}" CommandParameter="2" />
+                    <Button Classes="link" Content="{Binding RunsText}" Command="{Binding OpenTabCommand}" CommandParameter="3" />
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+        <!-- batch run / time-limit run: heading, indented children, own add button -->
+        <DataTemplate DataType="vm:ContainerBlockViewModel">
+            <StackPanel Spacing="6">
+                <ContentControl Classes="droprow" Content="{Binding}" ContentTemplate="{StaticResource Block}" HorizontalAlignment="Left" />
+                <StackPanel Margin="32,0,0,0" Spacing="6">
+                    <ItemsControl ItemsSource="{Binding Children}" ItemTemplate="{StaticResource ChildSlot}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChildrenEnd}" />
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Grid ColumnDefinitions="700,4,*">
+        <DockPanel Margin="12">
+            <!-- global start controls -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
+                <!-- like the blocks: orange square with the pictogram, then the rectangle with the text -->
+                <Button Classes="picto" Command="{Binding StartAllCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Border Classes="square logo"><c:Pictogram Symbol="Experiment_run_all" Foreground="{StaticResource InkBrush}" /></Border>
+                        <Border Classes="label"><TextBlock Text="Start all experiments" /></Border>
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="1" Classes="picto" Command="{Binding StartSelectedCommand}" ToolTip.Tip="Starts the experiments whose checkbox is ticked">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Border Classes="square logo"><c:Pictogram Symbol="Experiment_run_selected" Foreground="{StaticResource InkBrush}" /></Border>
+                        <Border Classes="label"><TextBlock Text="Start selected experiments" /></Border>
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="2" Classes="picto" Command="{Binding StopCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Border Classes="square logo"><c:Pictogram Symbol="experiment_stop" Foreground="{StaticResource InkBrush}" /></Border>
+                        <Border Classes="label"><TextBlock Text="Stop" /></Border>
+                    </StackPanel>
+                </Button>
+                <TextBlock Grid.Column="3" Text="{Binding Status}" VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding Status}" />
+            </Grid>
+
+            <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto">
+                <!-- blocks stay clickable while experiments run; what would change them is disabled -->
+                <StackPanel Spacing="14">
+                    <ItemsControl ItemsSource="{Binding Experiments}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="14" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ExperimentBlockViewModel">
+                                <Border Classes="dropend experiment" Padding="10">
+                                    <StackPanel Spacing="8">
+                                        <StackPanel Classes="droprow" Orientation="Horizontal" Spacing="10" Background="Transparent">
+                                            <CheckBox IsChecked="{Binding IsChecked}" ToolTip.Tip="Include in 'Start selected experiments'" />
+                                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Block}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding RunStatus}" VerticalAlignment="Center" Opacity="0.75" />
+                                        </StackPanel>
+                                        <StackPanel Margin="32,0,0,0" Spacing="6">
+                                            <ItemsControl ItemsSource="{Binding Children}" ItemTemplate="{StaticResource ChildSlot}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChildrenEnd}" />
+                                            <TextBlock Classes="missing" Text="{Binding Missing}" IsVisible="{Binding !IsReady}"
+                                                       FontSize="12" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Classes="action" Content="+ New experiment / open...">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuItem Header="New experiment" Command="{Binding CreateExperimentCommand}" />
+                                <MenuItem Header="New from data or benchmark..." Command="{Binding NewFromSetupCommand}"
+                                          ToolTip.Tip="An algorithm with its problem: a benchmark instance or a CSV/Parquet data file" />
+                                <MenuItem Header="Open..." Command="{Binding OpenExperimentCommand}" />
+                                <MenuItem Header="Open recent" ItemsSource="{Binding RecentMenu}" IsEnabled="{Binding HasRecentFiles}">
+                                    <MenuItem.ItemContainerTheme>
+                                        <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
+                                            <Setter Property="Header" Value="{Binding Display}" />
+                                            <Setter Property="Command" Value="{Binding Command}" />
+                                            <Setter Property="ToolTip.Tip" Value="{Binding Tip}" />
+                                        </ControlTheme>
+                                    </MenuItem.ItemContainerTheme>
+                                </MenuItem>
+                                <MenuItem Header="Samples..." Command="{Binding ShowSamplesCommand}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+
+        <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+
+        <!-- details of the selected block: algorithm tabs, or a container's settings and runs -->
+        <ContentControl Grid.Column="2" Margin="12" Content="{Binding Detail}">
+            <ContentControl.DataTemplates>
+                <DataTemplate DataType="vm:ExperimentBlockViewModel">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable}">
+                            <TextBlock Text="{Binding Kind}" Opacity="0.7" />
+                            <TextBox Text="{Binding Name}" />
+                            <TextBlock Text="{Binding FilePath, FallbackValue='', TargetNullValue='Not saved yet'}" Opacity="0.7" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" TextWrapping="Wrap" Foreground="#B0563A" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Save as..." Command="{Binding SaveCommand}" />
+                                <Button Content="Rename file..." Command="{Binding RenameFileCommand}"
+                                        ToolTip.Tip="Rename the experiment's .hl file on disk (in its folder)" />
+                                <Button Content="Show runs" Command="{Binding ShowRunsCommand}" ToolTip.Tip="Show its runs in the Runs tab" />
+                            </StackPanel>
+                            <TextBlock Text="Runs keep their own seed settings (random by default), so repetitions differ."
+                                       TextWrapping="Wrap" FontSize="12" Opacity="0.7" />
+                            <TextBlock Text="Runs" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        </StackPanel>
+                        <ContentControl Content="{Binding Runs}" />
+                    </DockPanel>
+                </DataTemplate>
+                <DataTemplate DataType="vm:ContainerBlockViewModel">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable}">
+                            <TextBlock Text="{Binding Kind}" Opacity="0.7" />
+                            <TextBox Text="{Binding Name}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsBatchRun}">
+                                <TextBlock Text="Repetitions" VerticalAlignment="Center" Width="100" />
+                                <TextBox Text="{Binding RepetitionsText, UpdateSourceTrigger=LostFocus}" Width="80" />
+                            </StackPanel>
+                            <TextBlock IsVisible="{Binding IsBatchRun}" TextWrapping="Wrap" FontSize="12" Opacity="0.7"
+                                       Text="Each repetition runs every building block in this batch once." />
+                            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsTimeLimitRun}">
+                                <TextBlock Text="Time limit" VerticalAlignment="Center" Width="100" />
+                                <TextBox Text="{Binding TimeLimitText, UpdateSourceTrigger=LostFocus}" Width="100" PlaceholderText="e.g. 5m" />
+                            </StackPanel>
+                            <TextBlock Text="Runs" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        </StackPanel>
+                        <ContentControl Content="{Binding Runs}" />
+                    </DockPanel>
+                </DataTemplate>
+            </ContentControl.DataTemplates>
+        </ContentControl>
+    </Grid>
+</UserControl>

@@ -1,0 +1,89 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
+
+namespace HeuristicLab.Studio.ViewModels;
+
+/// <summary>A column of a <see cref="TableGridViewModel"/>; a fixed column has its own shade and never scrolls away.</summary>
+public sealed record GridColumn(string Key, string Header, double Width, Color? Fixed = null);
+
+/// <summary>A cell: its text, its background (column color at the row's strength) and whether it stays in view.</summary>
+public sealed record GridCell(string Text, IBrush Background, double Width, bool IsFixed, GridRow? Row) {
+  public int ZIndex => IsFixed ? 1 : 0;
+}
+
+public sealed partial class GridRow(object item) : ObservableObject {
+  public object Item { get; } = item;
+  public IReadOnlyList<GridCell> Cells { get; internal set; } = [];
+
+  [ObservableProperty]
+  public partial bool IsSelected { get; set; }
+}
+
+/// <summary>
+/// A table of runs that stays readable: columns alternate grey and light grey, rows alternate in
+/// strength, fixed columns (where a run comes from, which run it is) are orange and stay in view
+/// while the table scrolls sideways, the header stays in view while it scrolls down.
+/// </summary>
+public partial class TableGridViewModel : ViewModelBase {
+  public static readonly Color Grey = Color.Parse("#D6D6D6"), LightGrey = Color.Parse("#EBEBEB");
+  // the logos' orange is #F7931D; the run comes closest to it, its source is the palest
+  public static readonly Color SourceShade = Color.Parse("#FDE5C8"), OriginShade = Color.Parse("#FBCD96"), RunShade = Color.Parse("#F9B462");
+  /// <summary>Every other row: the colors at this strength (over white).</summary>
+  public const double WeakRow = 0.55;
+
+  private readonly Action<object?> selected;
+  private readonly Action<string>? sort;
+
+  public TableGridViewModel(IReadOnlyList<GridColumn> columns, IEnumerable<(object Item, IReadOnlyList<string> Texts)> rows,
+      Action<object?> selected, Action<string>? sort = null) {
+    this.selected = selected;
+    this.sort = sort;
+    Columns = columns;
+    var colors = new List<Color>();
+    int plain = 0;
+    foreach (var c in columns) colors.Add(c.Fixed ?? (plain++ % 2 == 0 ? Grey : LightGrey));
+    Header = columns.Select((c, i) => new GridCell(c.Header, Brush(colors[i], 1), c.Width, c.Fixed != null, null)).ToList();
+    Rows = rows.Select((r, index) => {
+      var row = new GridRow(r.Item);
+      double strength = index % 2 == 0 ? 1 : WeakRow;
+      row.Cells = columns.Select((c, i) => new GridCell(i < r.Texts.Count ? r.Texts[i] : "", Brush(colors[i], strength), c.Width, c.Fixed != null, row)).ToList();
+      return row;
+    }).ToList();
+  }
+
+  public IReadOnlyList<GridColumn> Columns { get; }
+  public IReadOnlyList<GridCell> Header { get; }
+  public IReadOnlyList<GridRow> Rows { get; }
+  public bool CanSort => sort != null;
+
+  /// <summary>Marks the row of this item as selected (without telling the owner, who selected it).</summary>
+  public void Mark(object? item) {
+    foreach (var row in Rows) row.IsSelected = ReferenceEquals(row.Item, item);
+  }
+
+  /// <summary>A click on a row.</summary>
+  public void Select(GridRow row) {
+    Mark(row.Item);
+    selected(row.Item);
+  }
+
+  [RelayCommand]
+  private void Sort(string key) => sort?.Invoke(key);
+
+  private static readonly Dictionary<(Color, double), IBrush> brushes = [];
+
+  public static IBrush Brush(Color color, double strength) {
+    lock (brushes) {
+      if (!brushes.TryGetValue((color, strength), out var brush)) {
+        byte Mix(byte c) => (byte)Math.Round(c * strength + 255 * (1 - strength));
+        brushes[(color, strength)] = brush = new ImmutableSolidColorBrush(Color.FromRgb(Mix(color.R), Mix(color.G), Mix(color.B)));
+      }
+      return brush;
+    }
+  }
+}

@@ -12,6 +12,8 @@ public sealed record RunOptions {
   public TimeSpan ProgressInterval { get; init; } = TimeSpan.FromSeconds(1);
   /// <summary>Optional wall-clock limit; the optimizer is stopped when it is reached.</summary>
   public TimeSpan? Timeout { get; init; }
+  /// <summary>Labels copied into the report, e.g. sweep configuration or walk-forward fold.</summary>
+  public IReadOnlyDictionary<string, string>? Labels { get; init; }
 }
 
 /// <summary>
@@ -28,7 +30,8 @@ public sealed record RunRecord(
 
 public sealed record RunReport(
   Provenance Provenance, string Optimizer, string OptimizerType, int? RequestedSeed,
-  RunOutcome Outcome, string? Error, double ExecutionSeconds, IReadOnlyList<RunRecord> Runs);
+  RunOutcome Outcome, string? Error, double ExecutionSeconds, IReadOnlyList<RunRecord> Runs,
+  IReadOnlyDictionary<string, string>? Labels = null);
 
 /// <summary>Runs an optimizer (algorithm, experiment, batch run) to completion, cancellation or failure.</summary>
 public static class OptimizerRunner {
@@ -55,7 +58,7 @@ public static class OptimizerRunner {
       : new Timer(_ => progress.Report(Snapshot(optimizer, clock.Elapsed)), null, options.ProgressInterval, options.ProgressInterval);
 
     try {
-      await Task.Run(() => optimizer.Start(CancellationToken.None), CancellationToken.None);
+      await Task.Run(() => optimizer.Start(CancellationToken.None), CancellationToken.None).ConfigureAwait(false);
       // an exception or the stop request leaves the optimizer paused; stopping records its run
       if (optimizer.ExecutionState == ExecutionState.Paused) TryStop(optimizer);
     } catch (Exception e) {
@@ -63,7 +66,7 @@ public static class OptimizerRunner {
     } finally {
       optimizer.ExceptionOccurred -= OnException;
       // waits for callbacks in flight, so no progress is reported after the final snapshot
-      if (progressTimer != null) await progressTimer.DisposeAsync();
+      if (progressTimer != null) await progressTimer.DisposeAsync().ConfigureAwait(false);
     }
     progress?.Report(Snapshot(optimizer, clock.Elapsed));
 
@@ -72,7 +75,7 @@ public static class OptimizerRunner {
                 : RunOutcome.Completed;
     var runs = optimizer.Runs.Skip(runsBefore).Select(ToRecord).ToList();
     return new RunReport(provenance, optimizer.Name, optimizer.GetType().FullName!, options.Seed, outcome,
-      error?.ToString(), optimizer.ExecutionTime.TotalSeconds, runs);
+      error?.ToString(), optimizer.ExecutionTime.TotalSeconds, runs, options.Labels);
   }
 
   /// <summary>Sets SetSeedRandomly=false and Seed=seed on all algorithms that have these parameters.</summary>

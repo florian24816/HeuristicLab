@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             xmlns:c="using:HeuristicLab.Studio.Controls"
+             x:Class="HeuristicLab.Studio.Views.RunsBrowserView"
+             x:DataType="vm:RunsBrowserViewModel">
+    <Grid ColumnDefinitions="280,4,*">
+        <!-- the experiments of the Experiments tab -->
+        <DockPanel Margin="10">
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+                <Button Content="Refresh" Command="{Binding RefreshCommand}" ToolTip.Tip="Read the Experiments tab again (new experiments, finished runs)" />
+                <Button Content="Delete runs..." Command="{Binding DeleteRunsCommand}"
+                        ToolTip.Tip="Delete all runs of one experiment (you choose it and confirm)" />
+            </StackPanel>
+            <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
+                       Text="Runs are kept in their experiment and saved with it in its .hl file." />
+            <Panel>
+                <TextBlock Text="Open or create an experiment in the Experiments tab." TextWrapping="Wrap" Opacity="0.6" IsVisible="{Binding !HasSources}" />
+                <TreeView ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" AutoScrollToSelectedItem="True">
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate DataType="vm:RunsSourceViewModel" ItemsSource="{Binding Children}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Label}" />
+                                <TextBlock Text="{Binding Kind}" FontSize="11" Opacity="0.6" />
+                            </StackPanel>
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                    <TreeView.Styles>
+                        <Style Selector="TreeViewItem" x:DataType="vm:RunsSourceViewModel">
+                            <Setter Property="IsExpanded" Value="True" />
+                        </Style>
+                    </TreeView.Styles>
+                </TreeView>
+            </Panel>
+        </DockPanel>
+        <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+
+        <!-- the block's runs, then the selected run -->
+        <Grid Grid.Column="2" Margin="10" RowDefinitions="Auto,Auto,*">
+            <TextBlock Text="{Binding SelectedSource.Name, FallbackValue=''}" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <ContentControl Grid.Row="1" Content="{Binding Runs}" />
+            <Grid Grid.Row="2" ColumnDefinitions="360,4,*" Margin="0,10,0,0" IsVisible="{Binding SelectedRun, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Grid RowDefinitions="Auto,*,Auto,*">
+                    <TextBlock Text="Parameters of this run" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding RunParameters}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:NameValue">
+                                    <Grid ColumnDefinitions="170,*" Margin="0,1">
+                                        <TextBlock Text="{Binding Name}" Opacity="0.7" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Value}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Value}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <TextBlock Grid.Row="2" Text="Results of this run" FontWeight="SemiBold" Margin="0,8,0,4" />
+                    <ListBox Grid.Row="3" ItemsSource="{Binding RunResults}" SelectedItem="{Binding SelectedRunResult}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ResultEntryViewModel">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <c:Pictogram Symbol="{Binding KindPictogram}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                 ToolTip.Tip="{Binding KindTip}" Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Summary}" FontFamily="monospace" Opacity="0.75" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+                <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+                <ContentControl Grid.Column="2" Margin="8,0,0,0" Content="{Binding RunResultDetail}" />
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

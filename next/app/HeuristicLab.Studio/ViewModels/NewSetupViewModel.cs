@@ -12,7 +12,11 @@ using HeuristicLab.Studio.Services;
 namespace HeuristicLab.Studio.ViewModels;
 
 /// <summary>Choice in a picker; Entry is null for "(none)" / "(algorithm default)".</summary>
-public sealed record Choice(string Display, CatalogEntry? Entry);
+public sealed record Choice(string Display, CatalogEntry? Entry) {
+  /// <summary>HeuristicLab's category; the algorithm's own problem comes first, under "Default".</summary>
+  public string Category => Entry?.Category ?? DefaultCategory;
+  public const string DefaultCategory = "Default";
+}
 
 /// <summary>
 /// "New" dialog: algorithm, compatible problem, then a benchmark instance or a data file.
@@ -22,11 +26,18 @@ public partial class NewSetupViewModel : ViewModelBase {
   private const string NoInstance = "(none)";
   private readonly IFileDialogService? fileDialogs;
 
-  public NewSetupViewModel(IFileDialogService? fileDialogs = null) {
+  /// <param name="fixedAlgorithm">Only choose the problem for this algorithm (the experiment builder's "Add problem").</param>
+  public NewSetupViewModel(IFileDialogService? fileDialogs = null, CatalogEntry? fixedAlgorithm = null) {
     this.fileDialogs = fileDialogs;
-    Algorithms = Catalog.Algorithms().Select(a => new Choice(a.Name, a)).ToList();
+    ChoosesAlgorithm = fixedAlgorithm == null;
+    Algorithms = fixedAlgorithm != null ? [new Choice(fixedAlgorithm.Name, fixedAlgorithm)]
+      : Catalog.Algorithms().Select(a => new Choice(a.Name, a)).ToList();
     SelectedAlgorithm = Algorithms.FirstOrDefault(a => a.Entry?.Type.Name == "GeneticAlgorithm") ?? Algorithms.FirstOrDefault();
   }
+
+  public bool ChoosesAlgorithm { get; }
+  public string WindowTitle => ChoosesAlgorithm ? "New" : $"Problem for {SelectedAlgorithm?.Display}";
+  public string CreateText => ChoosesAlgorithm ? "Create" : "Use problem";
 
   public IReadOnlyList<Choice> Algorithms { get; }
 
@@ -38,6 +49,27 @@ public partial class NewSetupViewModel : ViewModelBase {
 
   [ObservableProperty]
   public partial Choice? SelectedProblem { get; set; }
+
+  /// <summary>Search over the problems (name, description, category).</summary>
+  [ObservableProperty]
+  public partial string ProblemFilter { get; set; } = "";
+
+  /// <summary>The problems shown: matching the search, grouped and tinted by category.</summary>
+  [ObservableProperty]
+  public partial IReadOnlyList<CatalogItem> VisibleProblems { get; set; } = [];
+
+  [ObservableProperty]
+  public partial CatalogItem? SelectedProblemItem { get; set; }
+
+  /// <summary>Search over the benchmark instances.</summary>
+  [ObservableProperty]
+  public partial string InstanceFilter { get; set; } = "";
+
+  /// <summary>The instances shown ("(none)" always).</summary>
+  [ObservableProperty]
+  public partial IReadOnlyList<string> VisibleInstances { get; set; } = [];
+
+  public bool HasInstances => Instances.Count > 1;
 
   [ObservableProperty]
   public partial IReadOnlyList<string> Instances { get; set; } = [];
@@ -75,15 +107,50 @@ public partial class NewSetupViewModel : ViewModelBase {
     var own = (value?.Entry?.CreateInstance() as IAlgorithm)?.Problem;
     if (own != null) problems.Add(new Choice($"(default: {own.ItemName})", null));
     if (value?.Entry != null) problems.AddRange(Setups.ProblemsFor(value.Entry).Select(p => new Choice(p.Name, p)));
-    Problems = problems;
-    SelectedProblem = problems.FirstOrDefault();
+    Problems = problems
+      .OrderBy(p => p.Entry == null ? "" : p.Entry.CategoryOrder, StringComparer.Ordinal)
+      .ThenBy(p => p.Entry?.Priority ?? int.MinValue).ThenBy(p => p.Display, StringComparer.OrdinalIgnoreCase).ToList();
+    ProblemFilter = "";
+    ShowProblems();
+    SelectedProblem = Problems.FirstOrDefault();
+  }
+
+  partial void OnProblemFilterChanged(string value) {
+    ShowProblems();
+    if (SelectedProblemItem == null && VisibleProblems.Count > 0) SelectedProblemItem = VisibleProblems[0];
+  }
+
+  private void ShowProblems() {
+    bool Matches(Choice c) => ProblemFilter.Length == 0
+      || c.Display.Contains(ProblemFilter, StringComparison.OrdinalIgnoreCase)
+      || c.Category.Contains(ProblemFilter, StringComparison.OrdinalIgnoreCase)
+      || (c.Entry?.Description.Contains(ProblemFilter, StringComparison.OrdinalIgnoreCase) ?? false);
+    VisibleProblems = CatalogItem.Group(Problems.Where(Matches).Select(c => (c.Display, c.Entry?.Description ?? "", c.Category, (object?)c)));
+    SelectedProblemItem = VisibleProblems.FirstOrDefault(i => ReferenceEquals(i.Value, SelectedProblem));
+  }
+
+  partial void OnSelectedProblemItemChanged(CatalogItem? value) {
+    if (value?.Value is Choice choice && !ReferenceEquals(choice, SelectedProblem)) SelectedProblem = choice;
+  }
+
+  partial void OnInstanceFilterChanged(string value) => ShowInstances();
+
+  private void ShowInstances() {
+    var selected = SelectedInstance;
+    VisibleInstances = Instances.Where((i, index) => index == 0 || InstanceFilter.Length == 0 || i.Contains(InstanceFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+    SelectedInstance = selected != null && VisibleInstances.Contains(selected) ? selected : VisibleInstances.FirstOrDefault();
   }
 
   partial void OnSelectedProblemChanged(Choice? value) {
     var problem = value?.Entry?.CreateInstance() as IProblem
                   ?? (SelectedAlgorithm?.Entry?.CreateInstance() as IAlgorithm)?.Problem;
+    if (!ReferenceEquals(SelectedProblemItem?.Value, value))
+      SelectedProblemItem = VisibleProblems.FirstOrDefault(i => ReferenceEquals(i.Value, value));
     Instances = problem == null ? [] : [NoInstance, .. ProblemInstances.For(problem).Select(i => i.QualifiedName)];
+    OnPropertyChanged(nameof(HasInstances));
     SelectedInstance = Instances.FirstOrDefault();
+    InstanceFilter = "";
+    ShowInstances();
     AcceptsData = problem != null && DataProblems.CanLoad(problem);
     if (!AcceptsData) DataFile = null;
   }

@@ -3,19 +3,28 @@
         xmlns:vm="using:HeuristicLab.Studio.ViewModels"
         x:Class="HeuristicLab.Studio.Views.NewSetupWindow"
         x:DataType="vm:NewSetupViewModel"
-        Title="New" Width="620" SizeToContent="Height" CanResize="False"
+        Title="{Binding WindowTitle}" Width="960" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">
     <StackPanel Margin="16" Spacing="10">
-        <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+        <Grid ColumnDefinitions="160,*">
             <TextBlock Text="Algorithm" VerticalAlignment="Center" />
-            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Algorithms}"
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Algorithms}" IsEnabled="{Binding ChoosesAlgorithm}"
                       SelectedItem="{Binding SelectedAlgorithm}" DisplayMemberBinding="{Binding Display, x:DataType=vm:Choice}" />
-            <TextBlock Grid.Row="1" Text="Problem" VerticalAlignment="Center" />
-            <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Problems}"
-                      SelectedItem="{Binding SelectedProblem}" DisplayMemberBinding="{Binding Display, x:DataType=vm:Choice}" />
-            <TextBlock Grid.Row="2" Text="Benchmark instance" VerticalAlignment="Center" />
-            <ComboBox Grid.Row="2" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Instances}"
-                      SelectedItem="{Binding SelectedInstance}" IsEnabled="{Binding Instances.Count}" />
+        </Grid>
+
+        <!-- problem and benchmark instance side by side, each searchable -->
+        <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,*" Height="440">
+            <TextBlock Text="Problem" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBox Grid.Row="1" Text="{Binding ProblemFilter}" PlaceholderText="Search problems by name, description or category" Margin="0,0,0,6" />
+            <ListBox Grid.Row="2" Classes="catalog" ItemsSource="{Binding VisibleProblems}" SelectedItem="{Binding SelectedProblemItem}"
+                     ItemTemplate="{StaticResource CatalogItemTemplate}" />
+            <TextBlock Grid.Column="2" Text="Benchmark instance" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding InstanceFilter}" PlaceholderText="Search instances" Margin="0,0,0,6"
+                     IsEnabled="{Binding HasInstances}" />
+            <Panel Grid.Row="2" Grid.Column="2">
+                <TextBlock Text="This problem has no benchmark instances." Opacity="0.6" TextWrapping="Wrap" IsVisible="{Binding !HasInstances}" />
+                <ListBox ItemsSource="{Binding VisibleInstances}" SelectedItem="{Binding SelectedInstance}" IsVisible="{Binding HasInstances}" />
+            </Panel>
         </Grid>
 
         <Border BorderThickness="1" CornerRadius="4" Padding="10" IsVisible="{Binding AcceptsData}"
@@ -38,7 +47,7 @@
         <TextBlock Text="{Binding Error}" Foreground="#C23B4A" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <Button Content="Cancel" Click="Cancel" />
-            <Button Content="Create" Classes="accent" Click="Create" />
+            <Button Content="{Binding CreateText}" Classes="accent" Click="Create" />
         </StackPanel>
     </StackPanel>
 </Window>

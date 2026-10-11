@@ -22,13 +22,14 @@ public partial class App : Application
         {
             var window = new MainWindow();
             var fileDialogs = new FileDialogService(window);
-            var viewModel = new MainViewModel(fileDialogs, new DialogService(window, fileDialogs));
+            var viewModel = new MainViewModel(fileDialogs, new DialogService(window, fileDialogs), new JsonSettingsStore());
             window.DataContext = viewModel;
+            window.Closing += (_, _) => viewModel.SaveSettings();
             desktop.MainWindow = window;
 
             // "HeuristicLab.Studio file.hl" opens the file at startup
             var file = desktop.Args?.FirstOrDefault(a => a.EndsWith(".hl", System.StringComparison.OrdinalIgnoreCase));
-            if (file != null && File.Exists(file)) _ = viewModel.LoadAsync(file);
+            if (file != null && File.Exists(file)) _ = viewModel.Workspace.OpenExperimentAsync(file);
         }
 
         base.OnFrameworkInitializationCompleted();
