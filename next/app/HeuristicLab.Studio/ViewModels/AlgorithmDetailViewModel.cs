@@ -277,6 +277,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     OnPropertyChanged(nameof(State));
     OnPropertyChanged(nameof(ExecutionTime));
     OnPropertyChanged(nameof(CanEdit));
+    SyncEditability();
     StartCommand.NotifyCanExecuteChanged();
     PauseCommand.NotifyCanExecuteChanged();
     StopCommand.NotifyCanExecuteChanged();
@@ -302,6 +303,19 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
 
   /// <summary>Called when the workspace's run state changes.</summary>
   public void Refresh() => Tick();
+
+  private bool? shownEditable;
+
+  /// <summary>Parameter pictograms show whether a value can be changed now: updated when that changes.</summary>
+  public void SyncEditability() {
+    if (shownEditable == CanEdit) return;
+    shownEditable = CanEdit;
+    OnPropertyChanged(nameof(CanEdit));
+    SyncEditability();
+    AlgorithmParameters.RefreshEditability();
+    ProblemParameters?.RefreshEditability();
+    Graph?.SelectedEditor?.RefreshEditability();
+  }
 }
 
 /// <summary>One named result; its value text changes in place while the algorithm runs.</summary>

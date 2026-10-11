@@ -13,7 +13,7 @@ public class ExperimentTreeTests {
   [TestMethod]
   public void ContainerTypesAreDiscovered() {
     var names = ExperimentTree.ContainerTypes().Select(e => e.Type).ToList();
-    CollectionAssert.IsSubsetOf(new[] { typeof(Experiment), typeof(BatchRun), typeof(TimeLimitRun) }, names);
+    CollectionAssert.IsSubsetOf(new[] { typeof(Experiment), typeof(BatchRun), typeof(TimeLimitExperiment) }, names);
   }
 
   [TestMethod]

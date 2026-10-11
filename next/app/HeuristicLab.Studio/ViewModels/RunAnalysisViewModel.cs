@@ -139,7 +139,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   private RunSourceViewModel Node(BlockViewModel block, RunSourceViewModel? parent, HashSet<object> ticked) {
     var optimizer = block switch { ContainerBlockViewModel c => c.Optimizer, AlgorithmBlockViewModel a => (IOptimizer)a.Algorithm, _ => null };
-    string kind = optimizer switch { Experiment => "Experiment", BatchRun => "Batch run", TimeLimitRun => "Time-limit run", _ => "Algorithm" };
+    string kind = optimizer switch { Experiment => "Experiment", BatchRun => "Batch run", TimeLimitRun or TimeLimitExperiment => "Time-limit run", _ => "Algorithm" };
     var node = new RunSourceViewModel(this, block.Name, kind, optimizer, null) { Parent = parent, IsChecked = optimizer != null && ticked.Contains(optimizer) };
     if (block is ContainerBlockViewModel container)
       foreach (var child in container.Children) node.Children.Add(Node(child, node, ticked));

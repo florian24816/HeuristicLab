@@ -28,7 +28,14 @@
   Experiments tab (first): several experiments in one workspace, each a tree of building blocks
   (algorithm + its problem, batch run, time-limit run) over plain HeuristicLab objects via
   runtime ExperimentTree (a batch run with several children wraps them in an inner Experiment
-  named "Batch content"; a time-limit run takes one algorithm). Block design (user's request,
+  named "Batch content"; a time-limit run is runtime TimeLimitExperiment: any blocks in an inner
+  Experiment, run one after another, stopped when their total time reaches the limit - .hl files
+  with it open in Studio/hl only; HeuristicLab's own TimeLimitRun from older files still holds
+  one algorithm). A time-limit run inside one with a shorter limit still runs, but its timer
+  field turns yellow (#F4E803) and the experiment lists a warning (ExperimentTree.Warnings).
+  While anything runs, blocks stay clickable (details shown) but nothing changes: menus offer no
+  edits, names/limits/repetitions are ignored, add buttons disabled, no saving, dragging, copying
+  or editing across algorithms; value and choice parameters show parameter_currently_not_editable. Block design (user's request,
   no rounded corners, no green/yellow): orange (#F7931D) square with the kind's pictogram, a dark
   square with the state (experiment: saved/unsaved; algorithm: status), the name; batch/time-limit
   runs end in an orange field (repetitions / time limit; while running "3 / 10" or "01:23 / 05:00").

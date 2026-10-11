@@ -49,7 +49,7 @@
                                      KeyDown="NameKeyDown" LostFocus="NameLostFocus" PropertyChanged="NameBoxPropertyChanged" />
                         </Panel>
                     </Border>
-                    <Border Classes="badge" IsVisible="{Binding HasBadge}" ToolTip.Tip="{Binding BadgeTip}">
+                    <Border Classes="badge" Classes.warning="{Binding HasBadgeWarning}" IsVisible="{Binding HasBadge}" ToolTip.Tip="{Binding BadgeTip}">
                         <TextBlock Text="{Binding Badge}" VerticalAlignment="Center" HorizontalAlignment="Center" FontWeight="SemiBold" />
                     </Border>
                 </StackPanel>
@@ -82,7 +82,8 @@
 
         <!-- add button of a container, with the building blocks it accepts -->
         <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
-            <Button Classes="action" Content="{Binding AddText}" IsVisible="{Binding CanAdd}">
+            <Button Classes="action" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
+                    IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}">
                 <Button.Flyout>
                     <MenuFlyout ItemsSource="{Binding AddChoices}">
                         <MenuFlyout.ItemContainerTheme>
@@ -156,6 +157,10 @@
             <Setter Property="MinWidth" Value="64" />
             <Setter Property="Padding" Value="10,0" />
         </Style>
+        <!-- a time limit longer than the one around it: yellow as the "unsaved" pictogram -->
+        <Style Selector="Border.badge.warning">
+            <Setter Property="Background" Value="#F4E803" />
+        </Style>
         <Style Selector="Border.ghost">
             <Setter Property="Background" Value="Transparent" />
         </Style>
@@ -184,6 +189,7 @@
                     <ContentControl Grid.Column="3" Content="{Binding Problem}" ContentTemplate="{StaticResource Block}"
                                     IsVisible="{Binding HasProblem}" />
                     <Button Grid.Column="3" Classes="action" Content="+ Add problem" Command="{Binding ChooseProblemCommand}"
+                            IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}"
                             IsVisible="{Binding !HasProblem}" Height="32" />
                 </Grid>
                 <StackPanel Margin="40,0,0,2" Spacing="0" IsVisible="{Binding IsExpanded}">
@@ -222,7 +228,8 @@
             </Grid>
 
             <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto">
-                <StackPanel Spacing="14" IsEnabled="{Binding IsEditable}">
+                <!-- blocks stay clickable while experiments run; what would change them is disabled -->
+                <StackPanel Spacing="14">
                     <ItemsControl ItemsSource="{Binding Experiments}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><StackPanel Spacing="14" /></ItemsPanelTemplate>
@@ -244,6 +251,8 @@
                                                 </ItemsControl.ItemsPanel>
                                             </ItemsControl>
                                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChildrenEnd}" />
+                                            <TextBlock Text="{Binding Warnings}" IsVisible="{Binding Warnings, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                       Foreground="#8A6D00" FontSize="12" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" Foreground="#B0563A"
                                                        FontSize="12" TextWrapping="Wrap" />
                                         </StackPanel>

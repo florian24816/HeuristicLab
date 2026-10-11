@@ -69,6 +69,9 @@ public partial class ParameterListViewModel : ViewModelBase {
   public string SelectedText => Selected == null ? "" : $"{Selected.Name} selected. Details/Options:";
 
   public void RefreshSummaries() { foreach (var p in Parameters) p.RefreshSummary(); }
+
+  /// <summary>Editing became possible or impossible (the algorithm started or stopped): pictograms of all shown levels.</summary>
+  public void RefreshEditability() { foreach (var p in Parameters) p.RefreshEditability(); }
 }
 
 public sealed record ChoiceItem(string Display, IItem Item);
@@ -106,15 +109,18 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
   public string KindPictogram {
     get {
       string type = parameter.GetType().Name;
-      return type.Contains("ConstrainedValueParameter", StringComparison.Ordinal) ? "constrained_value_parameter"
+      string kind = type.Contains("ConstrainedValueParameter", StringComparison.Ordinal) ? "constrained_value_parameter"
         : type.StartsWith("OptionalValueParameter", StringComparison.Ordinal) ? "optional_value_parameter"
         : "value_parameter";
+      // value and choice parameters that cannot be changed now (e.g. while the algorithm runs)
+      return kind != "optional_value_parameter" && !context.CanEdit ? "parameter_currently_not_editable" : kind;
     }
   }
 
   public string KindTip => KindPictogram switch {
     "constrained_value_parameter" => $"{ItemInspector.TypeName(parameter.GetType())}: one of the offered values",
     "optional_value_parameter" => $"{ItemInspector.TypeName(parameter.GetType())}: may have no value",
+    "parameter_currently_not_editable" => $"{ItemInspector.TypeName(parameter.GetType())}: cannot be changed now (while it runs)",
     _ => ItemInspector.TypeName(parameter.GetType())
   };
   public string Description => parameter.Description;
@@ -173,7 +179,17 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     Owner.RefreshSummaries();
   }
 
-  public void RefreshSummary() => OnPropertyChanged(nameof(Summary));
+  public void RefreshSummary() {
+    OnPropertyChanged(nameof(Summary));
+    OnPropertyChanged(nameof(KindPictogram));
+    OnPropertyChanged(nameof(KindTip));
+  }
+
+  /// <summary>After editing became possible or impossible: this parameter and the nested ones already shown.</summary>
+  public void RefreshEditability() {
+    RefreshSummary();
+    editor?.RefreshEditability();
+  }
 }
 
 /// <summary>A row of an array (one cell) or matrix (one cell per column).</summary>
@@ -215,6 +231,7 @@ public partial class CheckedEntryViewModel(CheckedList list, int index, EditCont
 
   private ParameterListViewModel? parameters;
   private bool parametersBuilt;
+  internal ParameterListViewModel? BuiltParameters => parameters;
 
   /// <summary>The operator's own options (built once, so a selection inside them stays).</summary>
   public ParameterListViewModel? Parameters {
@@ -400,4 +417,9 @@ public partial class ValueEditorViewModel : ViewModelBase, IMultiField {
     ? new ParameterListViewModel(p, ReadOnly ? context.ReadOnly() : context, nested: true, ReadOnly ? null : Path) : null;
   private ParameterListViewModel? nested;
   public bool HasNested => Nested != null;
+
+  public void RefreshEditability() {
+    nested?.RefreshEditability();
+    foreach (var entry in Entries) entry.BuiltParameters?.RefreshEditability();
+  }
 }

@@ -57,6 +57,10 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   [ObservableProperty]
   public partial BlockViewModel? Selected { get; set; }
 
+  partial void OnDetailChanged(ViewModelBase? value) {
+    if (value is AlgorithmDetailViewModel detail) detail.SyncEditability();
+  }
+
   partial void OnSelectedChanged(BlockViewModel? oldValue, BlockViewModel? newValue) {
     if (oldValue != null) { oldValue.IsSelected = false; oldValue.IsEditingName = false; }
     if (newValue != null) newValue.IsSelected = true;
@@ -104,7 +108,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// purple field) stop. The algorithms taking part are tinted purple; clicking one shows the field.
   /// </summary>
   public bool ToggleMultiEdit(AlgorithmBlockViewModel block, string key) {
-    if (block.Root is not { } root) return false;
+    if (block.Root is not { } root || !IsEditable) return false;
     bool stop = MultiEditing is { } m && m.Key == key && block.IsMultiMember;
     MultiEditing = stop ? null : new MultiEditState(root, block.Algorithm.GetType(), key);
     MultiVersion++;
@@ -173,6 +177,11 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   }
 
   partial void OnIsRunningChanged(bool value) {
+    // blocks stay clickable while running, but their menus offer no changes
+    foreach (var block in AllBlocks(Experiments)) {
+      block.RefreshMenu();
+      if (block is AlgorithmBlockViewModel { Problem: { } problem }) problem.RefreshMenu();
+    }
     if (value) liveTimer.Start();
     RefreshLive();
     if (!value) liveTimer.Stop();
@@ -287,6 +296,10 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   internal async Task SaveAsync(ExperimentBlockViewModel block) {
     if (fileDialogs == null) return;
+    if (!IsEditable) {
+      Status = "An experiment can be saved when nothing runs.";
+      return;
+    }
     var path = await fileDialogs.SaveHlFileAsync(Path.GetFileName(block.FilePath) ?? block.Name + ".hl");
     if (path == null) return;
     await Task.Run(() => Documents.Save(block.Experiment, path));
@@ -330,7 +343,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     var optimizer = (IOptimizer)entry.CreateInstance();
     optimizer.Name = optimizer switch {
       BatchRun => $"Batch run {++batchCounter}",
-      TimeLimitRun => $"Time-limit run {++timeLimitCounter}",
+      TimeLimitRun or TimeLimitExperiment => $"Time-limit run {++timeLimitCounter}",
       _ => optimizer.Name
     };
     ExperimentTree.Add(container.Optimizer, optimizer);
@@ -348,6 +361,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   }
 
   internal async Task ChooseProblemAsync(AlgorithmBlockViewModel block) {
+    if (!IsEditable) return;
     if (dialogs != null && await dialogs.PickProblemAsync(block.Algorithm) is IProblem problem) SetProblem(block, problem);
   }
 
@@ -533,7 +547,11 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>Recomputes what is missing per experiment and the start buttons' state.</summary>
   public void RefreshState() {
-    foreach (var e in Experiments) e.Missing = string.Join(" ", ExperimentTree.Problems(e.Experiment));
+    foreach (var e in Experiments) {
+      e.Missing = string.Join(" ", ExperimentTree.Problems(e.Experiment));
+      e.Warnings = string.Join(" ", ExperimentTree.Warnings(e.Experiment));
+    }
+    foreach (var c in AllBlocks(Experiments).OfType<ContainerBlockViewModel>()) c.RefreshBadge();
     RefreshMultiEdit();
     StartAllCommand.NotifyCanExecuteChanged();
     StartSelectedCommand.NotifyCanExecuteChanged();
@@ -626,7 +644,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   // ---- formatting
 
   public static string DisplayName(CatalogEntry entry) =>
-    entry.Type == typeof(BatchRun) ? "Batch run" : entry.Type == typeof(TimeLimitRun) ? "Time-limit run" : entry.Name;
+    entry.Type == typeof(BatchRun) ? "Batch run" : entry.Type == typeof(TimeLimitRun) || entry.Type == typeof(TimeLimitExperiment) ? "Time-limit run" : entry.Name;
 
   public static string FormatDuration(TimeSpan t) =>
     t.TotalSeconds < 60 && t.TotalSeconds == Math.Floor(t.TotalSeconds) ? $"{t.TotalSeconds:0} s"

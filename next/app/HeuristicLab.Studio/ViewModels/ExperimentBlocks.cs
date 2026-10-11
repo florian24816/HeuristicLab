@@ -53,6 +53,10 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   public string Name {
     get => Item.Name;
     set {
+      if (!Workspace.IsEditable) {
+        OnPropertyChanged();  // nothing changes while experiments run
+        return;
+      }
       if (string.IsNullOrWhiteSpace(value) || value == Item.Name || !Item.CanChangeName) return;
       Item.Name = value.Trim();
       MarkModified();
@@ -90,6 +94,8 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   public virtual bool HasBadge => false;
   public virtual string Badge => "";
   public virtual string BadgeTip => "";
+  /// <summary>The last field in yellow: its setting runs but makes little sense (see BadgeTip).</summary>
+  public virtual bool HasBadgeWarning => false;
 
   /// <summary>Algorithms and problems have names of one width, so problems line up.</summary>
   public virtual bool FixedWidth => false;
@@ -114,7 +120,7 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [RelayCommand]
   private void Rename() {
     Workspace.Selected = this;
-    IsEditingName = true;
+    if (Workspace.IsEditable) IsEditingName = true;
   }
 
   [RelayCommand]
@@ -128,12 +134,18 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
 
   /// <summary>"Copy" and "Copy n times..." where a copy can go next to the block.</summary>
   protected IReadOnlyList<MenuChoice> CopyMenu =>
-    Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
+    Workspace.IsEditable && Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
 
-  /// <summary>Context menu of the block.</summary>
-  public virtual IReadOnlyList<MenuChoice> Menu => [new("Rename", RenameCommand), new("Delete", DeleteCommand)];
+  /// <summary>Context menu of the block (while experiments run only what changes nothing).</summary>
+  public virtual IReadOnlyList<MenuChoice> Menu => EditMenu;
+
+  /// <summary>Rename and Delete, if the tree can be changed now.</summary>
+  protected IReadOnlyList<MenuChoice> EditMenu => Workspace.IsEditable ? [new("Rename", RenameCommand), new("Delete", DeleteCommand)] : [];
 
   public void RefreshLabel() => OnPropertyChanged(nameof(Label));
+
+  /// <summary>Running started or ended: the menu offers editing or not.</summary>
+  public void RefreshMenu() => OnPropertyChanged(nameof(Menu));
 }
 
 /// <summary>Experiment, batch run or time-limit run: children plus its own add button.</summary>
@@ -178,7 +190,7 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   public IReadOnlyList<MenuChoice> AddChoices { get; }
 
   public override IReadOnlyList<MenuChoice> Menu =>
-    [new("Show in Run tab", new RelayCommand(() => Workspace.ShowInRunTab(this))), .. CopyMenu, .. base.Menu];
+    [new("Show in Run tab", new RelayCommand(() => Workspace.ShowInRunTab(this))), .. CopyMenu, .. EditMenu];
 
   /// <summary>A time-limit run holds one algorithm, so its add button goes away once it has one.</summary>
   public bool CanAdd => Optimizer is not TimeLimitRun || Children.Count == 0;
@@ -190,7 +202,7 @@ public partial class ContainerBlockViewModel : BlockViewModel {
 
   public override string Pictogram => Optimizer switch {
     BatchRun => "batch_run",
-    TimeLimitRun => "time_limit_run",
+    _ when ExperimentTree.IsTimeLimit(Optimizer) => "time_limit_run",
     _ => "experiment_logo"
   };
 
@@ -201,19 +213,28 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   public override string Badge => Optimizer switch {
     BatchRun b when IsActive => $"{Math.Min(b.RepetitionsCounter + 1, b.Repetitions)} / {b.Repetitions}",
     BatchRun b => $"{b.Repetitions}×",
-    TimeLimitRun t when IsActive => $"{Clock(t.ExecutionTime)} / {Clock(t.MaximumExecutionTime)}",
-    TimeLimitRun t => ExperimentWorkspaceViewModel.FormatDuration(t.MaximumExecutionTime),
+    _ when ExperimentTree.TimeLimit(Optimizer) is { } limit => IsActive
+      ? $"{Clock(Optimizer.ExecutionTime)} / {Clock(limit)}" : ExperimentWorkspaceViewModel.FormatDuration(limit),
     _ => ""
   };
 
-  public override bool HasBadge => Optimizer is BatchRun or TimeLimitRun;
+  public override bool HasBadge => Optimizer is BatchRun || ExperimentTree.IsTimeLimit(Optimizer);
+
+  /// <summary>
+  /// A time limit longer than that of a time-limit run around it: it still runs, but the outer
+  /// one stops it first (the timer field turns yellow and says so).
+  /// </summary>
+  public override bool HasBadgeWarning => OuterLimit is { } outer && ExperimentTree.TimeLimit(Optimizer) > outer;
+
+  private TimeSpan? OuterLimit => Root is { } root && ExperimentTree.IsTimeLimit(Optimizer) ? ExperimentTree.EnclosingTimeLimit(root.Experiment, Optimizer) : null;
 
   /// <summary>Running or paused: the badge counts.</summary>
   public bool IsActive => Optimizer.ExecutionState is ExecutionState.Started or ExecutionState.Paused;
 
   public override string BadgeTip => Optimizer switch {
     BatchRun b => IsActive ? $"Repetition {Math.Min(b.RepetitionsCounter + 1, b.Repetitions)} of {b.Repetitions}" : $"{b.Repetitions} repetitions",
-    TimeLimitRun t => IsActive ? $"Running for {Clock(t.ExecutionTime)} of {Clock(t.MaximumExecutionTime)}" : "Time limit",
+    _ when HasBadgeWarning => $"Longer than the time-limit run around it ({Clock(OuterLimit!.Value)}): that one stops it first, so this limit is never reached.",
+    _ when ExperimentTree.TimeLimit(Optimizer) is { } limit => IsActive ? $"Running for {Clock(Optimizer.ExecutionTime)} of {Clock(limit)}" : "Time limit (for everything inside, in total)",
     _ => ""
   };
 
@@ -224,15 +245,16 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   public void RefreshBadge() {
     OnPropertyChanged(nameof(Badge));
     OnPropertyChanged(nameof(BadgeTip));
+    OnPropertyChanged(nameof(HasBadgeWarning));
   }
 
   public bool IsBatchRun => Optimizer is BatchRun;
-  public bool IsTimeLimitRun => Optimizer is TimeLimitRun;
+  public bool IsTimeLimitRun => ExperimentTree.IsTimeLimit(Optimizer);
 
   public string RepetitionsText {
     get => (Optimizer as BatchRun)?.Repetitions.ToString(CultureInfo.InvariantCulture) ?? "";
     set {
-      if (Optimizer is not BatchRun b) return;
+      if (Optimizer is not BatchRun b || !Workspace.IsEditable) return;
       if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= 1) {
         b.Repetitions = n;
         MarkModified();
@@ -244,13 +266,13 @@ public partial class ContainerBlockViewModel : BlockViewModel {
 
   /// <summary>Time limit as "90", "90s", "5m", "1h" or "hh:mm:ss".</summary>
   public string TimeLimitText {
-    get => Optimizer is TimeLimitRun t ? ExperimentWorkspaceViewModel.FormatDuration(t.MaximumExecutionTime) : "";
+    get => ExperimentTree.TimeLimit(Optimizer) is { } limit ? ExperimentWorkspaceViewModel.FormatDuration(limit) : "";
     set {
-      if (Optimizer is not TimeLimitRun t) return;
+      if (!IsTimeLimitRun || !Workspace.IsEditable) return;
       if (ExperimentWorkspaceViewModel.ParseDuration(value) is TimeSpan limit && limit > TimeSpan.Zero) {
-        t.MaximumExecutionTime = limit;
+        ExperimentTree.SetTimeLimit(Optimizer, limit);
         MarkModified();
-        RefreshBadge();
+        Workspace.RefreshState();  // limits inside or around it may now be longer than theirs
       } else Workspace.Status = "Time limit: e.g. 90s, 5m, 1h or 00:10:00.";
       OnPropertyChanged();
     }
@@ -303,9 +325,13 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   [RelayCommand]
   private Task SaveAsync() => Workspace.SaveAsync(this);
 
-  public override IReadOnlyList<MenuChoice> Menu =>
-    [new("Save as...", SaveCommand), new("Show in Run tab", ShowInRunTabCommand),
-     new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)];
+  public override IReadOnlyList<MenuChoice> Menu => Workspace.IsEditable
+    ? [new("Save as...", SaveCommand), new("Show in Run tab", ShowInRunTabCommand), new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)]
+    : [new("Show in Run tab", ShowInRunTabCommand)];
+
+  /// <summary>Settings that run but make little sense (e.g. a time-limit run longer than the one around it).</summary>
+  [ObservableProperty]
+  public partial string Warnings { get; set; } = "";
 
   [RelayCommand]
   private void ShowInRunTab() => Workspace.ShowInRunTab(this);
@@ -439,8 +465,8 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
   private void ShowInRunTab() => Workspace.ShowInRunTab(this);
 
   public override IReadOnlyList<MenuChoice> Menu =>
-    [new(HasProblem ? "Change problem..." : "Add problem...", ChooseProblemCommand), new("Show in Run tab", ShowInRunTabCommand),
-     .. CopyMenu, new("Rename", RenameCommand), new("Delete", DeleteCommand)];
+    [.. Workspace.IsEditable ? [new MenuChoice(HasProblem ? "Change problem..." : "Add problem...", ChooseProblemCommand)] : Array.Empty<MenuChoice>(),
+     new("Show in Run tab", ShowInRunTabCommand), .. CopyMenu, .. EditMenu];
 
   internal void SetProblem(IProblem? problem) {
     if (Problem?.IsSelected == true) Workspace.Selected = null;
@@ -483,5 +509,5 @@ public partial class ProblemBlockViewModel(ExperimentWorkspaceViewModel workspac
   private Task ChangeAsync() => Workspace.ChooseProblemAsync(Owner);
 
   public override IReadOnlyList<MenuChoice> Menu =>
-    [new("Change problem...", ChangeCommand), new("Rename", RenameCommand), new("Remove problem", DeleteCommand)];
+    Workspace.IsEditable ? [new("Change problem...", ChangeCommand), new("Rename", RenameCommand), new("Remove problem", DeleteCommand)] : [];
 }
