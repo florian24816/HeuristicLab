@@ -21,6 +21,8 @@ public interface IDialogService {
   Task<int?> AskNumberAsync(string title, string message, int initial, int min, int max) => Task.FromResult<int?>(null);
   /// <summary>Asks for a line of text; null if cancelled.</summary>
   Task<string?> AskTextAsync(string title, string message, string initial) => Task.FromResult<string?>(null);
+  /// <summary>Picks one of the items and confirms it with the action button; the item's index, null if cancelled.</summary>
+  Task<int?> ChooseAsync(string title, string message, System.Collections.Generic.IReadOnlyList<string> items, string action) => Task.FromResult<int?>(null);
 }
 
 public sealed class DialogService(Window owner, IFileDialogService fileDialogs) : IDialogService {
@@ -55,4 +57,7 @@ public sealed class DialogService(Window owner, IFileDialogService fileDialogs) 
 
   public async Task<string?> AskTextAsync(string title, string message, string initial) =>
     await new TextWindow(title, message, initial).ShowDialog<string?>(owner);
+
+  public async Task<int?> ChooseAsync(string title, string message, System.Collections.Generic.IReadOnlyList<string> items, string action) =>
+    await new ChooseWindow(title, message, items, action).ShowDialog<int?>(owner);
 }

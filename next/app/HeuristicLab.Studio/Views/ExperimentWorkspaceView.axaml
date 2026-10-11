@@ -141,6 +141,30 @@
         <Style Selector="Border.experiment TextBlock.missing">
             <Setter Property="Foreground" Value="#F2A27E" />
         </Style>
+        <Style Selector="Button.picto">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+        <Style Selector="Button.picto:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.picto:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.picto Border.label">
+            <Setter Property="Background" Value="{StaticResource ButtonBrush}" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="TextElement.Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style Selector="Button.picto Border.label TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.picto:pointerover Border.label">
+            <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
+        </Style>
+        <Style Selector="Button.picto:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
         <Style Selector="Button.plain">
             <Setter Property="CornerRadius" Value="0" />
         </Style>
@@ -243,10 +267,25 @@
         <DockPanel Margin="12">
             <!-- global start controls -->
             <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
-                <Button Classes="action" Content="Start all experiments" Command="{Binding StartAllCommand}" />
-                <Button Grid.Column="1" Classes="action" Content="Start selected experiments" Command="{Binding StartSelectedCommand}"
-                        ToolTip.Tip="Starts the experiments whose checkbox is ticked" />
-                <Button Grid.Column="2" Classes="action" Content="Stop" Command="{Binding StopCommand}" />
+                <!-- like the blocks: orange square with the pictogram, then the rectangle with the text -->
+                <Button Classes="picto" Command="{Binding StartAllCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Border Classes="square logo"><c:Pictogram Symbol="Experiment_run_all" Foreground="{StaticResource InkBrush}" /></Border>
+                        <Border Classes="label"><TextBlock Text="Start all experiments" /></Border>
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="1" Classes="picto" Command="{Binding StartSelectedCommand}" ToolTip.Tip="Starts the experiments whose checkbox is ticked">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Border Classes="square logo"><c:Pictogram Symbol="Experiment_run_selected" Foreground="{StaticResource InkBrush}" /></Border>
+                        <Border Classes="label"><TextBlock Text="Start selected experiments" /></Border>
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="2" Classes="picto" Command="{Binding StopCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Border Classes="square logo"><c:Pictogram Symbol="experiment_stop" Foreground="{StaticResource InkBrush}" /></Border>
+                        <Border Classes="label"><TextBlock Text="Stop" /></Border>
+                    </StackPanel>
+                </Button>
                 <TextBlock Grid.Column="3" Text="{Binding Status}" VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
                            ToolTip.Tip="{Binding Status}" />
             </Grid>

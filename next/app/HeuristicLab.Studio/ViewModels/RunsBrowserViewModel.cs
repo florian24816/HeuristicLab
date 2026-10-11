@@ -69,6 +69,13 @@ public partial class RunsBrowserViewModel : ViewModelBase {
     Select(selected, run);
   }
 
+  /// <summary>Deletes all runs of one experiment, chosen and confirmed in a dialog.</summary>
+  [RelayCommand]
+  private async System.Threading.Tasks.Task DeleteRunsAsync() {
+    await workspace.DeleteRunsAsync();
+    Refresh();
+  }
+
   /// <summary>Selects the block of this optimizer (and a run of it); the first experiment if it is not in the workspace.</summary>
   public void Select(IOptimizer? optimizer, IRun? run = null) {
     var node = All(Sources).FirstOrDefault(s => ReferenceEquals(s.Optimizer, optimizer)) ?? Sources.FirstOrDefault();

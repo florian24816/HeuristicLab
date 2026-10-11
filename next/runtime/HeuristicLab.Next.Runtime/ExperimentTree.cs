@@ -99,6 +99,17 @@ public static class ExperimentTree {
     }
   }
 
+  /// <summary>
+  /// Deletes every run in the tree (the root's and all its optimizers'), leaving the optimizers as
+  /// they are (no Prepare); returns how many runs the root held.
+  /// </summary>
+  public static int DeleteRuns(IOptimizer root) {
+    int count = root.Runs.Count;
+    foreach (var child in IsContainer(root) ? Children(root) : []) DeleteRuns(child);
+    root.Runs.Clear();
+    return count;
+  }
+
   public static IEnumerable<IAlgorithm> Algorithms(IOptimizer root) =>
     IsContainer(root) ? Children(root).SelectMany(Algorithms) : root is IAlgorithm a ? [a] : [];
 

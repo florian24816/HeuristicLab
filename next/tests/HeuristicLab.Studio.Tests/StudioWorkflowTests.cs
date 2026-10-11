@@ -270,4 +270,90 @@ public class StudioWorkflowTests {
       Directory.Delete(folder, recursive: true);
     }
   }
+
+  private sealed class ChooseDialogs : HeuristicLab.Studio.Services.IDialogService {
+    public int? Answer { get; set; }
+    public IReadOnlyList<string> Offered { get; private set; } = [];
+    public Task<SetupResult?> NewSetupAsync() => Task.FromResult<SetupResult?>(null);
+    public Task<CatalogEntry?> PickAlgorithmAsync() => Task.FromResult<CatalogEntry?>(null);
+    public Task<HeuristicLab.Optimization.IProblem?> PickProblemAsync(HeuristicLab.Optimization.IAlgorithm algorithm) => Task.FromResult<HeuristicLab.Optimization.IProblem?>(null);
+    public Task<bool> ConfirmAsync(string title, string message) => Task.FromResult(true);
+    public Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string> items, string action) { Offered = items; return Task.FromResult(Answer); }
+  }
+
+  /// <summary>
+  /// Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment, chosen in a list
+  /// and confirmed; never single runs. The start/stop buttons carry pictograms like the blocks.
+  /// </summary>
+  [TestMethod]
+  public async Task DeleteRunsDeletesAllRunsOfTheChosenExperiment() {
+    await OnUiThread(async () => {
+      var dialogs = new ChooseDialogs();
+      var vm = new MainViewModel(null, dialogs);
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1300, Height = 800 };
+      window.Show();
+      HeuristicLab.Optimization.IProblem Problem() => (HeuristicLab.Optimization.IProblem)SmallGaTsp().Algorithm.Problem!.Clone();
+      var first = ws.NewExperiment();
+      var batch = ws.AddContainer(first, HeuristicLab.Next.Runtime.ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(HeuristicLab.Optimization.BatchRun)));
+      batch.RepetitionsText = "2";
+      var inBatch = ws.AddAlgorithm(batch, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
+      ws.SetProblem(inBatch, Problem());
+      var single = ws.AddAlgorithm(first, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
+      ws.SetProblem(single, Problem());
+      var second = ws.NewExperiment();
+      var other = ws.AddAlgorithm(second, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
+      ws.SetProblem(other, Problem());
+      foreach (var a in new[] { inBatch, single, other }) ParameterEditor.Apply(a.Algorithm, ["MaximumGenerations=3", "PopulationSize=10"]);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("picto")).ToList();
+      Assert.AreEqual(3, buttons.Count, "start all, start selected, stop");
+      var symbols = buttons.Select(b => b.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().Single().Symbol).ToList();
+      CollectionAssert.AreEqual(new[] { "Experiment_run_all", "Experiment_run_selected", "experiment_stop" }, symbols);
+      window.CaptureRenderedFrame()!.Save(Shot("studio-start-buttons.png"));
+      await ws.StartAllCommand.ExecuteAsync(null);
+      Assert.AreEqual(3, first.Experiment.Runs.Count, "two from the batch run, one from the algorithm");
+      Assert.AreEqual(1, second.Experiment.Runs.Count);
+
+      vm.SelectedTab = MainViewModel.RunsTab;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsTrue(window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Delete runs..."));
+      Assert.IsFalse(window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Runs of"));
+
+      // cancelled: nothing happens
+      dialogs.Answer = null;
+      await vm.Runs.DeleteRunsCommand.ExecuteAsync(null);
+      CollectionAssert.AreEqual(new[] { "New experiment 1  (3 runs)", "New experiment 2  (1 run)" }, dialogs.Offered.ToList());
+      Assert.AreEqual(3, first.Experiment.Runs.Count);
+
+      // the first experiment chosen and confirmed: all its runs go, the other experiment keeps its
+      first.IsModified = false;
+      dialogs.Answer = 0;
+      await vm.Runs.DeleteRunsCommand.ExecuteAsync(null);
+      Assert.AreEqual(0, first.Experiment.Runs.Count);
+      Assert.AreEqual(0, inBatch.Algorithm.Runs.Count);
+      Assert.AreEqual(0, ((HeuristicLab.Optimization.BatchRun)batch.Optimizer).Runs.Count);
+      Assert.AreEqual(0, single.Algorithm.Runs.Count);
+      Assert.AreEqual(1, second.Experiment.Runs.Count, "another experiment keeps its runs");
+      Assert.IsTrue(first.IsModified, "a change to save");
+      Assert.AreEqual("Runs (0)", single.RunsText);
+      Assert.AreEqual(0, vm.Runs.Sources[0].RunCount, "the Runs tab shows it");
+      StringAssert.StartsWith(ws.Status, "Deleted 3 runs");
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      window.CaptureRenderedFrame()!.Save(Shot("studio-runs-deleted.png"));
+
+      // the dialog: the delete button stays disabled until an experiment is selected
+      var chooser = new ChooseWindow("Delete runs", "Choose the experiment whose runs are all deleted.", ["New experiment 1  (0 runs)", "New experiment 2  (1 run)"], "Delete runs");
+      chooser.Show();
+      var delete = chooser.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Delete runs");
+      Assert.IsFalse(delete.IsEnabled, "nothing selected yet");
+      chooser.GetVisualDescendants().OfType<ListBox>().Single().SelectedIndex = 1;
+      Assert.IsTrue(delete.IsEnabled);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      chooser.CaptureRenderedFrame()!.Save(Shot("studio-delete-runs-dialog.png"));
+      chooser.Close();
+      window.Close();
+      return 0;
+    });
+  }
 }

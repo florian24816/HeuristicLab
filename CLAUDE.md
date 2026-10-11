@@ -42,6 +42,11 @@
   events: no problem, not run / stopped by the user, waiting (in a running experiment, paused),
   working, finished (also stopped by a time limit), failed. Unsaved = changed since opened/saved
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
+  Start all / Start selected / Stop are drawn like blocks (Button.picto: orange square with
+  Experiment_run_all / Experiment_run_selected / experiment_stop, then a grey rectangle).
+  Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment (ChooseWindow: pick it
+  in a list, the delete button is disabled until then; ExperimentTree.DeleteRuns clears every
+  optimizer's runs without Prepare; never single runs, never while running; marks it unsaved).
   Each experiment's area is filled gunmetal grey (#3E474D, Border.experiment, no border) with light
   writing (checkbox, arrows, links, missing-text in #F2A27E). "Open..." takes several .hl files at once
   (IFileDialogService.OpenHlFilesAsync, AllowMultiple): each opens as its own experiment.

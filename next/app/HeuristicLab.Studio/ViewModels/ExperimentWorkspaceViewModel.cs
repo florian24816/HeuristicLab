@@ -415,6 +415,33 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     return true;
   }
 
+  /// <summary>
+  /// Runs tab's "Delete runs...": the user picks an experiment, then confirms; all its runs (also those
+  /// of its batch runs, time-limit runs and algorithms) are deleted. Never single runs, never while running.
+  /// </summary>
+  public async Task DeleteRunsAsync() {
+    if (!IsEditable) {
+      Status = "Runs can be deleted when nothing runs.";
+      return;
+    }
+    if (dialogs == null || Experiments.Count == 0) return;
+    var experiments = Experiments.ToList();
+    var index = await dialogs.ChooseAsync("Delete runs",
+      "Choose the experiment whose runs are all deleted (the runs of everything inside it), then press \"Delete runs\". The experiment itself stays.",
+      experiments.Select(e => $"{e.Name}  ({e.Experiment.Runs.Count} run{(e.Experiment.Runs.Count == 1 ? "" : "s")})").ToList(), "Delete runs");
+    if (index is int i && i >= 0 && i < experiments.Count) DeleteRuns(experiments[i]);
+  }
+
+  /// <summary>Deletes all runs of this experiment; returns how many there were.</summary>
+  public int DeleteRuns(ExperimentBlockViewModel experiment) {
+    if (!IsEditable) return 0;
+    int count = ExperimentTree.DeleteRuns(experiment.Experiment);
+    if (count > 0) experiment.MarkModified();
+    RefreshLive();
+    Status = $"Deleted {count} run{(count == 1 ? "" : "s")} of {experiment.Name}";
+    return count;
+  }
+
   /// <summary>Shows the block's runs in the Runs tab.</summary>
   internal void ShowRuns(BlockViewModel block) {
     var optimizer = block switch {
