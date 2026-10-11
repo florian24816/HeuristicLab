@@ -33,7 +33,10 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
 
   public AlgorithmDetailViewModel(AlgorithmBlockViewModel block) {
     this.block = block;
-    context = new EditContext(m => Message = m, () => CanEdit, block.MarkModified);
+    context = new EditContext(m => Message = m, () => CanEdit, block.MarkModified) {
+      MultiTarget = () => block.Workspace.MultiEditKeyFor(block),
+      ToggleMulti = key => block.Workspace.ToggleMultiEdit(block, key)
+    };
     Engines = ItemInspector.Engines();
     Results = new ResultsViewModel(() => Algorithm.Results, context);
     Runs = new RunsViewModel(Algorithm.Runs);
@@ -86,8 +89,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   /// </summary>
   public void RefreshProblem() {
     OnPropertyChanged(nameof(HasProblem));
-    AlgorithmParameters = new ParameterListViewModel(Algorithm, context);
-    Graph = ItemInspector.GraphOf(Algorithm) is OperatorGraph g ? new OperatorGraphViewModel(g, Algorithm.Name, context) : null;
+    RebuildEditors();
     var problem = Algorithm.Problem;
     if (problem == null) {
       ProblemParameters = null;
@@ -107,6 +109,70 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   }
 
   // ---- algorithm, results, runs, graph
+
+  private int editorsVersion = -1;
+
+  /// <summary>New editors of the algorithm's parameters and graph (they show the field edited across algorithms).</summary>
+  public void RebuildEditors() {
+    editorsVersion = block.Workspace.MultiVersion;
+    AlgorithmParameters = new ParameterListViewModel(Algorithm, context, path: MultiEdit.AlgorithmTab);
+    Graph = ItemInspector.GraphOf(Algorithm) is OperatorGraph g ? new OperatorGraphViewModel(g, Algorithm.Name, context) : null;
+  }
+
+  /// <summary>
+  /// Shows the field with this key (MultiEdit): its tab, the parameter (and the nested option,
+  /// analyzer or graph node on the way) selected; false if this algorithm has no such field.
+  /// </summary>
+  public bool Reveal(string key) {
+    if (editorsVersion != block.Workspace.MultiVersion) RebuildEditors();
+    var steps = MultiEdit.Steps(key);
+    ParameterListViewModel? list = null;
+    ValueEditorViewModel? editor = null;
+    switch (steps[0]) {
+      case MultiEdit.AlgorithmTab:
+        SelectedTab = AlgorithmTab;
+        list = AlgorithmParameters;
+        break;
+      case MultiEdit.GraphTab when Graph != null:
+        SelectedTab = GraphTab;
+        Graph.Home();
+        break;
+      default:
+        return false;
+    }
+    foreach (var step in steps.Skip(1)) {
+      switch (step[..2]) {
+        case "p:":
+          if (list == null && editor != null) {
+            if (editor.IsCheckedList) editor.CheckedListTab = ValueEditorViewModel.ParametersTab;
+            list = editor.Nested;
+          }
+          var node = list?.Parameters.FirstOrDefault(p => p.Name == step[2..]);
+          if (list == null || node == null) return false;
+          list.Selected = node;
+          editor = node.Editor;
+          list = null;
+          break;
+        case "e:":
+          var entry = editor?.Entries.FirstOrDefault(e => e.Name == step[2..]);
+          if (editor == null || entry == null) return false;
+          editor.CheckedListTab = ValueEditorViewModel.OperatorsTab;
+          editor.SelectedEntry = entry;
+          list = entry.Parameters;
+          editor = null;
+          break;
+        case "o:":
+        case "n:":
+          if (Graph == null || !Graph.Go(step)) return false;
+          editor = step[0] == 'n' ? Graph.SelectedEditor : null;
+          list = null;
+          break;
+        default:
+          return false;
+      }
+    }
+    return true;
+  }
 
   [ObservableProperty]
   public partial ParameterListViewModel AlgorithmParameters { get; set; } = null!;

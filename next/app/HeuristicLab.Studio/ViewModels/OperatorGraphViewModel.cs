@@ -24,12 +24,15 @@ public sealed record GraphEdgeView(double X1, double Y1, double X2, double Y2, s
 public partial class OperatorGraphViewModel : ViewModelBase {
   public const double NodeWidth = 190, NodeHeight = 44, LayerGap = 70, RowGap = 24;
   private readonly EditContext context;
-  private readonly Stack<(OperatorGraph Graph, string Title)> path = new();
+  private readonly Stack<(OperatorGraph Graph, string Title, string Address)> path = new();
 
   public OperatorGraphViewModel(OperatorGraph graph, string title, EditContext context) {
     this.context = context;
-    Show(graph, title);
+    Show(graph, title, MultiEdit.GraphTab);
   }
+
+  /// <summary>Address of the shown graph for editing across algorithms (opened nodes from the algorithm's graph).</summary>
+  public string Address => path.Peek().Address;
 
   [ObservableProperty]
   public partial string Title { get; set; } = "";
@@ -58,15 +61,38 @@ public partial class OperatorGraphViewModel : ViewModelBase {
   public bool CanGoBack => path.Count > 1;
 
   partial void OnSelectedChanged(GraphNodeView? value) {
-    SelectedEditor = value == null ? null : new ValueEditorViewModel(value.Operator, context);
+    SelectedEditor = value == null ? null
+      : new ValueEditorViewModel(value.Operator, context, path: MultiEdit.Node(Address, IndexOf(value), value.Operator.Name));
     OpenCommand.NotifyCanExecuteChanged();
   }
 
   public void Select(IOperator op) => Selected = Nodes.FirstOrDefault(n => n.Operator == op);
 
+  private int IndexOf(GraphNodeView node) => Nodes.ToList().IndexOf(node);
+
+  /// <summary>Back to the algorithm's own graph.</summary>
+  public void Home() {
+    while (path.Count > 1) Back();
+  }
+
+  /// <summary>Opens the node at this layout position ("index:name") or selects it; false if it is not there.</summary>
+  public bool Go(string step) {
+    if (Nodes.Count == 0) return false;
+    var node = step[2..].Split(':', 2) is [var i, var name] && int.TryParse(i, out int index) && index < Nodes.Count
+      && Nodes[index].Name == name ? Nodes[index] : null;
+    if (node == null) return false;
+    Selected = node;
+    if (step.StartsWith("o:", System.StringComparison.Ordinal)) {
+      if (!node.HasGraph) return false;
+      Open();
+    }
+    return true;
+  }
+
   [RelayCommand(CanExecute = nameof(CanOpen))]
   private void Open() {
-    if (Selected != null && ItemInspector.GraphOf(Selected.Operator) is OperatorGraph g) Show(g, Selected.Name);
+    if (Selected != null && ItemInspector.GraphOf(Selected.Operator) is OperatorGraph g)
+      Show(g, Selected.Name, MultiEdit.Open(Address, IndexOf(Selected), Selected.Name));
   }
   private bool CanOpen() => Selected?.HasGraph == true;
 
@@ -74,12 +100,12 @@ public partial class OperatorGraphViewModel : ViewModelBase {
   private void Back() {
     if (path.Count < 2) return;
     path.Pop();
-    var (graph, title) = path.Pop();
-    Show(graph, title);
+    var (graph, title, address) = path.Pop();
+    Show(graph, title, address);
   }
 
-  private void Show(OperatorGraph graph, string title) {
-    path.Push((graph, title));
+  private void Show(OperatorGraph graph, string title, string address) {
+    path.Push((graph, title, address));
     Title = string.Join(" › ", path.Reverse().Select(p => p.Title));
     var layout = ItemInspector.Layout(graph);
     var position = layout.Nodes.ToDictionary(n => n.Operator,

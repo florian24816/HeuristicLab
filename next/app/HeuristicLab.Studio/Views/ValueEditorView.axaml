@@ -18,8 +18,11 @@
         </StackPanel>
 
         <TextBlock Text="(no value)" Opacity="0.6" IsVisible="{Binding IsNone}" />
-        <CheckBox Content="True" IsChecked="{Binding Bool}" IsVisible="{Binding IsBool}" IsEnabled="{Binding !ReadOnly}" />
-        <TextBox Text="{Binding Text, UpdateSourceTrigger=LostFocus}" IsVisible="{Binding IsText}" IsReadOnly="{Binding ReadOnly}" />
+        <!-- Shift+click on the value: edit it across all algorithms of this type (purple) -->
+        <CheckBox Classes="field" Classes.multi="{Binding IsMultiTarget}" Content="True" IsChecked="{Binding Bool}"
+                  IsVisible="{Binding IsBool}" IsEnabled="{Binding !ReadOnly}" />
+        <TextBox Classes="field" Classes.multi="{Binding IsMultiTarget}" Text="{Binding Text, UpdateSourceTrigger=LostFocus}"
+                 IsVisible="{Binding IsText}" IsReadOnly="{Binding ReadOnly}" />
         <TextBlock Text="{Binding Text}" IsVisible="{Binding IsOther}" TextWrapping="Wrap" Opacity="0.8" />
 
         <!-- arrays and matrices -->
@@ -52,7 +55,7 @@
         </StackPanel>
 
         <!-- checked lists (analyzers) and nested parameters -->
-        <TabControl IsVisible="{Binding IsCheckedList}" Padding="0,6,0,0">
+        <TabControl IsVisible="{Binding IsCheckedList}" Padding="0,6,0,0" SelectedIndex="{Binding CheckedListTab}">
             <TabItem Header="Operators">
                 <StackPanel Spacing="6">
                     <StackPanel Orientation="Horizontal" Spacing="6">

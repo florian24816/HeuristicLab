@@ -32,6 +32,17 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [ObservableProperty]
   public partial BlockViewModel? PreviewBefore { get; set; }
 
+  /// <summary>
+  /// Editing a field across algorithms (MultiEdit): 0 not involved, 1 an algorithm whose field is
+  /// edited (purple, light), 2 the one shown now (purple, stronger). Problem blocks stay 0.
+  /// </summary>
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsMultiMember), nameof(MultiOpacity))]
+  public partial int MultiLevel { get; set; }
+
+  public bool IsMultiMember => MultiLevel > 0;
+  public double MultiOpacity => MultiLevel >= 2 ? 0.5 : 0.25;
+
   /// <summary>Dragged and shown faded at its new place: hidden at its old place meanwhile.</summary>
   [ObservableProperty]
   public partial bool IsMoving { get; set; }

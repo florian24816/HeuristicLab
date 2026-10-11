@@ -18,7 +18,8 @@
                           ToolTip.Tip="Record this value in every run" />
                 <Button Content="Clear value" Command="{Binding ClearCommand}" IsVisible="{Binding CanClear}" />
             </StackPanel>
-            <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" IsVisible="{Binding IsChoice}"
+            <!-- Shift+click on the choice: choose it across all algorithms of this type (purple) -->
+            <ComboBox Classes="field" Classes.multi="{Binding IsMultiTarget}" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" IsVisible="{Binding IsChoice}"
                       HorizontalAlignment="Stretch" DisplayMemberBinding="{Binding Display, x:DataType=vm:ChoiceItem}" />
             <ContentControl Content="{Binding Editor}" />
         </StackPanel>

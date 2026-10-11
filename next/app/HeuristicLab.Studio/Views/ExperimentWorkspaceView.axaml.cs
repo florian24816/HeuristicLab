@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -37,11 +38,51 @@ public partial class ExperimentWorkspaceView : UserControl {
   }
 
   private ExperimentWorkspaceViewModel? Workspace => DataContext as ExperimentWorkspaceViewModel;
+  private ExperimentWorkspaceViewModel? subscribed;
+
+  protected override void OnDataContextChanged(EventArgs e) {
+    base.OnDataContextChanged(e);
+    if (subscribed != null) subscribed.FocusMultiFieldRequested -= FocusMultiField;
+    subscribed = Workspace;
+    if (subscribed != null) subscribed.FocusMultiFieldRequested += FocusMultiField;
+  }
+
+  // ---- editing a field across algorithms: the keyboard goes to the purple field
+
+  /// <summary>Focuses the purple field once it is shown: a text is selected for typing over, a choice's list opens (arrows + Enter, or click).</summary>
+  private void FocusMultiField() => FocusMultiField(attempts: 6);
+
+  private void FocusMultiField(int attempts) =>
+    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+      var field = this.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Classes.Contains("multi") && c.Classes.Contains("field") && c.IsEffectivelyVisible);
+      switch (field) {
+        case TextBox text:
+          text.Focus(NavigationMethod.Tab);
+          text.SelectAll();
+          break;
+        case ComboBox choice:
+          choice.Focus(NavigationMethod.Tab);
+          choice.IsDropDownOpen = true;
+          break;
+        case Control other:
+          other.Focus(NavigationMethod.Tab);
+          break;
+        case null when attempts > 0:
+          FocusMultiField(attempts - 1);  // not laid out yet
+          break;
+      }
+    }, Avalonia.Threading.DispatcherPriority.Background);
 
   // ---- drag and drop: press a block, move, release where the faded preview shows it
 
   private void BlockPressed(object? sender, PointerPressedEventArgs e) {
     if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+    // Shift+click on a purple algorithm: stop editing a field across algorithms
+    if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && (sender as Control)?.DataContext is BlockViewModel { IsMultiMember: true }) {
+      Workspace?.ExitMultiEdit();
+      e.Handled = true;
+      return;
+    }
     if ((sender as Control)?.DataContext is BlockViewModel { IsEditingName: false } block) {
       pressed = block;
       pressedAt = e.GetPosition(this);

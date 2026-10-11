@@ -11,5 +11,25 @@
 
     <Application.Styles>
         <FluentTheme />
+        <!-- a field edited across algorithms (Shift+click): purple -->
+        <Style Selector="TextBox.multi /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="#E8D5F2" />
+            <Setter Property="BorderBrush" Value="#8E44AD" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="TextBox.multi">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="ComboBox.multi /template/ Border#Background">
+            <Setter Property="Background" Value="#E8D5F2" />
+            <Setter Property="BorderBrush" Value="#8E44AD" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="CheckBox.multi">
+            <Setter Property="Background" Value="#E8D5F2" />
+            <Setter Property="BorderBrush" Value="#8E44AD" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="Padding" Value="8,0,8,0" />
+        </Style>
     </Application.Styles>
 </Application>

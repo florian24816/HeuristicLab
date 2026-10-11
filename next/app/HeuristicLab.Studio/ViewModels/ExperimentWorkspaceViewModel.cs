@@ -60,6 +60,14 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   partial void OnSelectedChanged(BlockViewModel? oldValue, BlockViewModel? newValue) {
     if (oldValue != null) { oldValue.IsSelected = false; oldValue.IsEditingName = false; }
     if (newValue != null) newValue.IsSelected = true;
+    if (MultiEditing is { } multi && newValue is AlgorithmBlockViewModel { IsMultiMember: true } member) {
+      // editing across algorithms: straight to the same field in this algorithm, with the keyboard there
+      Detail = member.Detail;
+      member.Detail.Reveal(multi.Key);
+      RefreshMultiEdit();
+      FocusMultiFieldRequested?.Invoke();
+      return;
+    }
     Detail = newValue switch {
       AlgorithmBlockViewModel a => a.ShowDetail(AlgorithmDetailViewModel.AlgorithmTab),
       ProblemBlockViewModel p => p.Owner.ShowDetail(AlgorithmDetailViewModel.ProblemTab),
@@ -67,6 +75,75 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       _ => newValue
     };
     if (newValue == null) _ = Samples.LoadAsync();
+    RefreshMultiEdit();
+  }
+
+  // ---- editing one field across algorithms (Shift+click on a value or choice)
+
+  /// <summary>The field edited across the algorithms of one type in one experiment; null: off.</summary>
+  [ObservableProperty]
+  public partial MultiEditState? MultiEditing { get; set; }
+
+  /// <summary>Changes whenever editing across algorithms starts or ends: editors built before are outdated.</summary>
+  public int MultiVersion { get; private set; }
+
+  /// <summary>Asks the view to put the keyboard focus into the purple field (and open a choice's list).</summary>
+  public event Action? FocusMultiFieldRequested;
+
+  /// <summary>The key of the field edited across algorithms, for this algorithm (if it takes part).</summary>
+  public string? MultiEditKeyFor(AlgorithmBlockViewModel block) => MultiEditing is { } m && block.IsMultiMember ? m.Key : null;
+
+  private AlgorithmBlockViewModel? ShownAlgorithm => Selected switch {
+    AlgorithmBlockViewModel a => a,
+    ProblemBlockViewModel p => p.Owner,
+    _ => null
+  };
+
+  /// <summary>
+  /// Shift+click on a field: edit it across all algorithms of this type in this experiment, or (on the
+  /// purple field) stop. The algorithms taking part are tinted purple; clicking one shows the field.
+  /// </summary>
+  public bool ToggleMultiEdit(AlgorithmBlockViewModel block, string key) {
+    if (block.Root is not { } root) return false;
+    bool stop = MultiEditing is { } m && m.Key == key && block.IsMultiMember;
+    MultiEditing = stop ? null : new MultiEditState(root, block.Algorithm.GetType(), key);
+    MultiVersion++;
+    if (ShownAlgorithm != block) Selected = block;
+    RefreshMultiEdit();
+    block.Detail.Reveal(key);
+    Status = stop ? "Stopped editing across algorithms."
+      : $"Editing {Describe(key)} across {AllBlocks(Experiments).Count(b => b.IsMultiMember)} algorithms: click a purple algorithm to go to its field; Shift+click a purple surface to stop.";
+    if (!stop) FocusMultiFieldRequested?.Invoke();
+    return true;
+  }
+
+  /// <summary>Stops editing across algorithms (Shift+click on a purple block).</summary>
+  public void ExitMultiEdit() {
+    if (MultiEditing is not { } m) return;
+    MultiEditing = null;
+    MultiVersion++;
+    RefreshMultiEdit();
+    ShownAlgorithm?.Detail.Reveal(m.Key);
+    Status = "Stopped editing across algorithms.";
+  }
+
+  private static string Describe(string key) {
+    var last = MultiEdit.Steps(key).Last(s => s.StartsWith("p:", StringComparison.Ordinal))[2..];
+    return MultiEdit.IsChoice(key) ? $"the choice of {last}" : last;
+  }
+
+  /// <summary>Which algorithm blocks take part (same type, same experiment, the field exists) and which one is shown.</summary>
+  public void RefreshMultiEdit() {
+    if (MultiEditing is { } m && !Experiments.Contains(m.Root)) {
+      MultiEditing = null;
+      MultiVersion++;
+    }
+    var shown = ShownAlgorithm;
+    foreach (var block in AllBlocks(Experiments).OfType<AlgorithmBlockViewModel>()) {
+      bool member = MultiEditing is { } multi && block.Root == multi.Root && block.Algorithm.GetType() == multi.AlgorithmType
+                    && MultiEdit.Resolves(block.Algorithm, multi.Key);
+      block.MultiLevel = !member ? 0 : block == shown ? 2 : 1;
+    }
   }
 
   /// <summary>
@@ -457,6 +534,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// <summary>Recomputes what is missing per experiment and the start buttons' state.</summary>
   public void RefreshState() {
     foreach (var e in Experiments) e.Missing = string.Join(" ", ExperimentTree.Problems(e.Experiment));
+    RefreshMultiEdit();
     StartAllCommand.NotifyCanExecuteChanged();
     StartSelectedCommand.NotifyCanExecuteChanged();
   }

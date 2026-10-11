@@ -48,6 +48,16 @@
   ExperimentTree.Remove/Insert (HeuristicLab prepares an added optimizer; runs go with it).
   Copy / Copy n times... (menu): ExperimentTree.Copy = deep clone without runs, inserted after the
   original as "Name (copy k)"; not for an algorithm inside a time-limit run (copy the run).
+  Edit across algorithms (ViewModels/MultiEdit.cs): Shift+click on a value (text/checkbox) or a
+  choice (ComboBox) in the Algorithm or Operator Graph tab (tunnel handler in AlgorithmDetailView,
+  fields carry class "field") -> every algorithm block of the same type in the same experiment that
+  has that field gets a purple overlay (shown one stronger; problem blocks untouched) and the field
+  is purple (App.axaml styles, class "multi"). Clicking a purple block shows the same field there
+  (AlgorithmDetailViewModel.Reveal: tab, parameter, analyzer entry, graph node) and focuses it
+  (text selected; a choice's list opens: arrows + Enter or click). Shift+click on a purple block or
+  the purple field ends it. Fields are addressed by keys like a/p:Analyzer/e:Name/p:X#value or
+  g/o:2:MainLoop/n:5:Name/p:Y#choice (EditContext.MultiTarget/ToggleMulti; editors rebuilt when
+  MultiVersion changes).
   Parameter lists show the parameter kind's pictogram before the name (constrained = choice,
   optional = may be empty, else value). Checked operator lists (analyzers) are numbered: a
   MultiAnalyzer runs its ticked operators in list order. Nested editors below a list get a
