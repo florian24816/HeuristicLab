@@ -200,7 +200,7 @@ public class StudioBlockDesignTests {
       Assert.AreEqual(AlgorithmStatus.NotRun, inBatch.Status);
       Assert.AreEqual("Algorithm_never_attempted_or_aborted", inBatch.StatePictogram);
 
-      var timeLimit = ws.AddContainer(experiment, Container<TimeLimitExperiment>());
+      var timeLimit = ws.AddContainer(experiment, Container<TimeLimitRun>());
       timeLimit.TimeLimitText = "2s";
       var limited = ws.AddAlgorithm(timeLimit, TabuSearch);
       ws.SetProblem(limited, Tsp());

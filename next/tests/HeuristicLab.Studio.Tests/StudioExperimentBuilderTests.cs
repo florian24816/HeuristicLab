@@ -24,8 +24,6 @@ public class StudioExperimentBuilderTests {
     public Task<bool> ConfirmAsync(string title, string message) { Confirmations++; return Task.FromResult(ConfirmAnswer); }
   }
 
-  // HeuristicLab's own TimeLimitRun (from older files): one algorithm only
-  private static CatalogEntry LegacyTimeLimit => new("Time-limit run", "", typeof(TimeLimitRun).FullName!, typeof(TimeLimitRun));
   private static CatalogEntry TabuSearch => Catalog.Find(Catalog.Algorithms(), "TabuSearch")!;
   private static CatalogEntry Container<T>() => ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(T));
 
@@ -116,17 +114,10 @@ public class StudioExperimentBuilderTests {
       var experiment = ws.NewExperiment();
       var algorithm = ws.AddAlgorithm(experiment, TabuSearch);
       ws.SetProblem(algorithm, Tsp("berlin52"));
-      var timeLimit = ws.AddContainer(experiment, LegacyTimeLimit);
-      Assert.AreEqual(1, timeLimit.AddChoices.Count, "HeuristicLab's time-limit run only takes an algorithm");
+      var timeLimit = ws.AddContainer(experiment, Container<TimeLimitRun>());
+      Assert.AreEqual(1, timeLimit.AddChoices.Count, "a time-limit run only takes an algorithm");
       ws.AddAlgorithm(timeLimit, TabuSearch);
-      Assert.IsFalse(timeLimit.CanAdd, "HeuristicLab's time-limit run holds one algorithm");
-      // Studio's time-limit run takes several blocks, like a batch run
-      var multi = ws.AddContainer(experiment, Container<TimeLimitExperiment>());
-      ws.AddAlgorithm(multi, TabuSearch);
-      ws.AddAlgorithm(multi, TabuSearch);
-      Assert.IsTrue(multi.CanAdd, "the add button stays");
-      Assert.IsTrue(multi.AddChoices.Count > 1, "batch runs and time-limit runs can go in as well");
-      await multi.DeleteCommand.ExecuteAsync(null);
+      Assert.IsFalse(timeLimit.CanAdd, "a time-limit run holds one algorithm");
 
       // removing a problem only clears that algorithm's problem
       await algorithm.Problem!.DeleteCommand.ExecuteAsync(null);

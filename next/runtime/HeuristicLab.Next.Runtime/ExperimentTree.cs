@@ -9,88 +9,30 @@ namespace HeuristicLab.Next.Runtime;
 /// <item>Experiment: any number of children (algorithms, batch runs, time-limit runs, experiments).</item>
 /// <item>Batch run: repeats its content Repetitions times. HeuristicLab's BatchRun repeats one
 /// optimizer, so several children live in an inner Experiment; each run repeats all of them.</item>
-/// <item>Time-limit run: any building blocks, run one after another and stopped once they ran
-/// MaximumExecutionTime in total (TimeLimitExperiment). HeuristicLab's own TimeLimitRun (from
-/// older files) holds exactly one algorithm.</item>
+/// <item>Time-limit run: exactly one algorithm, stopped after MaximumExecutionTime.</item>
 /// </list>
 /// </summary>
 public static class ExperimentTree {
   /// <summary>Name of the inner experiment holding a batch run's children.</summary>
   public const string BatchContentName = "Batch content";
 
-  public static bool IsContainer(IOptimizer optimizer) => optimizer is Experiment or BatchRun or TimeLimitRun or TimeLimitExperiment;
+  public static bool IsContainer(IOptimizer optimizer) => optimizer is Experiment or BatchRun or TimeLimitRun;
 
-  /// <summary>
-  /// Containers that can be added as building blocks: HeuristicLab's experiment and batch run, and
-  /// the time-limit run that holds several blocks (TimeLimitExperiment).
-  /// </summary>
+  /// <summary>Containers that can be added as building blocks, as discovered from the plugins.</summary>
   public static IReadOnlyList<CatalogEntry> ContainerTypes() =>
-    Catalog.MetaOptimizers().Where(e => e.Type == typeof(BatchRun) || e.Type == typeof(Experiment))
-      .Append(new CatalogEntry("Time-limit run", "Runs its building blocks one after another and stops them when the time limit is reached.",
-        typeof(TimeLimitExperiment).FullName!, typeof(TimeLimitExperiment)))
-      .ToList();
-
-  public static bool IsTimeLimit(IOptimizer optimizer) => optimizer is TimeLimitRun or TimeLimitExperiment;
-
-  /// <summary>The time limit of a time-limit run (either kind); null for other optimizers.</summary>
-  public static TimeSpan? TimeLimit(IOptimizer optimizer) => optimizer switch {
-    TimeLimitRun t => t.MaximumExecutionTime,
-    TimeLimitExperiment t => t.MaximumExecutionTime,
-    _ => null
-  };
-
-  public static void SetTimeLimit(IOptimizer optimizer, TimeSpan limit) {
-    switch (optimizer) {
-      case TimeLimitRun t: t.MaximumExecutionTime = limit; break;
-      case TimeLimitExperiment t: t.MaximumExecutionTime = limit; break;
-    }
-  }
-
-  /// <summary>
-  /// The shortest time limit of the time-limit runs around a node (null if none): a time-limit run
-  /// inside another one with a shorter limit is stopped by the outer one first.
-  /// </summary>
-  public static TimeSpan? EnclosingTimeLimit(IOptimizer root, IOptimizer node) {
-    TimeSpan? Search(IOptimizer current, TimeSpan? limit) {
-      if (current == node) return limit;
-      if (!IsContainer(current)) return null;
-      var here = TimeLimit(current) is { } own && (limit == null || own < limit) ? own : limit;
-      foreach (var child in Children(current))
-        if (Contains(child, node)) return Search(child, here);
-      return null;
-    }
-    return Search(root, null);
-  }
-
-  /// <summary>Settings that run but make little sense, e.g. a time-limit run longer than one around it.</summary>
-  public static IReadOnlyList<string> Warnings(IOptimizer root) {
-    var warnings = new List<string>();
-    void Visit(IOptimizer node, TimeSpan? outer, string? outerName) {
-      if (TimeLimit(node) is { } own) {
-        if (outer is { } o && own > o)
-          warnings.Add($"{node.Name} ({Format(own)}) is inside {outerName} ({Format(o)}): it is stopped after {Format(o)} anyway.");
-        if (outer == null || own < outer) { outer = own; outerName = node.Name; }
-      }
-      if (IsContainer(node)) foreach (var child in Children(node)) Visit(child, outer, outerName);
-    }
-    Visit(root, null, null);
-    return warnings;
-  }
-
-  private static string Format(TimeSpan t) => t.ToString(t.TotalHours >= 1 ? @"h\:mm\:ss" : @"mm\:ss", System.Globalization.CultureInfo.InvariantCulture);
+    Catalog.MetaOptimizers().Where(e => e.Type == typeof(BatchRun) || e.Type == typeof(TimeLimitRun) || e.Type == typeof(Experiment)).ToList();
 
   public static IReadOnlyList<IOptimizer> Children(IOptimizer container) => container switch {
     Experiment e => e.Optimizers.ToList(),
     BatchRun { Optimizer: Experiment inner } when inner.Name == BatchContentName => inner.Optimizers.ToList(),
     BatchRun { Optimizer: IOptimizer single } => [single],
     TimeLimitRun { Algorithm: IAlgorithm algorithm } => [algorithm],
-    TimeLimitExperiment t => t.Content.Optimizers.ToList(),
     _ => []
   };
 
   /// <summary>Whether a child of this type can be added (a time-limit run takes one algorithm only).</summary>
   public static bool CanAdd(IOptimizer container, Type childType) => container switch {
-    Experiment or BatchRun or TimeLimitExperiment => typeof(IOptimizer).IsAssignableFrom(childType),
+    Experiment or BatchRun => typeof(IOptimizer).IsAssignableFrom(childType),
     TimeLimitRun t => t.Algorithm == null && typeof(IAlgorithm).IsAssignableFrom(childType),
     _ => false
   };
@@ -121,9 +63,6 @@ public static class ExperimentTree {
       case TimeLimitRun t:
         t.Algorithm = (IAlgorithm)child;
         break;
-      case TimeLimitExperiment t:
-        t.Content.Optimizers.Insert(Math.Clamp(index, 0, t.Content.Optimizers.Count), child);
-        break;
     }
   }
 
@@ -133,7 +72,6 @@ public static class ExperimentTree {
       case BatchRun { Optimizer: Experiment { Name: BatchContentName } inner }: inner.Optimizers.Remove(child); break;
       case BatchRun b when b.Optimizer == child: b.Optimizer = null; break;
       case TimeLimitRun t when t.Algorithm == child: t.Algorithm = null; break;
-      case TimeLimitExperiment t: t.Content.Optimizers.Remove(child); break;
     }
   }
 

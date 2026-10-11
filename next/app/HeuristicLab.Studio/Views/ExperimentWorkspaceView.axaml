@@ -49,7 +49,7 @@
                                      KeyDown="NameKeyDown" LostFocus="NameLostFocus" PropertyChanged="NameBoxPropertyChanged" />
                         </Panel>
                     </Border>
-                    <Border Classes="badge" Classes.warning="{Binding HasBadgeWarning}" IsVisible="{Binding HasBadge}" ToolTip.Tip="{Binding BadgeTip}">
+                    <Border Classes="badge" IsVisible="{Binding HasBadge}" ToolTip.Tip="{Binding BadgeTip}">
                         <TextBlock Text="{Binding Badge}" VerticalAlignment="Center" HorizontalAlignment="Center" FontWeight="SemiBold" />
                     </Border>
                 </StackPanel>
@@ -157,10 +157,6 @@
             <Setter Property="MinWidth" Value="64" />
             <Setter Property="Padding" Value="10,0" />
         </Style>
-        <!-- a time limit longer than the one around it: yellow as the "unsaved" pictogram -->
-        <Style Selector="Border.badge.warning">
-            <Setter Property="Background" Value="#F4E803" />
-        </Style>
         <Style Selector="Border.ghost">
             <Setter Property="Background" Value="Transparent" />
         </Style>
@@ -251,8 +247,6 @@
                                                 </ItemsControl.ItemsPanel>
                                             </ItemsControl>
                                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ChildrenEnd}" />
-                                            <TextBlock Text="{Binding Warnings}" IsVisible="{Binding Warnings, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                       Foreground="#8A6D00" FontSize="12" TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" Foreground="#B0563A"
                                                        FontSize="12" TextWrapping="Wrap" />
                                         </StackPanel>

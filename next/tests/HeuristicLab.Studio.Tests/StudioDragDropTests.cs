@@ -28,8 +28,6 @@ public class StudioDragDropTests {
     public Task<int?> AskNumberAsync(string title, string message, int initial, int min, int max) => Task.FromResult<int?>(answer);
   }
 
-  // HeuristicLab's own TimeLimitRun (from older files): one algorithm only
-  private static CatalogEntry LegacyTimeLimit => new("Time-limit run", "", typeof(TimeLimitRun).FullName!, typeof(TimeLimitRun));
   private static CatalogEntry TabuSearch => Catalog.Find(Catalog.Algorithms(), "TabuSearch")!;
   private static CatalogEntry Container<T>() => ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(T));
 
@@ -58,7 +56,7 @@ public class StudioDragDropTests {
       var batch = ws.AddContainer(experiment, Container<BatchRun>());
       var b1 = Algorithm(ws, batch, "B1");
       var b2 = Algorithm(ws, batch, "B2");
-      var timeLimit = ws.AddContainer(experiment, LegacyTimeLimit);
+      var timeLimit = ws.AddContainer(experiment, Container<TimeLimitRun>());
       var t = Algorithm(ws, timeLimit, "T");
 
       // into the batch, between its two algorithms
@@ -123,7 +121,7 @@ public class StudioDragDropTests {
       var a = Algorithm(ws, experiment, "A");
       var batch = ws.AddContainer(experiment, Container<BatchRun>());
       var b1 = Algorithm(ws, batch, "B1");
-      var timeLimit = ws.AddContainer(experiment, LegacyTimeLimit);
+      var timeLimit = ws.AddContainer(experiment, Container<TimeLimitRun>());
 
       Assert.IsFalse(ws.BeginDrag(experiment), "experiments are not dragged");
       Assert.IsTrue(ws.BeginDrag(a.Problem!), "dragging the problem moves its algorithm");
@@ -287,7 +285,7 @@ public class StudioDragDropTests {
       Assert.AreEqual(((BatchRun)batch.Optimizer).Repetitions, ((BatchRun)batchCopy.Optimizer).Repetitions);
 
       // a time-limit run is copied as a whole; its single algorithm cannot be copied next to itself
-      var timeLimit = ws.AddContainer(experiment, LegacyTimeLimit);
+      var timeLimit = ws.AddContainer(experiment, Container<TimeLimitRun>());
       var t = Algorithm(ws, timeLimit, "T");
       Assert.IsFalse(ws.CanCopy(t));
       Assert.IsFalse(t.Menu.Any(m => m.Display == "Copy"));

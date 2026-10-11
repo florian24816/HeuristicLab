@@ -343,7 +343,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     var optimizer = (IOptimizer)entry.CreateInstance();
     optimizer.Name = optimizer switch {
       BatchRun => $"Batch run {++batchCounter}",
-      TimeLimitRun or TimeLimitExperiment => $"Time-limit run {++timeLimitCounter}",
+      TimeLimitRun => $"Time-limit run {++timeLimitCounter}",
       _ => optimizer.Name
     };
     ExperimentTree.Add(container.Optimizer, optimizer);
@@ -547,11 +547,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>Recomputes what is missing per experiment and the start buttons' state.</summary>
   public void RefreshState() {
-    foreach (var e in Experiments) {
-      e.Missing = string.Join(" ", ExperimentTree.Problems(e.Experiment));
-      e.Warnings = string.Join(" ", ExperimentTree.Warnings(e.Experiment));
-    }
-    foreach (var c in AllBlocks(Experiments).OfType<ContainerBlockViewModel>()) c.RefreshBadge();
+    foreach (var e in Experiments) e.Missing = string.Join(" ", ExperimentTree.Problems(e.Experiment));
     RefreshMultiEdit();
     StartAllCommand.NotifyCanExecuteChanged();
     StartSelectedCommand.NotifyCanExecuteChanged();
@@ -644,7 +640,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   // ---- formatting
 
   public static string DisplayName(CatalogEntry entry) =>
-    entry.Type == typeof(BatchRun) ? "Batch run" : entry.Type == typeof(TimeLimitRun) || entry.Type == typeof(TimeLimitExperiment) ? "Time-limit run" : entry.Name;
+    entry.Type == typeof(BatchRun) ? "Batch run" : entry.Type == typeof(TimeLimitRun) ? "Time-limit run" : entry.Name;
 
   public static string FormatDuration(TimeSpan t) =>
     t.TotalSeconds < 60 && t.TotalSeconds == Math.Floor(t.TotalSeconds) ? $"{t.TotalSeconds:0} s"

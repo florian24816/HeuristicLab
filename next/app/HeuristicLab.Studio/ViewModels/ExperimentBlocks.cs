@@ -94,8 +94,6 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   public virtual bool HasBadge => false;
   public virtual string Badge => "";
   public virtual string BadgeTip => "";
-  /// <summary>The last field in yellow: its setting runs but makes little sense (see BadgeTip).</summary>
-  public virtual bool HasBadgeWarning => false;
 
   /// <summary>Algorithms and problems have names of one width, so problems line up.</summary>
   public virtual bool FixedWidth => false;
@@ -202,7 +200,7 @@ public partial class ContainerBlockViewModel : BlockViewModel {
 
   public override string Pictogram => Optimizer switch {
     BatchRun => "batch_run",
-    _ when ExperimentTree.IsTimeLimit(Optimizer) => "time_limit_run",
+    TimeLimitRun => "time_limit_run",
     _ => "experiment_logo"
   };
 
@@ -213,28 +211,19 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   public override string Badge => Optimizer switch {
     BatchRun b when IsActive => $"{Math.Min(b.RepetitionsCounter + 1, b.Repetitions)} / {b.Repetitions}",
     BatchRun b => $"{b.Repetitions}×",
-    _ when ExperimentTree.TimeLimit(Optimizer) is { } limit => IsActive
-      ? $"{Clock(Optimizer.ExecutionTime)} / {Clock(limit)}" : ExperimentWorkspaceViewModel.FormatDuration(limit),
+    TimeLimitRun t when IsActive => $"{Clock(t.ExecutionTime)} / {Clock(t.MaximumExecutionTime)}",
+    TimeLimitRun t => ExperimentWorkspaceViewModel.FormatDuration(t.MaximumExecutionTime),
     _ => ""
   };
 
-  public override bool HasBadge => Optimizer is BatchRun || ExperimentTree.IsTimeLimit(Optimizer);
-
-  /// <summary>
-  /// A time limit longer than that of a time-limit run around it: it still runs, but the outer
-  /// one stops it first (the timer field turns yellow and says so).
-  /// </summary>
-  public override bool HasBadgeWarning => OuterLimit is { } outer && ExperimentTree.TimeLimit(Optimizer) > outer;
-
-  private TimeSpan? OuterLimit => Root is { } root && ExperimentTree.IsTimeLimit(Optimizer) ? ExperimentTree.EnclosingTimeLimit(root.Experiment, Optimizer) : null;
+  public override bool HasBadge => Optimizer is BatchRun or TimeLimitRun;
 
   /// <summary>Running or paused: the badge counts.</summary>
   public bool IsActive => Optimizer.ExecutionState is ExecutionState.Started or ExecutionState.Paused;
 
   public override string BadgeTip => Optimizer switch {
     BatchRun b => IsActive ? $"Repetition {Math.Min(b.RepetitionsCounter + 1, b.Repetitions)} of {b.Repetitions}" : $"{b.Repetitions} repetitions",
-    _ when HasBadgeWarning => $"Longer than the time-limit run around it ({Clock(OuterLimit!.Value)}): that one stops it first, so this limit is never reached.",
-    _ when ExperimentTree.TimeLimit(Optimizer) is { } limit => IsActive ? $"Running for {Clock(Optimizer.ExecutionTime)} of {Clock(limit)}" : "Time limit (for everything inside, in total)",
+    TimeLimitRun t => IsActive ? $"Running for {Clock(t.ExecutionTime)} of {Clock(t.MaximumExecutionTime)}" : "Time limit",
     _ => ""
   };
 
@@ -245,11 +234,10 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   public void RefreshBadge() {
     OnPropertyChanged(nameof(Badge));
     OnPropertyChanged(nameof(BadgeTip));
-    OnPropertyChanged(nameof(HasBadgeWarning));
   }
 
   public bool IsBatchRun => Optimizer is BatchRun;
-  public bool IsTimeLimitRun => ExperimentTree.IsTimeLimit(Optimizer);
+  public bool IsTimeLimitRun => Optimizer is TimeLimitRun;
 
   public string RepetitionsText {
     get => (Optimizer as BatchRun)?.Repetitions.ToString(CultureInfo.InvariantCulture) ?? "";
@@ -266,13 +254,13 @@ public partial class ContainerBlockViewModel : BlockViewModel {
 
   /// <summary>Time limit as "90", "90s", "5m", "1h" or "hh:mm:ss".</summary>
   public string TimeLimitText {
-    get => ExperimentTree.TimeLimit(Optimizer) is { } limit ? ExperimentWorkspaceViewModel.FormatDuration(limit) : "";
+    get => Optimizer is TimeLimitRun t ? ExperimentWorkspaceViewModel.FormatDuration(t.MaximumExecutionTime) : "";
     set {
-      if (!IsTimeLimitRun || !Workspace.IsEditable) return;
+      if (Optimizer is not TimeLimitRun t || !Workspace.IsEditable) return;
       if (ExperimentWorkspaceViewModel.ParseDuration(value) is TimeSpan limit && limit > TimeSpan.Zero) {
-        ExperimentTree.SetTimeLimit(Optimizer, limit);
+        t.MaximumExecutionTime = limit;
         MarkModified();
-        Workspace.RefreshState();  // limits inside or around it may now be longer than theirs
+        RefreshBadge();
       } else Workspace.Status = "Time limit: e.g. 90s, 5m, 1h or 00:10:00.";
       OnPropertyChanged();
     }
@@ -328,10 +316,6 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   public override IReadOnlyList<MenuChoice> Menu => Workspace.IsEditable
     ? [new("Save as...", SaveCommand), new("Show in Run tab", ShowInRunTabCommand), new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)]
     : [new("Show in Run tab", ShowInRunTabCommand)];
-
-  /// <summary>Settings that run but make little sense (e.g. a time-limit run longer than the one around it).</summary>
-  [ObservableProperty]
-  public partial string Warnings { get; set; } = "";
 
   [RelayCommand]
   private void ShowInRunTab() => Workspace.ShowInRunTab(this);
