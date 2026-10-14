@@ -15,7 +15,7 @@
                 <Button Content="⛶ Fullscreen" Click="OnFullscreen" IsEnabled="{Binding HasTrace}" ToolTip.Tip="Picture fullscreen, controls in a movable window (F11; Esc or F11 to leave)" />
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="10,0,0,0" />
             </StackPanel>
-            <TextBlock Text="{Binding Unsupported}" Foreground="#B0563A" TextWrapping="Wrap" IsVisible="{Binding !IsSupported}" />
+            <TextBlock Text="{Binding Unsupported}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" IsVisible="{Binding !IsSupported}" />
             <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.7" IsVisible="{Binding !HasTrace}"
                        Text="Runs a copy of this algorithm and records every solution it creates: by which operator, from which parents, with which quality, in which iteration and when. Afterwards (and while it runs) select iterations in the chart and step through them." />
         </StackPanel>

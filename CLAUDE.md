@@ -190,7 +190,15 @@
   a category carries its name (CatalogItemTemplate / ListBox.catalog in App.axaml). Algorithm
   picker (CatalogPickerWindow); problem dialog (NewSetupWindow): problem list (searchable, grouped)
   and benchmark instances (searchable, "(none)" always first) side by side.
-  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files and resource limits.
+  Light/dark mode: square button at the top left of the tab row (tabs moved right of it), showing the
+  mode it switches to - darkmode pictogram black on grey #BDBDBD, or lightmode on the logo orange;
+  MainViewModel.IsDarkMode sets Application.RequestedThemeVariant (light by default, saved in settings).
+  Theme-dependent colors live in App.axaml ThemeDictionaries (WindowBrush: dark #1E1E1E instead of
+  Fluent's black; WarningBrush, ErrorBrush); blocks, tables and charts keep their own fixed colors.
+  Problem tab arrays/matrices: flat square cells (TextBox.cell, no border; editing underlined orange),
+  shaded like the run tables in darker greys (CellViewModel.Grey #B5B5B5 / LightGrey #CACACA, every
+  other row at TableGridViewModel.WeakRow), row numbers kept.
+  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits and dark mode.
   Own LineChart control.
   Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,
   launchers hl and hl-studio in ~/.local/bin, desktop entry; needs the .NET 10 runtime).

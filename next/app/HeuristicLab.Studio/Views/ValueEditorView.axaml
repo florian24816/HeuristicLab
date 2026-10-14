@@ -5,8 +5,29 @@
              x:DataType="vm:ValueEditorViewModel">
     <UserControl.Styles>
         <Style Selector="ListBox.cells ListBoxItem">
-            <Setter Property="Padding" Value="4,1" />
+            <Setter Property="Padding" Value="4,0" />
             <Setter Property="MinHeight" Value="0" />
+        </Style>
+        <!-- array/matrix cells: square, no border, shaded like the run tables (CellViewModel.Background);
+             the cell being edited is underlined in the logo orange -->
+        <Style Selector="TextBox.cell">
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="Width" Value="140" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="Padding" Value="6,2" />
+        </Style>
+        <Style Selector="TextBox.cell /template/ Border#PART_BorderElement, TextBox.cell:pointerover /template/ Border#PART_BorderElement, TextBox.cell:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.cell:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0,0,0,2" />
+            <Setter Property="BorderBrush" Value="#F7931D" />
+        </Style>
+        <Style Selector="TextBox.cell:pointerover, TextBox.cell:focus">
+            <Setter Property="Foreground" Value="#1E1E1E" />
         </Style>
     </UserControl.Styles>
     <StackPanel Spacing="6">
@@ -35,14 +56,16 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:CellRowViewModel">
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <TextBlock Text="{Binding Index}" Width="44" Opacity="0.6" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Index}" Width="44" Opacity="0.6" VerticalAlignment="Center" TextAlignment="Right" Margin="0,0,4,0" />
                             <ItemsControl ItemsSource="{Binding Cells}">
                                 <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:CellViewModel">
-                                        <TextBox Text="{Binding Text, UpdateSourceTrigger=LostFocus}" Width="96" MinHeight="24" Padding="4,1" />
+                                        <Border Background="{Binding Background}">
+                                            <TextBox Classes="cell" Text="{Binding Text, UpdateSourceTrigger=LostFocus}" />
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

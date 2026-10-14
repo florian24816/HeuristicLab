@@ -212,6 +212,12 @@ public partial class CellViewModel(IItem value, int row, int column, string text
     }
   }
   private readonly IItem valueItem = value;
+
+  /// <summary>Like the run tables, in darker greys: columns alternate, every other row weaker.</summary>
+  public static readonly Avalonia.Media.Color Grey = Avalonia.Media.Color.Parse("#B5B5B5"), LightGrey = Avalonia.Media.Color.Parse("#CACACA");
+
+  public Avalonia.Media.IBrush Background { get; } =
+    TableGridViewModel.Brush(column % 2 == 0 ? Grey : LightGrey, row % 2 == 0 ? 1 : TableGridViewModel.WeakRow);
 }
 
 /// <summary>One item of a checked list (e.g. an analyzer): enabled or not, with its own parameters.</summary>

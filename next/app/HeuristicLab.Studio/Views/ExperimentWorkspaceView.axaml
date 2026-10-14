@@ -162,8 +162,13 @@
         <Style Selector="Button.picto:pointerover Border.label">
             <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
         </Style>
-        <Style Selector="Button.picto:disabled">
+        <!-- disabled: faded square, pale label (no opacity on the label: it would sink into a dark background) -->
+        <Style Selector="Button.picto:disabled Border.square">
             <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <Style Selector="Button.picto:disabled Border.label">
+            <Setter Property="Background" Value="{StaticResource DisabledBrush}" />
+            <Setter Property="TextElement.Foreground" Value="#9A9A9A" />
         </Style>
         <Style Selector="Button.plain">
             <Setter Property="CornerRadius" Value="0" />
@@ -356,7 +361,7 @@
                             <TextBlock Text="{Binding Kind}" Opacity="0.7" />
                             <TextBox Text="{Binding Name}" />
                             <TextBlock Text="{Binding FilePath, FallbackValue='', TargetNullValue='Not saved yet'}" Opacity="0.7" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" TextWrapping="Wrap" Foreground="#B0563A" />
+                            <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}" />
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="Save as..." Command="{Binding SaveCommand}" />
                                 <Button Content="Rename file..." Command="{Binding RenameFileCommand}"

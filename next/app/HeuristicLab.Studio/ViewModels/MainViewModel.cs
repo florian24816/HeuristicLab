@@ -1,6 +1,9 @@
 using System;
 using System.Linq;
+using Avalonia;
+using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using HeuristicLab.Next.Runtime;
 using HeuristicLab.Studio.Services;
 
@@ -39,6 +42,9 @@ public partial class MainViewModel : ViewModelBase {
         Runs.Refresh();
       }
     };
+    // before Resources: loading the setting saves nothing
+    IsDarkMode = loaded?.DarkMode ?? false;
+    ApplyTheme();
     var limits = loaded == null ? new ResourceLimits() : new ResourceLimits {
       Cores = loaded.ResourceCores > 0 ? loaded.ResourceCores : Environment.ProcessorCount,
       ThreadsPerAlgorithm = Math.Max(1, loaded.ResourceThreads), ConcurrentExperiments = loaded.ResourceConcurrentExperiments,
@@ -48,13 +54,29 @@ public partial class MainViewModel : ViewModelBase {
     Resources = new ResourcesViewModel(limits, _ => { if (Resources != null) SaveSettings(); }, StopEverything);
   }
 
+  /// <summary>Dark or light mode (the square button at the top left), remembered in the settings.</summary>
+  [ObservableProperty]
+  public partial bool IsDarkMode { get; set; }
+
+  partial void OnIsDarkModeChanged(bool value) {
+    ApplyTheme();
+    if (Resources != null) SaveSettings();
+  }
+
+  [RelayCommand]
+  private void ToggleTheme() => IsDarkMode = !IsDarkMode;
+
+  private void ApplyTheme() {
+    if (Application.Current is { } app) app.RequestedThemeVariant = IsDarkMode ? ThemeVariant.Dark : ThemeVariant.Light;
+  }
+
   /// <summary>Stores recent files and the resource limits (called on exit and after open/save).</summary>
   public void SaveSettings() {
     var limits = Resources?.Limits ?? new ResourceLimits();
     settingsStore?.Save(new StudioSettings {
       RecentFiles = Workspace.RecentFiles.ToList(),
       ResourceCores = limits.Cores, ResourceThreads = limits.ThreadsPerAlgorithm, ResourceConcurrentExperiments = limits.ConcurrentExperiments,
-      ResourceMemoryGB = limits.MemoryLimitGB, ResourcePriority = limits.Priority.ToString()
+      ResourceMemoryGB = limits.MemoryLimitGB, ResourcePriority = limits.Priority.ToString(), DarkMode = IsDarkMode
     });
   }
 

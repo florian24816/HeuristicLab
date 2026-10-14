@@ -14,6 +14,8 @@ public sealed class StudioSettings {
   public int ResourceConcurrentExperiments { get; set; }
   public double ResourceMemoryGB { get; set; }
   public string ResourcePriority { get; set; } = "Normal";
+  /// <summary>Dark mode (the button at the top left); light by default.</summary>
+  public bool DarkMode { get; set; }
 }
 
 public interface ISettingsStore {

@@ -3,8 +3,8 @@
              x:Class="HeuristicLab.Studio.App"
              xmlns:local="using:HeuristicLab.Studio"
              xmlns:vm="using:HeuristicLab.Studio.ViewModels"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Light">
+             <!-- light or dark: the button at the top left of the main window (MainViewModel.IsDarkMode) -->
 
     <Application.DataTemplates>
         <local:ViewLocator />
@@ -14,6 +14,7 @@
         <!-- every window (dialogs too) shows HeuristicLab's icon -->
         <Style Selector=":is(Window)">
             <Setter Property="Icon" Value="/Assets/HeuristicLab.ico" />
+            <Setter Property="Background" Value="{DynamicResource WindowBrush}" />
         </Style>
         <FluentTheme />
         <!-- a field edited across algorithms (Shift+click): purple -->
@@ -46,6 +47,20 @@
     </Application.Styles>
 
     <Application.Resources>
+      <ResourceDictionary>
+        <!-- colors that differ between light and dark mode -->
+        <ResourceDictionary.ThemeDictionaries>
+            <ResourceDictionary x:Key="Light">
+                <SolidColorBrush x:Key="WindowBrush" Color="White" />
+                <SolidColorBrush x:Key="WarningBrush" Color="#B0563A" />
+                <SolidColorBrush x:Key="ErrorBrush" Color="#C23B4A" />
+            </ResourceDictionary>
+            <ResourceDictionary x:Key="Dark">
+                <SolidColorBrush x:Key="WindowBrush" Color="#1E1E1E" />
+                <SolidColorBrush x:Key="WarningBrush" Color="#F2A27E" />
+                <SolidColorBrush x:Key="ErrorBrush" Color="#F08A95" />
+            </ResourceDictionary>
+        </ResourceDictionary.ThemeDictionaries>
         <DataTemplate x:Key="CatalogItemTemplate" x:DataType="vm:CatalogItem">
             <StackPanel Spacing="1">
                 <TextBlock Text="{Binding Category}" IsVisible="{Binding StartsGroup}" Foreground="{Binding Accent}"
@@ -55,5 +70,6 @@
                            FontSize="12" TextWrapping="Wrap" />
             </StackPanel>
         </DataTemplate>
+      </ResourceDictionary>
     </Application.Resources>
 </Application>
