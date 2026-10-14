@@ -81,6 +81,8 @@
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
                             <CheckBox Content="All parameters" IsChecked="{Binding ShowAllParameters}" ToolTip.Tip="Else only the parameters that differ between the runs" />
                             <Button Content="Export CSV..." Command="{Binding ExportCommand}" ToolTip.Tip="The table as shown: filtered, sorted, these columns" />
+                            <Button Content="Export to Python..." Command="{Binding ExportPythonCommand}"
+                                    ToolTip.Tip="The shown runs as a Python module named after the experiment: its blocks as attributes (exp.batch_run_1.ga), typed parameters, results and curves, pandas tables via .df and compare(...)" />
                             <TextBlock Text="Click a column title to sort; select a run to see it under Run." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
                         </StackPanel>
                         <ContentControl Content="{Binding Grid}" HorizontalAlignment="Left" VerticalAlignment="Top" />

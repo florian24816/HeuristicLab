@@ -157,7 +157,13 @@
   run is shown if the block it was made in is ticked (deepest optimizer holding it; a time-limit run's
   runs belong to its algorithm) and listed under the highest fully ticked box above it (source),
   filters (column op value), grouping by any combination of columns (numbers in N ranges),
-  Table (varying parameters or all, sort, CSV export), Charts (box plot, scatter, histogram,
+  Table (varying parameters or all, sort, CSV export - kept as is on purpose: one-to-one comparison with
+  HeuristicLab's; "Export to Python..." next to it: runtime Runs.PythonExport writes the shown runs as a
+  module named after the experiment (PythonExport.ModuleName: importable), blocks as attributes of the
+  blocks above them (exp.batch_run_1.genetic_algorithm_ga; generated classes so editors complete them,
+  checked with pyright), Run.params / results (dataclasses, int/float/bool/str by the values, NAMES map
+  HeuristicLab names) / curves (DataTable rows), Block.values/curves/df/curve_df/find/tree, compare(),
+  compare_curves(); pandas only for the tables; curves above 20 000 values in <module>_data.json), Charts (box plot, scatter, histogram,
   cumulative distribution, curves of a DataTable row per run + group mean; NaN = line gap),
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
   Bonferroni-Holm, t-test, Cohen's d, Hedges' g), Run (one run's results with visualizations).

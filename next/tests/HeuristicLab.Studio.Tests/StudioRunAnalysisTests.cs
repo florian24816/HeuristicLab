@@ -78,6 +78,71 @@ public class StudioRunAnalysisTests {
     }, CancellationToken.None);
   }
 
+  /// <summary>
+  /// Export to Python: a module named after the experiment, its blocks as attributes, typed values;
+  /// loaded with Python itself (if installed). Big curves go into a data file next to it.
+  /// </summary>
+  private static void AssertPythonExport(RunAnalysisViewModel analysis, string experimentName) {
+    var folder = Path.Combine(AppContext.BaseDirectory, "python-export");
+    Directory.CreateDirectory(folder);
+    var written = analysis.ExportPython(Path.Combine(folder, experimentName + ".py"));
+    var module = HeuristicLab.Next.Runtime.Runs.PythonExport.ModuleName(experimentName);
+    Assert.AreEqual(module + ".py", Path.GetFileName(written.Single()), "named after the experiment, importable");
+    var source = File.ReadAllText(written[0]);
+    StringAssert.Contains(source, "self.batch_run_1 = self._add(");
+    StringAssert.Contains(source, "self.batch_run_2 = self._add(");
+    StringAssert.Contains(source, "exp.batch_run_1.genetic_algorithm_ga.runs[0].results.best_quality", "the example uses the best quality");
+    StringAssert.Contains(source, "best_quality: Optional[");
+    StringAssert.Contains(source, "population_size: Optional[int] = None", "whole numbers are ints");
+
+    // the same with its curves in a data file
+    var big = Path.Combine(folder, "big");
+    Directory.CreateDirectory(big);
+    var withData = analysis.ExportPython(Path.Combine(big, experimentName + ".py"), inlineCurveValues: 0);
+    CollectionAssert.AreEqual(new[] { module + ".py", module + "_data.json" }, withData.Select(Path.GetFileName).ToList());
+
+    foreach (var dir in new[] { folder, big }) {
+      var check = $$"""
+        import sys
+        sys.path.insert(0, {{PythonString(dir)}})
+        from {{module}} import exp, Run, Block
+        assert exp.name == {{PythonString(experimentName)}}, exp.name
+        assert len(exp.runs) == 11, len(exp.runs)
+        assert [b.kind for b in exp.blocks] == ["Batch run", "Batch run", "Algorithm"], [b.kind for b in exp.blocks]
+        ga20 = exp.blocks[0].blocks[0]
+        assert len(ga20.runs) == 5 and len(exp.blocks[0].runs) == 5
+        assert all(r.params.population_size == 20 for r in ga20.runs), ga20.values("population_size")
+        assert all(r.params["PopulationSize"] == 60 for r in exp.blocks[1].runs)
+        assert all(isinstance(q, (int, float)) for q in ga20.values("best_quality"))
+        assert all(isinstance(r.params.mutation_probability, float) for r in ga20.runs)
+        assert all(isinstance(v, float) for c in ga20.curves("qualities", "best_quality") for v in c)
+        assert ga20.values("BestQuality") == [r.results.best_quality for r in ga20.runs]
+        curves = ga20.curves("qualities", "best_quality")
+        assert len(curves) == 5 and all(len(c) == 26 for c in curves), [len(c) for c in curves]
+        assert ga20.runs[0].path.startswith({{PythonString(experimentName)}} + " / "), ga20.runs[0].path
+        assert exp.find(ga20.name) is not None
+        print("ok", len(exp.tree().splitlines()))
+        """;
+      if (RunPython(check) is { } output) StringAssert.StartsWith(output, "ok", output);
+    }
+  }
+
+  private static string PythonString(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+  /// <summary>Runs a script with python3 (null if Python is not installed: the check is skipped).</summary>
+  private static string? RunPython(string script) {
+    var start = new System.Diagnostics.ProcessStartInfo("python3") { ArgumentList = { "-I", "-c", script },
+      RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+    try {
+      using var process = System.Diagnostics.Process.Start(start)!;
+      var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+      process.WaitForExit();
+      return output;
+    } catch (System.ComponentModel.Win32Exception) {
+      return null;
+    }
+  }
+
   [TestMethod]
   [Timeout(300_000)]
   public async Task CompareBatchRunsOfAnExperiment() {
@@ -128,6 +193,8 @@ public class StudioRunAnalysisTests {
       Assert.AreEqual(true, root.IsChecked);
       Assert.AreEqual(11, analysis.Table.Rows.Count);
       Assert.IsTrue(analysis.Table.Rows.All(r => r.Text("source") == root.Name));
+
+      AssertPythonExport(analysis, experiment.Name);
 
       // group by where the runs were made: one group per batch run and the tabu search
       analysis.GroupToAdd = analysis.AllColumns.Single(c => c.Key == "origin");

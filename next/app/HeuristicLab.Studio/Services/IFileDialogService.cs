@@ -14,6 +14,8 @@ public interface IFileDialogService {
   Task<string?> OpenDataFileAsync();
   Task<string?> PickFolderAsync(string title);
   Task<string?> SaveCsvFileAsync(string suggestedName);
+  /// <summary>Where to write a Python module (exported runs).</summary>
+  Task<string?> SavePythonFileAsync(string suggestedName) => Task.FromResult<string?>(null);
 }
 
 public sealed class FileDialogService(TopLevel topLevel) : IFileDialogService {
@@ -50,6 +52,14 @@ public sealed class FileDialogService(TopLevel topLevel) : IFileDialogService {
     var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions {
       Title = "Export table", SuggestedFileName = suggestedName, DefaultExtension = "csv",
       FileTypeChoices = [new FilePickerFileType("CSV files") { Patterns = ["*.csv"] }]
+    });
+    return file?.TryGetLocalPath();
+  }
+
+  public async Task<string?> SavePythonFileAsync(string suggestedName) {
+    var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions {
+      Title = "Export to Python", SuggestedFileName = suggestedName, DefaultExtension = "py",
+      FileTypeChoices = [new FilePickerFileType("Python files") { Patterns = ["*.py"] }]
     });
     return file?.TryGetLocalPath();
   }

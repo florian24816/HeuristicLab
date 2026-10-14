@@ -244,6 +244,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     // runs a container holds alone (a time-limit run takes its algorithm's) belong to that algorithm
     foreach (var (run, node) in origin.ToList())
       if (node.Children.Count > 0) origin[run] = FirstLeaf(node);
+    originOf = origin;
     var shown = origin.Where(o => o.Value.Own).Select(o => {
       var source = SourceOf(o.Value);
       return new SourcedRun(source.Name, Relative(o.Value.Path, source), o.Key);
@@ -347,6 +348,44 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     if (fileDialogs == null || await fileDialogs.SaveCsvFileAsync("runs.csv") is not string path) return;
     Export(path);
   }
+
+  /// <summary>Where each run of the workspace was made (from the last rebuild).</summary>
+  private Dictionary<IRun, RunSourceViewModel> originOf = new(ReferenceEqualityComparer.Instance);
+
+  /// <summary>The shown runs (filtered, sorted) as a Python module named after the experiment: blocks as attributes, typed values.</summary>
+  [RelayCommand]
+  private async Task ExportPythonAsync() {
+    var runs = PythonRuns();
+    if (runs.Count == 0) { Status = "Nothing to export: tick runs first."; return; }
+    if (fileDialogs == null || await fileDialogs.SavePythonFileAsync(PythonExport.ModuleName(PythonTitle(runs)) + ".py") is not string path) return;
+    ExportPython(path);
+  }
+
+  public IReadOnlyList<string> ExportPython(string path, int inlineCurveValues = PythonExport.InlineCurveValues) {
+    var runs = PythonRuns();
+    // the file name is what Python imports: letters, digits and '_' only
+    var module = PythonExport.ModuleName(Path.GetFileNameWithoutExtension(path));
+    path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, module + ".py");
+    var written = PythonExport.Write(path, PythonTitle(runs), runs, inlineCurveValues);
+    Status = $"Exported {runs.Count} runs to {string.Join(" and ", written.Select(Path.GetFileName))} (import {module})";
+    return written;
+  }
+
+  private static string PythonTitle(IReadOnlyList<PythonExportRun> runs) {
+    var roots = runs.Select(r => r.Path[0]).Distinct().ToList();
+    return roots.Count == 1 ? roots[0] : string.Join(", ", roots.Take(3)) + (roots.Count > 3 ? " and more" : "");
+  }
+
+  /// <summary>The shown runs with the path of blocks they were made in (a results folder's runs: the folder).</summary>
+  private List<PythonExportRun> PythonRuns() =>
+    Rows.Select(r => r.Row).Select(row => {
+      if (row.Run != null && originOf.TryGetValue(row.Run, out var node)) {
+        var chain = new List<RunSourceViewModel>();
+        for (var n = node; n != null; n = n.Parent) chain.Insert(0, n);
+        return new PythonExportRun(chain.Select(n => n.Name).ToList(), chain.Select(n => n.Kind).ToList(), row);
+      }
+      return new PythonExportRun([row.Source], ["Results folder"], row);
+    }).ToList();
 
   public void Export(string path) {
     using var writer = new StreamWriter(path);
