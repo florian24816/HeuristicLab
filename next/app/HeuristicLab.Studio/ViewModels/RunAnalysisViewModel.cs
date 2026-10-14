@@ -27,10 +27,35 @@ public partial class RunSourceViewModel(RunAnalysisViewModel owner, string name,
   public int RunCount => Optimizer?.Runs.Count ?? owner.FolderRunCount(Folder);
   public string Label => $"{Name}  ({RunCount} run{(RunCount == 1 ? "" : "s")})";
 
-  [ObservableProperty]
-  public partial bool IsChecked { get; set; }
+  /// <summary>Whether the runs made here (not below) are shown.</summary>
+  internal bool Own { get; set; }
 
-  partial void OnIsCheckedChanged(bool value) => owner.Rebuild();
+  /// <summary>
+  /// Ticked: everything here and below is shown; empty: nothing; partly (null): some of it. Ticking or
+  /// unticking applies to everything below; a partly ticked box becomes ticked.
+  /// </summary>
+  public bool? IsChecked {
+    get {
+      bool any = false, all = true;
+      foreach (var node in Subtree().Where(n => n.Counts)) { any |= node.Own; all &= node.Own; }
+      return all ? true : any ? null : false;
+    }
+    set {
+      bool on = value != false;
+      foreach (var node in Subtree()) node.Own = on;
+      owner.TicksChanged();
+    }
+  }
+
+  /// <summary>
+  /// Whether its own tick shows in the boxes: only blocks without children hold runs of their own
+  /// (experiments and batch runs mirror their children's runs, a time-limit run's runs are its algorithm's).
+  /// </summary>
+  internal bool Counts => Children.Count == 0;
+
+  public IEnumerable<RunSourceViewModel> Subtree() => Children.SelectMany(c => c.Subtree()).Prepend(this);
+
+  internal void NotifyChecked() => OnPropertyChanged(nameof(IsChecked));
 
   public string Path => Parent == null ? Name : Parent.Path + " / " + Name;
 }
@@ -125,25 +150,40 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>Re-reads the workspace (new experiments, finished runs); ticked sources stay ticked.</summary>
   [RelayCommand]
   public void RefreshSources() {
-    var ticked = AllSources(Sources).Where(s => s.IsChecked).Select(s => (object?)s.Optimizer ?? s.Folder).OfType<object>().ToHashSet();
+    var before = AllSources(Sources).Where(s => Key(s) != null).ToDictionary(s => Key(s)!, s => s.Own, ReferenceEqualityComparer.Instance);
     rebuilding = true;
     Sources.Clear();
-    foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment, null, ticked));
+    foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment, null, before));
     foreach (var folder in folders) {
-      var node = new RunSourceViewModel(this, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), "Results folder", null, folder) { IsChecked = ticked.Contains(folder) };
+      var node = new RunSourceViewModel(this, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), "Results folder", null, folder) {
+        Own = before.GetValueOrDefault(folder)
+      };
       Sources.Add(node);
     }
     rebuilding = false;
-    Rebuild();
+    TicksChanged();
   }
 
-  private RunSourceViewModel Node(BlockViewModel block, RunSourceViewModel? parent, HashSet<object> ticked) {
+  private static object? Key(RunSourceViewModel s) => (object?)s.Optimizer ?? s.Folder;
+
+  /// <summary>Ticks stay as they were; a block that is new here takes its parent's (added to a ticked batch run: ticked).</summary>
+  private RunSourceViewModel Node(BlockViewModel block, RunSourceViewModel? parent, IReadOnlyDictionary<object, bool> before) {
     var optimizer = block switch { ContainerBlockViewModel c => c.Optimizer, AlgorithmBlockViewModel a => (IOptimizer)a.Algorithm, _ => null };
     string kind = optimizer switch { Experiment => "Experiment", BatchRun => "Batch run", TimeLimitRun => "Time-limit run", _ => "Algorithm" };
-    var node = new RunSourceViewModel(this, block.Name, kind, optimizer, null) { Parent = parent, IsChecked = optimizer != null && ticked.Contains(optimizer) };
+    var node = new RunSourceViewModel(this, block.Name, kind, optimizer, null) {
+      Parent = parent,
+      Own = optimizer != null && before.TryGetValue(optimizer, out var own) ? own : parent?.IsChecked == true
+    };
     if (block is ContainerBlockViewModel container)
-      foreach (var child in container.Children) node.Children.Add(Node(child, node, ticked));
+      foreach (var child in container.Children) node.Children.Add(Node(child, node, before));
     return node;
+  }
+
+  /// <summary>A box was ticked or unticked: every box shows its state again, and the runs follow.</summary>
+  public void TicksChanged() {
+    if (rebuilding) return;
+    foreach (var node in AllSources(Sources)) node.NotifyChecked();
+    Rebuild();
   }
 
   private static IEnumerable<RunSourceViewModel> AllSources(IEnumerable<RunSourceViewModel> nodes) =>
@@ -195,15 +235,20 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>Builds table, groups and every view from the ticked sources, filters and grouping.</summary>
   public void Rebuild() {
     if (rebuilding) return;
-    var ticked = AllSources(Sources).Where(s => s.IsChecked).ToList();
-    // where each run was made: the deepest optimizer of the tree that holds it
-    var origin = new Dictionary<IRun, string>(ReferenceEqualityComparer.Instance);
+    var ticked = AllSources(Sources).Where(s => s.Own).ToList();
+    // where each run was made: the deepest optimizer of the tree that holds it (experiments and batch runs
+    // hold their children's runs too; a time-limit run takes them over). It is shown if that box is ticked.
+    var origin = new Dictionary<IRun, RunSourceViewModel>(ReferenceEqualityComparer.Instance);
     foreach (var node in AllSources(Sources).Where(s => s.Optimizer != null))
-      foreach (var run in node.Optimizer!.Runs) origin[run] = node.Path;
-    var tables = new List<RunTable> {
-      RunTable.FromRuns(ticked.Where(s => s.Optimizer != null)
-        .SelectMany(s => s.Optimizer!.Runs.ToArray().Select(r => new SourcedRun(s.Name, Relative(origin.GetValueOrDefault(r, s.Path), s), r))))
-    };
+      foreach (var run in node.Optimizer!.Runs.ToArray()) origin[run] = node;
+    // runs a container holds alone (a time-limit run takes its algorithm's) belong to that algorithm
+    foreach (var (run, node) in origin.ToList())
+      if (node.Children.Count > 0) origin[run] = FirstLeaf(node);
+    var shown = origin.Where(o => o.Value.Own).Select(o => {
+      var source = SourceOf(o.Value);
+      return new SourcedRun(source.Name, Relative(o.Value.Path, source), o.Key);
+    });
+    var tables = new List<RunTable> { RunTable.FromRuns(shown) };
     tables.AddRange(ticked.Where(s => s.Folder != null && folderRows.ContainsKey(s.Folder!)).Select(s => RunTable.FromStore(s.Name, folderRows[s.Folder!])));
     var all = RunTable.Combine(tables);
     AllColumns = all.Columns.Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
@@ -216,6 +261,15 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     RebuildRows();
     RebuildChart();
     RebuildStatistics();
+  }
+
+  private static RunSourceViewModel FirstLeaf(RunSourceViewModel node) => node.Children.Count == 0 ? node : FirstLeaf(node.Children[0]);
+
+  /// <summary>The source a shown run is listed under: the highest box above its origin that is fully ticked.</summary>
+  private static RunSourceViewModel SourceOf(RunSourceViewModel origin) {
+    var source = origin;
+    while (source.Parent is { } parent && parent.IsChecked == true) source = parent;
+    return source;
   }
 
   /// <summary>Origin below the ticked source ("Batch run 1 / GA" under "Experiment 1"); the source itself if the run is its own.</summary>

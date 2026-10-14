@@ -151,7 +151,11 @@
   default crossover for real vectors is CopyCrossover: only mutations create new solutions there.
   Results tab (RunAnalysisView, runtime Runs.*): ticked sources (any experiment / batch run /
   time-limit run / algorithm of the workspace, results folders) -> RunTable (source, origin
-  relative to the source, run, param:*, result:*; numbers or text; a run from two sources once),
+  relative to the source, run, param:*, result:*; numbers or text). Ticks cascade (RunSourceViewModel:
+  Own per block, IsChecked = true/false/null over the blocks without children): ticking a box ticks
+  everything below, unticking a part leaves its runs out and the boxes above show partly ticked; a
+  run is shown if the block it was made in is ticked (deepest optimizer holding it; a time-limit run's
+  runs belong to its algorithm) and listed under the highest fully ticked box above it (source),
   filters (column op value), grouping by any combination of columns (numbers in N ranges),
   Table (varying parameters or all, sort, CSV export), Charts (box plot, scatter, histogram,
   cumulative distribution, curves of a DataTable row per run + group mean; NaN = line gap),

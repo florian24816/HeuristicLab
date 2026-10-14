@@ -12,7 +12,7 @@
                 <Button Content="+ Results folder..." Command="{Binding AddFolderCommand}" ToolTip.Tip="Runs stored by 'hl run --store'" />
             </StackPanel>
             <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
-                       Text="Tick one source to look at its runs, several to compare them. A run reached from two ticked sources counts once." />
+                       Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked)." />
             <TreeView ItemsSource="{Binding Sources}">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate DataType="vm:RunSourceViewModel" ItemsSource="{Binding Children}">

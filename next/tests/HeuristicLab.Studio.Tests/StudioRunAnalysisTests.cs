@@ -46,6 +46,38 @@ public class StudioRunAnalysisTests {
     scroll.Offset = default;
   }
 
+  /// <summary>A time-limit run takes its algorithm's runs over: they still belong to the algorithm's box.</summary>
+  [TestMethod]
+  [Timeout(300_000)]
+  public async Task TimeLimitRunsBelongToTheirAlgorithmsBox() {
+    await session.Dispatch(async () => {
+      var vm = new MainViewModel(null, null);
+      var ws = vm.Workspace;
+      var experiment = ws.NewExperiment();
+      var limit = ws.AddContainer(experiment, ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(TimeLimitRun)));
+      limit.TimeLimitText = "00:00:02";
+      var ts = ws.AddAlgorithm(limit, Catalog.Find(Catalog.Algorithms(), "TabuSearch")!);
+      ws.SetProblem(ts, Ch130());
+      ParameterEditor.Apply(ts.Algorithm, ["MaximumIterations=5"]);
+      var ls = ws.AddAlgorithm(experiment, Catalog.Find(Catalog.Algorithms(), "LocalSearch")!);
+      ws.SetProblem(ls, Ch130());
+      ParameterEditor.Apply(ls.Algorithm, ["MaximumIterations=5"]);
+      await ws.StartAllCommand.ExecuteAsync(null);
+
+      var analysis = vm.RunAnalysis;
+      analysis.RefreshSources();
+      var root = analysis.Sources.Single();
+      root.IsChecked = true;
+      Assert.AreEqual(2, analysis.Table.Rows.Count, analysis.Status);
+      var limitBox = root.Children.Single(c => c.Kind == "Time-limit run");
+      limitBox.Children.Single().IsChecked = false;
+      Assert.AreEqual(1, analysis.Table.Rows.Count, "unticking the algorithm in the time-limit run leaves its run out");
+      Assert.AreEqual(false, limitBox.IsChecked);
+      Assert.IsNull(root.IsChecked);
+      return true;
+    }, CancellationToken.None);
+  }
+
   [TestMethod]
   [Timeout(300_000)]
   public async Task CompareBatchRunsOfAnExperiment() {
@@ -80,6 +112,22 @@ public class StudioRunAnalysisTests {
       Assert.AreEqual(3, root.Children.Count, "two batch runs and the tabu search");
       root.IsChecked = true;
       Assert.AreEqual(11, analysis.Table.Rows.Count, analysis.Status);
+      Assert.IsTrue(root.Subtree().All(s => s.IsChecked == true), "ticking the experiment ticks everything below it");
+
+      // unticking a part leaves its runs out; the boxes above are partly ticked
+      var gaBatch = root.Children[0];
+      gaBatch.Children[0].IsChecked = false;
+      Assert.AreEqual(6, analysis.Table.Rows.Count, "the GA's runs are left out, also from its batch run and the experiment");
+      Assert.IsNull(root.IsChecked);
+      Assert.AreEqual(false, gaBatch.IsChecked, "nothing left under the batch run");
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var rootBox = window.GetVisualDescendants().OfType<Avalonia.Controls.CheckBox>().First(c => c.DataContext == root);
+      Assert.IsNull(rootBox.IsChecked, "the experiment's box shows it is partly ticked");
+      Assert.IsTrue(analysis.Table.Rows.All(r => r.Text("source") != root.Name), "runs are listed under the fully ticked boxes");
+      rootBox.IsChecked = true;  // a click on a partly ticked box ticks everything
+      Assert.AreEqual(true, root.IsChecked);
+      Assert.AreEqual(11, analysis.Table.Rows.Count);
+      Assert.IsTrue(analysis.Table.Rows.All(r => r.Text("source") == root.Name));
 
       // group by where the runs were made: one group per batch run and the tabu search
       analysis.GroupToAdd = analysis.AllColumns.Single(c => c.Key == "origin");
