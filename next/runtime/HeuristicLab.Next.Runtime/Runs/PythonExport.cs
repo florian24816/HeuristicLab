@@ -9,21 +9,15 @@ namespace HeuristicLab.Next.Runtime.Runs;
 public sealed record PythonExportRun(IReadOnlyList<string> Path, IReadOnlyList<string> Kinds, RunRow Row);
 
 /// <summary>
-/// Writes runs as a Python module that mirrors the experiment: every experiment, batch run,
-/// time-limit run and algorithm is an attribute of the block above it (exp.batch_run_1.ga), every
-/// run has typed params / results / curves. Editors can complete all of it because the module
-/// declares it (generated classes, no dictionaries). Each block also gives its runs as a pandas
-/// table (.df) and compare(a, b) puts several blocks side by side. Only the standard library is
-/// needed to load it; pandas only for the tables.
-/// <para>
-/// Large curve data (DataTable rows such as Qualities / BestQuality per generation) goes into
-/// "&lt;module&gt;_data.json" next to the module, so the .py stays small enough for editors.
-/// </para>
+/// Exports runs for Python in three files: "&lt;name&gt;_structure.py" mirrors the experiment (every
+/// experiment, batch run, time-limit run and algorithm an attribute of the block above it:
+/// exp.batch_run_1.ga; typed params / results / curves, as generated classes so editors complete them;
+/// .df / compare() for pandas), "&lt;name&gt;_data.json" holds the values (loaded by the structure on
+/// import), "&lt;name&gt;_analysis.py" holds examples (syntax, a box plot, a curve) using only values every
+/// exported run has. Only the standard library is needed to load; pandas for tables, seaborn for plots.
 /// </summary>
 public static class PythonExport {
   private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
-  /// <summary>Curve values up to this count are written into the module itself.</summary>
-  public const int InlineCurveValues = 20_000;
 
   private static readonly HashSet<string> Keywords = [
     "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif",
@@ -33,7 +27,7 @@ public static class PythonExport {
 
   // a block's own members: a child block may not hide them
   private static readonly HashSet<string> BlockMembers = [
-    "name", "kind", "path", "parent", "blocks", "runs", "values", "curves", "df", "curve_df", "find", "compare", "tree"
+    "name", "kind", "path", "label", "parent", "blocks", "runs", "made_here", "walk", "values", "curves", "df", "curve_df", "find", "compare", "tree"
   ];
 
   /// <summary>A file name that Python can import: letters, digits and '_' ("New experiment 1" -> "New_experiment_1").</summary>
@@ -98,27 +92,40 @@ public static class PythonExport {
 
   private sealed record Field(string Key, string Name, string Attribute, ValueType Type);
 
-  /// <summary>Writes the module (and, for large curves, its data file); returns the files written.</summary>
-  /// <param name="path">The .py file; its name should be importable (see ModuleName).</param>
-  /// <param name="title">What the runs are, for the module's description (e.g. the experiment's name).</param>
-  /// <param name="inlineCurveValues">Curve values up to this count go into the module, more into the data file.</param>
-  public static IReadOnlyList<string> Write(string path, string title, IReadOnlyList<PythonExportRun> runs, int inlineCurveValues = InlineCurveValues) {
-    var module = System.IO.Path.GetFileNameWithoutExtension(path);
-    var dataFile = module + "_data.json";
-    var (source, data) = Generate(module, title, runs, dataFile, inlineCurveValues);
-    File.WriteAllText(path, source, new UTF8Encoding(false));
-    var written = new List<string> { path };
-    var dataPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!, dataFile);
-    if (data != null) {
-      File.WriteAllText(dataPath, data, new UTF8Encoding(false));
-      written.Add(dataPath);
-    } else if (File.Exists(dataPath)) File.Delete(dataPath);  // left from an earlier, larger export of the same name
+  /// <summary>The files of one export.</summary>
+  /// <param name="Structure">"&lt;name&gt;_structure.py": the experiment's blocks and the types of its values; loads the data.</param>
+  /// <param name="Data">"&lt;name&gt;_data.json": every run's parameters, results and curves.</param>
+  /// <param name="Analysis">"&lt;name&gt;_analysis.py": examples to start from (box plot, curve, the syntax).</param>
+  public sealed record Files(string Structure, string Data, string Analysis);
+
+  /// <summary>The files for a name ("New experiment 1" -> New_experiment_1_structure.py, ..._data.json, ..._analysis.py).</summary>
+  public static Files FilesFor(string folder, string name) {
+    var module = ModuleName(name);
+    return new(System.IO.Path.Combine(folder, module + "_structure.py"), System.IO.Path.Combine(folder, module + "_data.json"),
+               System.IO.Path.Combine(folder, module + "_analysis.py"));
+  }
+
+  /// <summary>
+  /// Writes structure and data. The analysis is the user's to change: written only if it does not
+  /// exist yet. Returns the files written.
+  /// </summary>
+  public static IReadOnlyList<string> Write(Files files, string title, IReadOnlyList<PythonExportRun> runs) {
+    var (structure, data, analysis) = Generate(System.IO.Path.GetFileNameWithoutExtension(files.Structure), System.IO.Path.GetFileName(files.Data), title, runs);
+    var utf8 = new UTF8Encoding(false);
+    File.WriteAllText(files.Structure, structure, utf8);
+    File.WriteAllText(files.Data, data, utf8);
+    var written = new List<string> { files.Structure, files.Data };
+    if (!File.Exists(files.Analysis)) {
+      File.WriteAllText(files.Analysis, analysis, utf8);
+      written.Add(files.Analysis);
+    }
     return written;
   }
 
-  /// <summary>The module's source, and the data file's content if the curves are too large to inline.</summary>
-  public static (string Source, string? Data) Generate(string module, string title, IReadOnlyList<PythonExportRun> runs, string dataFile,
-      int inlineCurveValues = InlineCurveValues) {
+  /// <summary>The structure module, the data (JSON) and the analysis script.</summary>
+  /// <param name="module">The structure module's name (what the analysis imports).</param>
+  /// <param name="dataFile">The data file's name, next to the module.</param>
+  public static (string Structure, string Data, string Analysis) Generate(string module, string dataFile, string title, IReadOnlyList<PythonExportRun> runs) {
     // ---- the tree: one root (the experiment), or a root holding several experiments / folders
     bool single = runs.Count > 0 && runs.All(r => r.Path.Count > 0 && r.Path[0] == runs[0].Path[0]);
     var root = single ? new Node(runs[0].Path[0], runs[0].Kinds[0], null) : new Node(title, "Runs", null);
@@ -139,6 +146,7 @@ public static class PythonExport {
       }
     }
     Name(root);
+    var blocks = PreOrder(root).ToList();
 
     // ---- fields: every parameter and scalar result of any run, typed by its values
     List<Field> Fields(string prefix) {
@@ -169,69 +177,49 @@ public static class PythonExport {
     var curveTables = tables.Select(t => {
       var rowNames = new Names(["NAMES"]);
       var attribute = tableNames.Take(Identifier(t.Key));
-      return (Name: t.Key, Attribute: attribute, Class: "_" + Pascal(attribute) + "Curves",
-              Rows: t.Value.Select(r => (Name: r, Attribute: rowNames.Take(Identifier(r)))).ToList());
+      return new CurveTable(t.Key, attribute, "_" + Pascal(attribute) + "Curves",
+        t.Value.Select(r => new CurveRow(r, rowNames.Take(Identifier(r)))).ToList());
     }).ToList();
     var curveValues = runs.Select(r => {
-      var byTable = new Dictionary<string, Dictionary<string, double[]>>();
+      var byTable = new Dictionary<CurveTable, Dictionary<CurveRow, double[]>>();
       if (r.Row.Run != null)
         foreach (var t in curveTables)
           if (r.Row.Run.Results.TryGetValue(t.Name, out var item) && item is DataTable table) {
-            var rows = byTable[t.Attribute] = [];
+            var rows = byTable[t] = [];
             foreach (var row in t.Rows)
-              if (table.Rows.TryGetValue(row.Name, out var dataRow)) rows[row.Attribute] = dataRow.Values.ToArray();
+              if (table.Rows.TryGetValue(row.Name, out var dataRow)) rows[row] = dataRow.Values.ToArray();
           }
       return byTable;
     }).ToList();
-    bool inline = curveValues.Sum(c => c.Values.Sum(t => t.Values.Sum(v => v.Length))) <= inlineCurveValues;
 
-    // ---- the module
+    // ---- the structure module
     var py = new StringBuilder();
     void Line(string text = "") => py.Append(text).Append('\n');
 
     Line("\"\"\"");
     Line($"Runs of {Doc(title)}, exported from HeuristicLab Studio on {DateTime.Now.ToString("yyyy-MM-dd HH:mm", Invariant)}.");
     Line();
-    Line("The blocks are attributes of the blocks above them, as in Studio's tree:");
-    Line();
-    var example = Example(root);
-    var exampleResult = (results.FirstOrDefault(f => f.Name == "BestQuality") ?? results.FirstOrDefault(f => f.Type is ValueType.Number or ValueType.Integer))?.Attribute ?? "...";
-    var exampleTable = curveTables.FirstOrDefault(t => t.Name == "Qualities");
-    if (exampleTable.Name == null && curveTables.Count > 0) exampleTable = curveTables[0];
-    Line($"    from {module} import exp, compare");
-    Line($"    exp{example}.runs[0].results.{exampleResult}");
-    Line($"    exp{example}.values(\"{exampleResult}\")   # one value per run");
-    Line($"    exp.df                       # every run as a pandas table (path, block, run, parameters, results)");
-    Line($"    compare(exp{example}, ...)    # several blocks in one table, column \"group\" = which block");
-    if (exampleTable.Name != null) {
-      var exampleRow = exampleTable.Rows.FirstOrDefault(r => r.Name == "BestQuality");
-      if (exampleRow.Name == null) exampleRow = exampleTable.Rows[0];
-      Line($"    exp.curves(\"{exampleTable.Attribute}\", \"{exampleRow.Attribute}\")   # one list per run, e.g. per generation");
-    }
+    Line($"The experiment's structure: its blocks and the types of its values, so editors can complete them.");
+    Line($"The values are in {dataFile} (loaded on import; keep it next to this file). Examples: {module.Replace("_structure", "")}_analysis.py.");
     Line();
     Line("Blocks (name in HeuristicLab -> attribute):");
     Line();
     Tree(root, "exp", 1, Line);
     Line();
     Line("Parameter and result names are HeuristicLab's in snake case; run.params[\"PopulationSize\"] also works.");
-    Line("Loading needs only Python's standard library; .df, compare() and curve_df() need pandas.");
-    if (!inline) Line($"The curves are in {dataFile}, which has to stay next to this file.");
+    Line("Loading needs only Python's standard library; .df, compare() and the curve tables need pandas.");
     Line("\"\"\"");
     Line();
     Line("from __future__ import annotations");
     Line();
     Line("import json");
-    Line("import math");
     Line("import os");
     Line("from dataclasses import dataclass, field");
     Line("from typing import Any, ClassVar, Iterator, Optional, TypeVar");
     Line();
-    Line("nan = math.nan");
-    Line("inf = math.inf");
     Line();
-    Line();
-    WriteFields(Line, "Params", "Parameters of a run.", parameters);
-    WriteFields(Line, "Results", "Scalar results of a run (tables are in Run.curves).", results);
+    WriteFields(Line, "Params", "Parameters of a run: its settings.", parameters);
+    WriteFields(Line, "Results", "Scalar results of a run: what it found (tables are in Run.curves).", results);
     foreach (var t in curveTables) {
       Line("@dataclass");
       Line($"class {t.Class}:");
@@ -274,56 +262,186 @@ public static class PythonExport {
     Line($"exp = {root.Class}()");
     Line($"\"\"\"{Doc(root.Kind)} {Doc(root.Name)}: all exported runs.\"\"\"");
     Line();
-    if (curveTables.Count > 0) {
-      if (inline) {
-        Line("_CURVES: list[dict[str, dict[str, list[float]]]] = [");
-        foreach (var c in curveValues)
-          Line("    {" + string.Join(", ", c.Select(t => $"{Str(t.Key)}: {{{string.Join(", ", t.Value.Select(r => $"{Str(r.Key)}: [{string.Join(", ", r.Value.Select(Float))}]"))}}}")) + "},");
-        Line("]");
-      } else {
-        Line($"with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), {Str(dataFile)}), encoding=\"utf-8\") as _file:");
-        Line("    _CURVES: list[dict[str, dict[str, list[float]]]] = json.load(_file)");
-      }
-    } else Line("_CURVES: list[dict[str, dict[str, list[float]]]] = []");
+    Line("PARAMETERS: list[str] = list(Params.NAMES.values())");
+    Line("\"\"\"The parameters' attributes, also the parameter columns of .df.\"\"\"");
+    Line("RESULTS: list[str] = [\"result_\" + a if a in Params.NAMES.values() else a for a in Results.NAMES.values()]");
+    Line("\"\"\"The results' columns of .df (\"result_\" in front where a parameter has the same name).\"\"\"");
     Line();
     Line();
-    Line("def _curves(index: int) -> Curves:");
-    Line("    tables = _CURVES[index] if index < len(_CURVES) else {}");
-    Line("    curves = Curves()");
-    Line("    for table, rows in tables.items():");
-    Line("        target = getattr(curves, table)");
-    Line("        for row, values in rows.items():");
-    Line("            setattr(target, row, [nan if v is None else v for v in values])");
-    Line("    return curves");
+    Line("def _load() -> None:");
+    Line($"    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), {Str(dataFile)}), encoding=\"utf-8\") as file:");
+    Line("        data = json.load(file)");
+    Line($"    blocks: list[Block] = [{string.Join(", ", blocks.Select(b => "exp" + Access(b)))}]");
+    Line("    for entry in data[\"runs\"]:");
+    Line("        curves = Curves()");
+    Line("        for table, rows in entry[\"curves\"].items():");
+    Line("            for row, values in rows.items():");
+    Line("                setattr(getattr(curves, table), row, values)");
+    Line("        run = Run(entry[\"name\"], Params(**entry[\"params\"]), Results(**entry[\"results\"]), curves)");
+    Line("        blocks[entry[\"block\"]]._run(run)");
     Line();
     Line();
-    for (int i = 0; i < runs.Count; i++) {
-      var row = runs[i].Row;
-      var node = origins[i];
-      Line($"exp{Access(node)}._run(Run(");
-      Line($"    name={Str(row.Text("run"))},");
-      Line($"    params=Params({Arguments(parameters, row)}),");
-      Line($"    results=Results({Arguments(results, row)}),");
-      Line($"    curves=_curves({i}),");
-      Line("))");
-    }
-    Line();
+    Line("_load()");
     Line();
     Line("if __name__ == \"__main__\":");
     Line("    print(exp.tree())");
 
-    string? data = null;
-    if (!inline) {
-      var json = new StringBuilder("[\n");
-      for (int i = 0; i < curveValues.Count; i++) {
-        json.Append("  {").Append(string.Join(", ", curveValues[i].Select(t =>
-          $"{Str(t.Key)}: {{{string.Join(", ", t.Value.Select(r => $"{Str(r.Key)}: [{string.Join(", ", r.Value.Select(JsonNumber))}]"))}}}")));
-        json.Append(i + 1 < curveValues.Count ? "},\n" : "}\n");
-      }
-      data = json.Append("]\n").ToString();
+    // ---- the data: one run per line
+    var json = new StringBuilder("{\"runs\": [\n");
+    for (int i = 0; i < runs.Count; i++) {
+      var row = runs[i].Row;
+      json.Append("  {\"block\": ").Append(blocks.IndexOf(origins[i])).Append(", \"name\": ").Append(Str(row.Text("run")));
+      json.Append(", \"params\": {").Append(JsonFields(parameters, row)).Append('}');
+      json.Append(", \"results\": {").Append(JsonFields(results, row)).Append('}');
+      json.Append(", \"curves\": {").Append(string.Join(", ", curveValues[i].Select(t =>
+        $"{Str(t.Key.Attribute)}: {{{string.Join(", ", t.Value.Select(r => $"{Str(r.Key.Attribute)}: [{string.Join(", ", r.Value.Select(JsonNumber))}]"))}}}")));
+      json.Append(i + 1 < runs.Count ? "}},\n" : "}}\n");
     }
-    return (py.ToString(), data);
+    json.Append("]}\n");
+
+    return (py.ToString(), json.ToString(), Analysis(module, title, root, runs, parameters, results, curveTables, curveValues));
   }
+
+  private sealed record CurveRow(string Name, string Attribute);
+  private sealed record CurveTable(string Name, string Attribute, string Class, IReadOnlyList<CurveRow> Rows);
+
+  /// <summary>
+  /// The analysis script: the syntax on one run, the runs as a pandas table, a box plot of the quality
+  /// per block the runs were made in and its curve per step. Its examples only use values every exported
+  /// run has, so they fit any algorithm (with or without batch runs).
+  /// </summary>
+  private static string Analysis(string module, string title, Node root, IReadOnlyList<PythonExportRun> runs,
+      IReadOnlyList<Field> parameters, IReadOnlyList<Field> results,
+      IReadOnlyList<CurveTable> curveTables, IReadOnlyList<Dictionary<CurveTable, Dictionary<CurveRow, double[]>>> curveValues) {
+    bool Everywhere(Field f) => runs.All(r => r.Row.Values.ContainsKey(f.Key));
+    bool IsNumber(Field f) => f.Type is ValueType.Integer or ValueType.Number;
+    Field? Pick(IReadOnlyList<Field> fields, Func<Field, bool> where, params string[] preferred) {
+      var candidates = fields.Where(f => Everywhere(f) && where(f)).ToList();
+      return preferred.Select(p => candidates.FirstOrDefault(f => f.Name == p)).FirstOrDefault(f => f != null) ?? candidates.FirstOrDefault();
+    }
+    var quality = Pick(results, f => IsNumber(f) && f.Name.Contains("Quality"), "BestQuality") ?? Pick(results, IsNumber);
+    var textParameter = Pick(parameters, f => f.Type == ValueType.Text, "Algorithm Name", "Algorithm Type", "Problem Name");
+    var numberParameter = Pick(parameters, IsNumber, "Seed", "MaximumIterations", "MaximumGenerations");
+    var maximization = Pick(parameters, f => f.Type == ValueType.Bool && f.Name == "Maximization");
+    // a curve every run has: the qualities' best quality if possible
+    var everywhere = curveTables.SelectMany(t => t.Rows.Select(r => (Table: t, Row: r)))
+      .Where(c => curveValues.All(v => v.TryGetValue(c.Table, out var rows) && rows.ContainsKey(c.Row))).ToList();
+    (CurveTable Table, CurveRow Row)? curve = everywhere.Count == 0 ? null
+      : everywhere.FirstOrDefault(c => c.Table.Name == "Qualities" && c.Row.Name == "BestQuality") is { Table: not null } best ? best
+      : everywhere.FirstOrDefault(c => c.Table.Name == "Qualities") is { Table: not null } qualities ? qualities : everywhere[0];
+    var example = "exp" + Example(root);
+    var importName = module;
+
+    var py = new StringBuilder();
+    void Line(string text = "") => py.Append(text).Append('\n');
+    Line("\"\"\"");
+    Line($"Analysis of {Doc(title)}: examples to start from - change them, keep what you need.");
+    Line();
+    Line($"Run it (python {module.Replace("_structure", "")}_analysis.py), or open it in VS Code / Jupyter: every \"# %%\" starts a cell.");
+    Line($"The runs come from {module}.py (the experiment's blocks) and its _data.json (the values).");
+    Line("Needs pandas, seaborn and matplotlib:  pip install pandas seaborn matplotlib");
+    Line("A new export from Studio does not overwrite this file (delete it to get a fresh one).");
+    Line("\"\"\"");
+    Line();
+    Line("# %%");
+    Line("import matplotlib.pyplot as plt");
+    Line("import pandas as pd");
+    Line("import seaborn as sns");
+    Line();
+    Line($"from {importName} import PARAMETERS, RESULTS, compare, compare_curves, exp");
+    Line();
+    Line("print(exp.tree())  # the blocks, as in Studio's tree");
+    Line();
+    Line("# %% The syntax: blocks, runs, parameters, results, curves");
+    Line("# blocks are attributes of the blocks above them (the names are in the tree above):");
+    Line($"block = {example}");
+    Line("print(block.name, \"-\", block.kind, \"-\", len(block.runs), \"runs\")");
+    Line();
+    Line("# every block has the runs made in it or below it; exp.runs are all of them");
+    Line("run = block.runs[0]");
+    Line("print(run.name, \"was made in\", run.path)");
+    Line();
+    Line("# run.params: the settings it ran with (parameters); run.results: what it found");
+    if (textParameter != null) Line($"print(\"Parameter {Doc(textParameter.Name)}:\", run.params.{textParameter.Attribute})");
+    if (numberParameter != null) Line($"print(\"Parameter {Doc(numberParameter.Name)}:\", run.params.{numberParameter.Attribute})");
+    if (quality != null) {
+      Line($"print(\"Result {Doc(quality.Name)}:\", run.results.{quality.Attribute})");
+      Line($"print(\"The same with HeuristicLab's name:\", run.results[{Str(quality.Name)}])");
+    }
+    Line("print(\"All parameters:\", PARAMETERS)");
+    Line("print(\"All results:\", RESULTS)");
+    if (curve is { } c) {
+      Line();
+      Line($"# run.curves: tables with one value per step (generation / iteration), here {Doc(c.Table.Name)} -> {Doc(c.Row.Name)}");
+      Line($"steps = run.curves.{c.Table.Attribute}.{c.Row.Attribute} or []");
+      Line("print(f\"{len(steps)} steps, first {steps[0] if steps else None}, last {steps[-1] if steps else None}\")");
+    }
+    if (quality != null) {
+      Line();
+      Line("# one value per run of a block, and plain Python on the runs");
+      Line($"print(block.values(\"{quality.Attribute}\"))");
+      if (maximization != null) {
+        Line($"best = max if run.params.{maximization.Attribute} else min  # the problem says whether larger is better");
+        Line($"best_run = best(exp.runs, key=lambda r: r.results.{quality.Attribute} or 0)");
+        Line($"print(\"Best {Doc(quality.Name)}:\", best_run.results.{quality.Attribute}, \"in\", best_run.path)");
+      } else {
+        Line($"best_run = min(exp.runs, key=lambda r: r.results.{quality.Attribute} or 0)  # max(...) if larger is better");
+        Line($"print(\"Lowest {Doc(quality.Name)}:\", best_run.results.{quality.Attribute}, \"in\", best_run.path)");
+      }
+    }
+    Line();
+    Line("# %% All runs as one pandas table: a row per run, a column per parameter and result");
+    Line("df = exp.df");
+    Line("print(df[[\"path\", \"run\"] + RESULTS].head())  # only the results (PARAMETERS: only the parameters)");
+    if (quality != null) {
+      Line($"print(df.groupby(\"path\")[\"{quality.Attribute}\"].describe())  # per block the runs were made in");
+      if (textParameter != null)
+        Line($"print(df[df[\"{textParameter.Attribute}\"] == run.params.{textParameter.Attribute}][[\"path\", \"run\", \"{quality.Attribute}\"]])  # filter rows by a value");
+    }
+    Line();
+    Line("# the blocks that made runs (algorithms; e.g. one per batch run) - the groups compared below");
+    Line("groups = [b for b in exp.walk() if b.made_here]");
+    Line("# to compare chosen blocks instead: groups = [exp.batch_run_1, exp.batch_run_2] (names as in the tree)");
+    if (quality != null) {
+      Line();
+      Line($"# %% Box plot: {Doc(quality.Name)} per block, every run a dot");
+      Line("data = compare(*groups)  # one table, the column \"group\" says which block");
+      Line($"ax = sns.boxplot(data, x=\"group\", y=\"{quality.Attribute}\", color=\"#F9B462\")");
+      Line($"sns.stripplot(data, x=\"group\", y=\"{quality.Attribute}\", color=\"black\", size=4, ax=ax)");
+      Line($"ax.set(title={Str(title + ": " + quality.Name)}, xlabel=\"\", ylabel={Str(quality.Name)})");
+      Line("ax.tick_params(axis=\"x\", labelrotation=20)");
+      Line("plt.tight_layout()");
+      Line("plt.show()");
+    } else {
+      Line();
+      Line("# (no numeric result that every run has: no box plot example)");
+    }
+    if (curve is { } k) {
+      Line();
+      Line($"# %% Curve: {Doc(k.Row.Name)} per step, mean of each block's runs with its 95 % confidence band");
+      Line($"curves = compare_curves(\"{k.Table.Attribute}\", \"{k.Row.Attribute}\", *groups)  # long form: group, run, step, value");
+      Line("ax = sns.lineplot(curves, x=\"step\", y=\"value\", hue=\"group\")");
+      Line($"ax.set(title={Str(title + ": " + k.Table.Name + " / " + k.Row.Name)}, xlabel=\"Step (generation / iteration)\", ylabel={Str(k.Row.Name)})");
+      Line("plt.tight_layout()");
+      Line("plt.show()");
+    } else {
+      Line();
+      Line("# (no table every run has: no curve example)");
+    }
+    return py.ToString();
+  }
+
+  private static IEnumerable<Node> PreOrder(Node node) => node.Children.SelectMany(PreOrder).Prepend(node);
+
+  private static string JsonFields(IReadOnlyList<Field> fields, RunRow row) =>
+    string.Join(", ", fields.Where(f => row.Values.ContainsKey(f.Key)).Select(f => $"{Str(f.Attribute)}: {JsonValue(f, row.Values[f.Key])}"));
+
+  private static string JsonValue(Field field, object value) => field.Type switch {
+    ValueType.Integer => ((long)(double)value).ToString(Invariant),
+    ValueType.Number => JsonNumber((double)value),
+    ValueType.Bool => (string)value == "True" ? "true" : "false",
+    _ => Str(value is double d ? d.ToString("R", Invariant) : (string)value)
+  };
 
   private static IEnumerable<Node> PostOrder(Node node) => node.Children.SelectMany(PostOrder).Append(node);
 
@@ -358,16 +476,6 @@ public static class PythonExport {
     line("");
   }
 
-  private static string Arguments(IReadOnlyList<Field> fields, RunRow row) =>
-    string.Join(", ", fields.Where(f => row.Values.ContainsKey(f.Key)).Select(f => $"{f.Attribute}={Value(f, row.Values[f.Key])}"));
-
-  private static string Value(Field field, object value) => field.Type switch {
-    ValueType.Integer => ((long)(double)value).ToString(Invariant),
-    ValueType.Number => Float((double)value),
-    ValueType.Bool => (string)value,
-    _ => Str(value is double d ? d.ToString("R", Invariant) : (string)value)
-  };
-
   private static string Number(double d) =>
     double.IsNaN(d) ? "nan" : double.IsPositiveInfinity(d) ? "inf" : double.IsNegativeInfinity(d) ? "-inf"
     : d == Math.Floor(d) && Math.Abs(d) < 1e15 ? ((long)d).ToString(Invariant) : d.ToString("R", Invariant);
@@ -378,7 +486,9 @@ public static class PythonExport {
     return double.IsFinite(d) && !text.Contains('.') && !text.Contains('E') ? text + ".0" : text;
   }
 
-  private static string JsonNumber(double d) => double.IsNaN(d) || double.IsInfinity(d) ? "null" : Float(d);
+  /// <summary>A float in JSON; NaN and infinities as Python's json writes and reads them.</summary>
+  private static string JsonNumber(double d) =>
+    double.IsNaN(d) ? "NaN" : double.IsPositiveInfinity(d) ? "Infinity" : double.IsNegativeInfinity(d) ? "-Infinity" : Float(d);
 
   /// <summary>A Python (and JSON) string literal.</summary>
   private static string Str(string s) {
@@ -445,7 +555,29 @@ class Block:
 
     @property
     def path(self) -> str:
+        """Its names from the experiment down, e.g. "Experiment / Batch run 1 / Genetic Algorithm"."""
         return self.parent.path + " / " + self.name if self.parent else self.name
+
+    @property
+    def label(self) -> str:
+        """Its path below the experiment ("Batch run 1 / Genetic Algorithm"); the experiment: its name."""
+        names = []
+        block: Optional[Block] = self
+        while block is not None and block.parent is not None:
+            names.insert(0, block.name)
+            block = block.parent
+        return " / ".join(names) or self.name
+
+    @property
+    def made_here(self) -> list[Run]:
+        """The runs made in this block itself (not in blocks below it)."""
+        return [run for run in self.runs if run.block is self]
+
+    def walk(self) -> Iterator[Block]:
+        """This block and every block below it."""
+        yield self
+        for block in self.blocks:
+            yield from block.walk()
 
     def __iter__(self) -> Iterator[Run]:
         return iter(self.runs)
@@ -510,26 +642,29 @@ class Block:
         return pd.DataFrame(rows)
 
 
+def _group(block: Block, blocks: tuple[Block, ...]) -> str:
+    """A block's name in a comparison; where names repeat (an algorithm in each batch run), its label."""
+    return block.name if [b.name for b in blocks].count(block.name) == 1 else block.label
+
+
 def compare(*blocks: Block) -> Any:
-    """Several blocks' runs in one pandas DataFrame; the column "group" says which block (its name, or its path if names repeat)."""
+    """Several blocks' runs in one pandas DataFrame; the column "group" says which block."""
     import pandas as pd
-    names = [block.name for block in blocks]
     frames = []
     for block in blocks:
         frame = block.df
-        frame.insert(0, "group", block.name if names.count(block.name) == 1 else block.path)
+        frame.insert(0, "group", _group(block, blocks))
         frames.append(frame)
     return pd.concat(frames, ignore_index=True)
 
 
 def compare_curves(table: str, row: str, *blocks: Block) -> Any:
-    """compare() for curves: a table's row of several blocks in long form, column "group" = which block."""
+    """compare() for curves: a table's row of several blocks in long form (group, path, block, run, step, value)."""
     import pandas as pd
-    names = [block.name for block in blocks]
     frames = []
     for block in blocks:
         frame = block.curve_df(table, row)
-        frame.insert(0, "group", block.name if names.count(block.name) == 1 else block.path)
+        frame.insert(0, "group", _group(block, blocks))
         frames.append(frame)
     return pd.concat(frames, ignore_index=True)
 

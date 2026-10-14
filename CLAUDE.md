@@ -158,12 +158,15 @@
   runs belong to its algorithm) and listed under the highest fully ticked box above it (source),
   filters (column op value), grouping by any combination of columns (numbers in N ranges),
   Table (varying parameters or all, sort, CSV export - kept as is on purpose: one-to-one comparison with
-  HeuristicLab's; "Export to Python..." next to it: runtime Runs.PythonExport writes the shown runs as a
-  module named after the experiment (PythonExport.ModuleName: importable), blocks as attributes of the
-  blocks above them (exp.batch_run_1.genetic_algorithm_ga; generated classes so editors complete them,
-  checked with pyright), Run.params / results (dataclasses, int/float/bool/str by the values, NAMES map
-  HeuristicLab names) / curves (DataTable rows), Block.values/curves/df/curve_df/find/tree, compare(),
-  compare_curves(); pandas only for the tables; curves above 20 000 values in <module>_data.json), Charts (box plot, scatter, histogram,
+  HeuristicLab's; "Export to Python..." next to it: runtime Runs.PythonExport writes three files named after the
+  experiment (ModuleName: importable): <name>_structure.py (blocks as attributes of the blocks above them,
+  exp.batch_run_1.genetic_algorithm_ga - generated classes so editors complete them, checked with pyright;
+  Run.params / results dataclasses typed int/float/bool/str by the values, NAMES map HeuristicLab names,
+  curves = DataTable rows; Block.values/curves/df/curve_df/walk/made_here/label/find/tree, compare(),
+  compare_curves(), PARAMETERS/RESULTS; no values), <name>_data.json (all values, loaded on import) and
+  <name>_analysis.py ("# %%" cells: the syntax on one run, pandas table, seaborn box plot of the quality
+  per block that made runs, curve per step; only fields every exported run has, BestQuality / Qualities
+  preferred, min/max by Maximization; written only if missing - it is the user's), Charts (box plot, scatter, histogram,
   cumulative distribution, curves of a DataTable row per run + group mean; NaN = line gap),
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
   Bonferroni-Holm, t-test, Cohen's d, Hedges' g), Run (one run's results with visualizations).

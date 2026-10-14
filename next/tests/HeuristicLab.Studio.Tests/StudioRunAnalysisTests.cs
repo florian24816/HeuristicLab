@@ -79,52 +79,58 @@ public class StudioRunAnalysisTests {
   }
 
   /// <summary>
-  /// Export to Python: a module named after the experiment, its blocks as attributes, typed values;
-  /// loaded with Python itself (if installed). Big curves go into a data file next to it.
+  /// Export to Python: &lt;experiment&gt;_structure.py (blocks as attributes, typed values), _data.json (the
+  /// values) and _analysis.py (examples); loaded with Python itself (if installed). A second export keeps
+  /// the analysis, which is the user's.
   /// </summary>
   private static void AssertPythonExport(RunAnalysisViewModel analysis, string experimentName) {
     var folder = Path.Combine(AppContext.BaseDirectory, "python-export");
+    if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
     Directory.CreateDirectory(folder);
-    var written = analysis.ExportPython(Path.Combine(folder, experimentName + ".py"));
     var module = HeuristicLab.Next.Runtime.Runs.PythonExport.ModuleName(experimentName);
-    Assert.AreEqual(module + ".py", Path.GetFileName(written.Single()), "named after the experiment, importable");
-    var source = File.ReadAllText(written[0]);
-    StringAssert.Contains(source, "self.batch_run_1 = self._add(");
-    StringAssert.Contains(source, "self.batch_run_2 = self._add(");
-    StringAssert.Contains(source, "exp.batch_run_1.genetic_algorithm_ga.runs[0].results.best_quality", "the example uses the best quality");
-    StringAssert.Contains(source, "best_quality: Optional[");
-    StringAssert.Contains(source, "population_size: Optional[int] = None", "whole numbers are ints");
+    var written = analysis.ExportPython(Path.Combine(folder, module + "_analysis.py"));
+    CollectionAssert.AreEqual(new[] { module + "_structure.py", module + "_data.json", module + "_analysis.py" },
+      written.Select(Path.GetFileName).ToList(), "named after the experiment, importable");
+    var structure = File.ReadAllText(written[0]);
+    StringAssert.Contains(structure, "self.batch_run_1 = self._add(");
+    StringAssert.Contains(structure, "self.batch_run_2 = self._add(");
+    StringAssert.Contains(structure, "population_size: Optional[int] = None", "whole numbers are ints");
+    Assert.IsFalse(structure.Contains("6110"), "no values in the structure");
+    var script = File.ReadAllText(written[2]);
+    StringAssert.Contains(script, $"from {module}_structure import");
+    StringAssert.Contains(script, "sns.boxplot(data, x=\"group\", y=\"best_quality\"");
+    StringAssert.Contains(script, "compare_curves(\"qualities\", \"best_quality\", *groups)");
+    StringAssert.Contains(script, "run.params.algorithm_name", "a parameter every algorithm has");
 
-    // the same with its curves in a data file
-    var big = Path.Combine(folder, "big");
-    Directory.CreateDirectory(big);
-    var withData = analysis.ExportPython(Path.Combine(big, experimentName + ".py"), inlineCurveValues: 0);
-    CollectionAssert.AreEqual(new[] { module + ".py", module + "_data.json" }, withData.Select(Path.GetFileName).ToList());
+    // exported again: structure and data anew, the analysis (perhaps changed by the user) kept
+    File.AppendAllText(written[2], "# mine\n");
+    var again = analysis.ExportPython(Path.Combine(folder, module + "_structure.py"));
+    Assert.AreEqual(2, again.Count);
+    StringAssert.EndsWith(File.ReadAllText(written[2]), "# mine\n");
 
-    foreach (var dir in new[] { folder, big }) {
-      var check = $$"""
-        import sys
-        sys.path.insert(0, {{PythonString(dir)}})
-        from {{module}} import exp, Run, Block
-        assert exp.name == {{PythonString(experimentName)}}, exp.name
-        assert len(exp.runs) == 11, len(exp.runs)
-        assert [b.kind for b in exp.blocks] == ["Batch run", "Batch run", "Algorithm"], [b.kind for b in exp.blocks]
-        ga20 = exp.blocks[0].blocks[0]
-        assert len(ga20.runs) == 5 and len(exp.blocks[0].runs) == 5
-        assert all(r.params.population_size == 20 for r in ga20.runs), ga20.values("population_size")
-        assert all(r.params["PopulationSize"] == 60 for r in exp.blocks[1].runs)
-        assert all(isinstance(q, (int, float)) for q in ga20.values("best_quality"))
-        assert all(isinstance(r.params.mutation_probability, float) for r in ga20.runs)
-        assert all(isinstance(v, float) for c in ga20.curves("qualities", "best_quality") for v in c)
-        assert ga20.values("BestQuality") == [r.results.best_quality for r in ga20.runs]
-        curves = ga20.curves("qualities", "best_quality")
-        assert len(curves) == 5 and all(len(c) == 26 for c in curves), [len(c) for c in curves]
-        assert ga20.runs[0].path.startswith({{PythonString(experimentName)}} + " / "), ga20.runs[0].path
-        assert exp.find(ga20.name) is not None
-        print("ok", len(exp.tree().splitlines()))
-        """;
-      if (RunPython(check) is { } output) StringAssert.StartsWith(output, "ok", output);
-    }
+    var check = $$"""
+      import sys
+      sys.path.insert(0, {{PythonString(folder)}})
+      from {{module}}_structure import exp, Run, Block, PARAMETERS, RESULTS
+      assert exp.name == {{PythonString(experimentName)}}, exp.name
+      assert len(exp.runs) == 11, len(exp.runs)
+      assert [b.kind for b in exp.blocks] == ["Batch run", "Batch run", "Algorithm"], [b.kind for b in exp.blocks]
+      ga20 = exp.batch_run_1.genetic_algorithm_ga
+      assert len(ga20.runs) == 5 and len(exp.batch_run_1.runs) == 5 and not exp.batch_run_1.made_here
+      assert [b.name for b in exp.walk() if b.made_here] == ["Genetic Algorithm (GA)", "Genetic Algorithm (GA)", "Tabu Search (TS)"]
+      assert ga20.label == "Batch run 1 / Genetic Algorithm (GA)", ga20.label
+      assert all(r.params.population_size == 20 for r in ga20.runs), ga20.values("population_size")
+      assert all(r.params["PopulationSize"] == 60 for r in exp.batch_run_2.runs)
+      assert all(isinstance(r.params.population_size, int) for r in ga20.runs)
+      assert all(isinstance(r.params.mutation_probability, float) for r in ga20.runs)
+      assert ga20.values("BestQuality") == [r.results.best_quality for r in ga20.runs]
+      curves = ga20.curves("qualities", "best_quality")
+      assert len(curves) == 5 and all(len(c) == 26 and all(isinstance(v, float) for v in c) for c in curves), [len(c) for c in curves]
+      assert ga20.runs[0].path == {{PythonString(experimentName)}} + " / Batch run 1 / Genetic Algorithm (GA)", ga20.runs[0].path
+      assert "population_size" in PARAMETERS and "best_quality" in RESULTS
+      print("ok")
+      """;
+    if (RunPython(check) is { } output) StringAssert.StartsWith(output, "ok", output);
   }
 
   private static string PythonString(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";

@@ -352,22 +352,28 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>Where each run of the workspace was made (from the last rebuild).</summary>
   private Dictionary<IRun, RunSourceViewModel> originOf = new(ReferenceEqualityComparer.Instance);
 
-  /// <summary>The shown runs (filtered, sorted) as a Python module named after the experiment: blocks as attributes, typed values.</summary>
+  /// <summary>
+  /// The shown runs (filtered, sorted) for Python: &lt;experiment&gt;_structure.py (blocks as attributes, typed
+  /// values), &lt;experiment&gt;_data.json (the values) and &lt;experiment&gt;_analysis.py (examples; kept if it exists).
+  /// </summary>
   [RelayCommand]
   private async Task ExportPythonAsync() {
     var runs = PythonRuns();
     if (runs.Count == 0) { Status = "Nothing to export: tick runs first."; return; }
-    if (fileDialogs == null || await fileDialogs.SavePythonFileAsync(PythonExport.ModuleName(PythonTitle(runs)) + ".py") is not string path) return;
+    if (fileDialogs == null || await fileDialogs.SavePythonFileAsync(PythonExport.ModuleName(PythonTitle(runs)) + "_analysis.py") is not string path) return;
     ExportPython(path);
   }
 
-  public IReadOnlyList<string> ExportPython(string path, int inlineCurveValues = PythonExport.InlineCurveValues) {
+  /// <summary>Exports next to this file; its name without _analysis / _structure / _data names the three files.</summary>
+  public IReadOnlyList<string> ExportPython(string path) {
     var runs = PythonRuns();
-    // the file name is what Python imports: letters, digits and '_' only
-    var module = PythonExport.ModuleName(Path.GetFileNameWithoutExtension(path));
-    path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, module + ".py");
-    var written = PythonExport.Write(path, PythonTitle(runs), runs, inlineCurveValues);
-    Status = $"Exported {runs.Count} runs to {string.Join(" and ", written.Select(Path.GetFileName))} (import {module})";
+    var name = Path.GetFileNameWithoutExtension(path);
+    foreach (var suffix in new[] { "_analysis", "_structure", "_data" })
+      if (name.EndsWith(suffix, StringComparison.Ordinal) && name.Length > suffix.Length) { name = name[..^suffix.Length]; break; }
+    var files = PythonExport.FilesFor(Path.GetDirectoryName(Path.GetFullPath(path))!, name);
+    var written = PythonExport.Write(files, PythonTitle(runs), runs);
+    Status = $"Exported {runs.Count} runs: {string.Join(", ", written.Select(Path.GetFileName))}"
+             + (written.Contains(files.Analysis) ? "" : $" ({Path.GetFileName(files.Analysis)} kept as it was)");
     return written;
   }
 
