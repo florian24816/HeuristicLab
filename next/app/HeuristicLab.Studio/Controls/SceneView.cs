@@ -110,9 +110,9 @@ public class SceneView : Control {
     var result = new List<(Rect, LegendEntry)>();
     double x = 16, y = 6, max = Math.Max(120, Bounds.Width - 16);
     foreach (var entry in Entries(scene)) {
-      double w = 16 + Text(entry.Label, foreground).Width + 14;
-      if (x + w > max && x > 16) { x = 16; y += 18; }
-      result.Add((new Rect(x, y, w, 16), entry));
+      double w = 18 + Text(entry.Label, foreground, UiSize).Width + 18;
+      if (x + w > max && x > 16) { x = 16; y += 22; }
+      result.Add((new Rect(x, y, w, 20), entry));
       x += w;
     }
     return result;
@@ -144,8 +144,21 @@ public class SceneView : Control {
 
   private static readonly Typeface Font = new(FontFamily.Default);
 
+  /// <summary>Legend, scales and axis titles (labels inside a picture keep their own size).</summary>
+  private const double UiSize = 13;
+  private static readonly Typeface TitleFont = new(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold);
+
   private static FormattedText Text(string text, IBrush brush, double size = 11) =>
     new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, size, brush);
+
+  private static FormattedText Title(string text, IBrush brush) =>
+    new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, TitleFont, UiSize, brush);
+
+  /// <summary>A category's name, wrapped to its slot and centered in it.</summary>
+  private static FormattedText Category(string text, IBrush brush, double width) =>
+    new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, UiSize, brush) {
+      MaxTextWidth = Math.Max(20, width), TextAlignment = TextAlignment.Center, MaxLineCount = 3, Trimming = TextTrimming.CharacterEllipsis
+    };
 
   private static Color ColorOf(Rgb c) => Color.FromArgb(c.A, c.R, c.G, c.B);
 
@@ -169,13 +182,14 @@ public class SceneView : Control {
     return bitmap;
   });
 
-  private static (double MinX, double MinY, double MaxX, double MaxY)? WorldBounds(IEnumerable<Shape> shapes) {
+  private static (double MinX, double MinY, double MaxX, double MaxY)? WorldBounds(SceneVisual scene) {
     double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
     void Add(double x, double y) {
       if (!double.IsFinite(x) || !double.IsFinite(y)) return;
       minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
     }
-    foreach (var shape in shapes) {
+    if (scene.Shapes.Count == 0) return null;
+    foreach (var shape in scene.Shapes) {
       switch (shape) {
         case LineShape l: Add(l.From.X, l.From.Y); Add(l.To.X, l.To.Y); break;
         case PathShape p: foreach (var q in p.Points) Add(q.X, q.Y); break;
@@ -187,15 +201,18 @@ public class SceneView : Control {
         case TextShape t: Add(t.At.X, t.At.Y); break;
       }
     }
-    return minX <= maxX ? (minX, minY, maxX, maxY) : null;
+    if (minX > maxX) return null;
+    if (scene.XRange is { } xr) { minX = Math.Min(minX, xr.Min); maxX = Math.Max(maxX, xr.Max); }
+    if (scene.YRange is { } yr) { minY = Math.Min(minY, yr.Min); maxY = Math.Max(maxY, yr.Max); }
+    return (minX, minY, maxX, maxY);
   }
 
   public override void Render(DrawingContext context) {
     var foreground = Foreground ?? Brushes.Gray;
     if (Background != null) context.FillRectangle(Background, new Rect(Bounds.Size));
     var scene = Scene;
-    if (scene == null || WorldBounds(scene.Shapes) is not { } world) {
-      var empty = Text("Nothing to draw yet.", foreground);
+    if (scene == null || WorldBounds(scene) is not { } world) {
+      var empty = Text("Nothing to draw yet.", foreground, UiSize);
       context.DrawText(empty, new Point((Bounds.Width - empty.Width) / 2, (Bounds.Height - empty.Height) / 2));
       return;
     }
@@ -203,12 +220,25 @@ public class SceneView : Control {
     // room for labels outside the drawing (row names, axis ticks) and for the legend
     double rightAnchored = scene.Shapes.OfType<TextShape>().Where(t => t.Anchor == TextAnchor.Right)
       .Select(t => Text(t.Text, foreground, t.Size).Width).DefaultIfEmpty(0).Max();
-    double left = 16 + Math.Max(rightAnchored, scene.Axes ? 56 : 0);
+    bool yScale = scene.Axes && !scene.Shapes.OfType<TextShape>().Any(t => t.Anchor == TextAnchor.Right);
+    // the scale's labels and the vertical axis title left of the drawing
+    double yLabels = yScale ? LineChart.NiceTicks(world.MinY, world.MaxY, 5).Select(v => Text(LineChart.Label(v), foreground, UiSize).Width).Max() + 8 : 0;
+    double yTitle = scene.Axes && !string.IsNullOrEmpty(scene.YAxisTitle) ? Title(scene.YAxisTitle, foreground).Height + 6 : 0;
+    double left = 16 + Math.Max(rightAnchored, yLabels + yTitle);
     var legend = LayoutLegend(scene, foreground);
     double legendBottom = legend.Count > 0 ? legend.Max(l => l.Area.Bottom) + 4 : 0;
     double top = 16 + legendBottom + (scene.Shapes.OfType<TextShape>().Any(t => !hidden.Contains(t.GroupName)) ? 12 : 0);
-    double bottom = scene.Axes ? 44 : 16, right = 24;
-    var plot = new Rect(left, top, Math.Max(1, Bounds.Width - left - right), Math.Max(1, Bounds.Height - top - bottom));
+    double right = 24;
+    double plotWidth = Math.Max(1, Bounds.Width - left - right);
+    // under the drawing: the scale or the categories' names (wrapped to their slots), then the axis title
+    double bottom = 16;
+    if (scene.Axes) {
+      double xLabels = scene.XCategories.Count > 0
+        ? scene.XCategories.Select(c => Category(c.Label, foreground, CategorySlot(scene, world, plotWidth)).Height).Max() + 10
+        : scene.XAxisScale ? Text("0", foreground, UiSize).Height + 8 : 4;
+      bottom = xLabels + (string.IsNullOrEmpty(scene.XAxisTitle) ? 0 : Title(scene.XAxisTitle, foreground).Height + 6) + 10;
+    }
+    var plot = new Rect(left, top, plotWidth, Math.Max(1, Bounds.Height - top - bottom));
 
     double width = Math.Max(world.MaxX - world.MinX, 1e-9), height = Math.Max(world.MaxY - world.MinY, 1e-9);
     if (world.MaxX - world.MinX < 1e-9) width = Math.Max(1, height);
@@ -297,54 +327,82 @@ public class SceneView : Control {
       }
     }
 
-    if (scene.Axes) DrawAxes(context, scene, foreground, plot, Map, sx, sy, screenCenter, cx, cy);
+    if (scene.Axes) DrawAxes(context, scene, foreground, plot, Map, sx, sy, screenCenter, cx, cy, yScale, yLabels);
 
     legendAreas.Clear();
     foreach (var (area, entry) in legend) {
       bool off = hidden.Contains(entry.Label);
-      var box = new Rect(area.X, area.Y + 3, 11, 11);
+      var box = new Rect(area.X, area.Y + 4, 12, 12);
       // a filled box: shown; an empty one: hidden (click toggles)
       context.DrawRectangle(off ? null : new SolidColorBrush(ColorOf(entry.Color)), new Pen(new SolidColorBrush(ColorOf(entry.Color)), 1.5), box);
-      var text = Text(entry.Label, off ? new SolidColorBrush(Colors.Gray, 0.6) : foreground);
-      context.DrawText(text, new Point(area.X + 16, area.Y + 8 - text.Height / 2));
+      var text = Text(entry.Label, off ? new SolidColorBrush(Colors.Gray, 0.6) : foreground, UiSize);
+      context.DrawText(text, new Point(area.X + 18, area.Y + 10 - text.Height / 2));
       legendAreas.Add((area, entry.Label));
     }
   }
 
-  /// <summary>Scales along the bottom and left edges for the part of the scene that is visible.</summary>
+  /// <summary>Width a category's name may take: the distance to its neighbor (the whole width for one).</summary>
+  private static double CategorySlot(SceneVisual scene, (double MinX, double MinY, double MaxX, double MaxY) world, double plotWidth) {
+    var xs = scene.XCategories.Select(c => c.X).Distinct().Order().ToList();
+    double spacing = xs.Count > 1 ? Enumerable.Range(1, xs.Count - 1).Min(i => xs[i] - xs[i - 1]) : Math.Max(world.MaxX - world.MinX, 1e-9);
+    return plotWidth * spacing / Math.Max(world.MaxX - world.MinX, 1e-9) - 8;
+  }
+
+  /// <summary>Scales (or category names) along the bottom and left edges for the part of the scene that is visible, and the axis titles.</summary>
   private void DrawAxes(DrawingContext context, SceneVisual scene, IBrush foreground, Rect plot, Func<double, double, Point> map,
-                        double sx, double sy, Point screenCenter, double cx, double cy) {
+                        double sx, double sy, Point screenCenter, double cx, double cy, bool yScale, double yLabels) {
     double WorldX(double px) => cx + (px - screenCenter.X) / sx;
     double WorldY(double py) => scene.YUp ? cy - (py - screenCenter.Y) / sy : cy + (py - screenCenter.Y) / sy;
     var pen = new Pen(foreground, 1);
     var grid = new Pen(new SolidColorBrush(Colors.Gray, 0.25), 1);
     context.DrawLine(pen, plot.BottomLeft, plot.BottomRight);
     context.DrawLine(pen, plot.BottomLeft, plot.TopLeft);
-    double x0 = WorldX(plot.Left), x1 = WorldX(plot.Right);
-    if (scene.XAxisScale) foreach (var x in LineChart.NiceTicks(Math.Min(x0, x1), Math.Max(x0, x1), 6)) {
-      double px = map(x, 0).X;
-      if (px < plot.Left - 0.5 || px > plot.Right + 0.5) continue;
-      context.DrawLine(grid, new Point(px, plot.Top), new Point(px, plot.Bottom));
-      var label = Text(LineChart.Label(x), foreground);
-      context.DrawText(label, new Point(px - label.Width / 2, plot.Bottom + 4));
+    double xBottom = plot.Bottom;
+    if (scene.XCategories.Count > 0) {
+      double slot = Math.Abs(sx) * (scene.XCategories.Count > 1
+        ? scene.XCategories.Select(c => c.X).Distinct().Order().Zip(scene.XCategories.Select(c => c.X).Distinct().Order().Skip(1), (a, b) => b - a).Min()
+        : (plot.Width / Math.Abs(sx))) - 8;
+      foreach (var category in scene.XCategories) {
+        double px = map(category.X, 0).X;
+        if (px < plot.Left - 0.5 || px > plot.Right + 0.5) continue;
+        context.DrawLine(pen, new Point(px, plot.Bottom), new Point(px, plot.Bottom + 4));
+        bool off = category.Group != null && hidden.Contains(category.Group);
+        var label = Category(category.Label, off ? new SolidColorBrush(Colors.Gray, 0.6) : foreground, slot);
+        context.DrawText(label, new Point(px - label.MaxTextWidth / 2, plot.Bottom + 8));
+        xBottom = Math.Max(xBottom, plot.Bottom + 8 + label.Height);
+      }
+    } else if (scene.XAxisScale) {
+      double x0 = WorldX(plot.Left), x1 = WorldX(plot.Right);
+      foreach (var x in LineChart.NiceTicks(Math.Min(x0, x1), Math.Max(x0, x1), 6)) {
+        double px = map(x, 0).X;
+        if (px < plot.Left - 0.5 || px > plot.Right + 0.5) continue;
+        context.DrawLine(grid, new Point(px, plot.Top), new Point(px, plot.Bottom));
+        var label = Text(LineChart.Label(x), foreground, UiSize);
+        context.DrawText(label, new Point(px - label.Width / 2, plot.Bottom + 6));
+        xBottom = Math.Max(xBottom, plot.Bottom + 6 + label.Height);
+      }
     }
-    if (!scene.Shapes.OfType<TextShape>().Any(t => t.Anchor == TextAnchor.Right)) {
+    if (yScale) {
       double y0 = WorldY(plot.Bottom), y1 = WorldY(plot.Top);
       foreach (var y in LineChart.NiceTicks(Math.Min(y0, y1), Math.Max(y0, y1), 5)) {
         double py = map(0, y).Y;
         if (py < plot.Top - 0.5 || py > plot.Bottom + 0.5) continue;
         context.DrawLine(grid, new Point(plot.Left, py), new Point(plot.Right, py));
-        var label = Text(LineChart.Label(y), foreground);
-        context.DrawText(label, new Point(plot.Left - label.Width - 6, py - label.Height / 2));
+        var label = Text(LineChart.Label(y), foreground, UiSize);
+        context.DrawText(label, new Point(plot.Left - label.Width - 8, py - label.Height / 2));
       }
     }
     if (!string.IsNullOrEmpty(scene.XAxisTitle)) {
-      var title = Text(scene.XAxisTitle, foreground);
-      context.DrawText(title, new Point(plot.Center.X - title.Width / 2, plot.Bottom + 22));
+      var title = Title(scene.XAxisTitle, foreground);
+      context.DrawText(title, new Point(plot.Center.X - title.Width / 2, xBottom + 6));
     }
     if (!string.IsNullOrEmpty(scene.YAxisTitle)) {
-      var title = Text(scene.YAxisTitle, foreground);
-      context.DrawText(title, new Point(Math.Max(2, plot.Left - title.Width - 6), Math.Max(2, plot.Top - 18)));
+      // vertical, left of the scale, centered on the drawing
+      var title = Title(scene.YAxisTitle, foreground);
+      double x = plot.Left - yLabels - 6 - title.Height / 2;
+      using (context.PushTransform(Matrix.CreateTranslation(-title.Width / 2, -title.Height / 2) * Matrix.CreateRotation(-Math.PI / 2)
+                                   * Matrix.CreateTranslation(Math.Max(title.Height / 2 + 2, x), plot.Center.Y)))
+        context.DrawText(title, new Point(0, 0));
     }
   }
 }

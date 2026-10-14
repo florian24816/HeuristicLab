@@ -31,18 +31,13 @@ public static class RunCharts {
   public static Visual BoxPlot(RunTable table, IReadOnlyList<RunGroup> groups, string y) {
     var shapes = new List<Shape>();
     var notes = new List<string>();
-    double? low = null;
     var data = groups.Select(g => (g.Name, Values: g.Rows.Select(r => r.Number(y)).OfType<double>().Where(double.IsFinite).Order().ToArray())).ToList();
     var all = data.SelectMany(d => d.Values).ToList();
     if (all.Count == 0) return new TextVisual("Box plot", $"No numeric values of {Name(table, y)}.");
     double span = Math.Max(all.Max() - all.Min(), 1e-12);
-    low = all.Min() - span * 0.08;
-    // room below the group names, so they do not sit on the axis
-    shapes.Add(new MarkerShape(new Point2(0, low.Value - span * 0.05), new Rgb(0, 0, 0, 0), 0) { Group = "Labels" });
     for (int i = 0; i < data.Count; i++) {
       var (name, values) = data[i];
       var color = Rgb.Palette(i);
-      shapes.Add(new TextShape(new Point2(i, low.Value), name, Rgb.Black) { Group = name });
       if (values.Length == 0) continue;
       var s = RunStatistics.Summary(name, values);
       double iqr = s.Q3 - s.Q1, lowFence = s.Q1 - 1.5 * iqr, highFence = s.Q3 + 1.5 * iqr;
@@ -61,6 +56,9 @@ public static class RunCharts {
     return new SceneVisual($"{Name(table, y)} by group", shapes, YUp: true, Uniform: false) {
       Axes = true, XAxisScale = false, YAxisTitle = Name(table, y),
       Legend = data.Select((d, i) => new LegendEntry(d.Name, Rgb.Palette(i))).ToList(),
+      // the group names under the axis; half a slot of room left and right, a little above and below
+      XCategories = data.Select((d, i) => new AxisCategory(i, d.Name, d.Name)).ToList(),
+      XRange = (-0.5, data.Count - 0.5), YRange = (all.Min() - span * 0.06, all.Max() + span * 0.06),
       Notes = ["Box: quartiles · line: median · diamond: mean · whiskers: 1.5 box lengths · dots: outliers", .. notes]
     };
   }
@@ -92,7 +90,7 @@ public static class RunCharts {
   /// </summary>
   public static ChartVisual Curves(IReadOnlyList<RunGroup> groups, string tableName, string rowName, bool runs = true, bool mean = true) {
     var series = new List<PlotSeries>();
-    string xTitle = "Index";
+    string xTitle = "Step (generation / iteration)";
     for (int i = 0; i < groups.Count; i++) {
       var curves = new List<double[]>();
       foreach (var row in groups[i].Rows) {

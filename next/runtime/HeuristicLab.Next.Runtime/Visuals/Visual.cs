@@ -120,7 +120,15 @@ public sealed record SceneVisual(string Title, IReadOnlyList<Shape> Shapes, bool
   public string XAxisTitle { get; init; } = "";
   public string YAxisTitle { get; init; } = "";
   public IReadOnlyList<LegendEntry> Legend { get; init; } = [];
+  /// <summary>With Axes: names along the horizontal axis instead of a scale (a box plot's groups), drawn under it.</summary>
+  public IReadOnlyList<AxisCategory> XCategories { get; init; } = [];
+  /// <summary>Ranges the drawing covers at least (room around a box plot's boxes), besides its shapes.</summary>
+  public (double Min, double Max)? XRange { get; init; }
+  public (double Min, double Max)? YRange { get; init; }
 }
+
+/// <summary>A name on a category axis at this position; Group: the shape group it belongs to (hidden with it).</summary>
+public sealed record AxisCategory(double X, string Label, string? Group = null);
 
 /// <summary>Axis-aligned box: position (x right, y up, z towards the viewer) and size.</summary>
 public sealed record Box3(double X, double Y, double Z, double Width, double Height, double Depth, Rgb Color, string? Label = null);

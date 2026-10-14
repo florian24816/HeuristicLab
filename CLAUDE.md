@@ -222,7 +222,10 @@
   Windows a toast via Windows PowerShell's WinRT (PowerShell's AppId, text in env variables), macOS
   osascript. A failure shows in the status bar. Tests use a fake IDesktopNotifications.
   Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits, dark mode, notifications.
-  Own LineChart control.
+  Own LineChart control. Chart text (LineChart, SceneView legend/scales/titles): 13 px in the full text color
+  (SystemControlForegroundBaseHigh), axis titles semi-bold, y titles vertical beside their scales, margins
+  from the labels' sizes; SceneVisual.XCategories names a category axis under the drawing (wrapped to
+  its slot; the box plot's groups), XRange/YRange widen the drawn area; notes one per line.
   Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,
   launchers hl and hl-studio in ~/.local/bin, desktop entry; needs the .NET 10 runtime).
   DataFiles.Read/Write block on Parquet.Net's async API: keep that work on the thread pool

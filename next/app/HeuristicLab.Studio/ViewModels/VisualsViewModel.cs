@@ -77,6 +77,7 @@ public partial class VisualsViewModel : ViewModelBase {
     var visual = SelectedIndex >= 0 && SelectedIndex < visuals.Count ? visuals[SelectedIndex] : null;
     Current = visual is ChartVisual chart ? ChartPanel.From(chart) : visual;
     Title = visual?.Title ?? "";
-    Notes = visual == null ? "" : string.Join("    ·    ", visual.Notes);
+    // one note per line: a box plot's groups each get their own
+    Notes = visual == null ? "" : string.Join("\n", visual.Notes);
   }
 }
