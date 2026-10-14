@@ -64,11 +64,32 @@ public class StudioThemeTests {
         Assert.AreNotEqual(shades[0], shades[2], "the second row is weaker");
         window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-theme-light.png"));
 
+        // a matrix too wide to edit (52 columns): the same cells, read-only
+        var problem = algorithm.Algorithm.Problem!;
+        var parameter = (HeuristicLab.Core.IValueParameter)problem.Parameters["DistanceMatrix"];
+        var distances = new double[52, 52];
+        for (int i = 0; i < 52; i++) for (int j = 0; j < 52; j++) distances[i, j] = Math.Abs(i - j) * 17;
+        parameter.Value = (HeuristicLab.Core.IItem)Activator.CreateInstance(parameter.DataType, distances)!;
+        detail.ProblemParameters.Selected = detail.ProblemParameters.Parameters.First(p => p.Name == "DistanceMatrix");
+        Pump();
+        var wide = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("cell") && t.IsEffectivelyVisible).ToList();
+        Assert.IsTrue(wide.Count >= 4, "the distance matrix is shown in cells");
+        Assert.AreEqual(CellViewModel.Grey, ((ISolidColorBrush)((Border)wide[0].Parent!).Background!).Color);
+        Assert.AreEqual(CellViewModel.LightGrey, ((ISolidColorBrush)((Border)wide[1].Parent!).Background!).Color);
+        Assert.IsFalse(window.GetVisualDescendants().OfType<TextBox>().Any(t => t.Classes.Contains("cell") && t.IsEffectivelyVisible), "read-only");
+        window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-theme-light-distances.png"));
+        var area = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("experiment"));
+        Assert.AreEqual(Color.Parse("#D5CFC6"), ((ISolidColorBrush)area.Background!).Color);
+
         Click(window, button);
         Assert.IsTrue(main.IsDarkMode);
         Assert.AreEqual(ThemeVariant.Dark, Application.Current.RequestedThemeVariant);
         Assert.AreEqual("lightmode", ShownPictogram(button));
         Assert.AreEqual(Color.Parse("#F7931D"), ((ISolidColorBrush)button.Background!).Color);
+        Assert.AreEqual(Color.Parse("#36322E"), ((ISolidColorBrush)area.Background!).Color);
+        window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-theme-dark-distances.png"));
+        detail.ProblemParameters.Selected = detail.ProblemParameters.Parameters.First(p => p.Name == "Coordinates");
+        Pump();
         window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-theme-dark.png"));
 
         main.SelectedTab = MainViewModel.ResultsTab;

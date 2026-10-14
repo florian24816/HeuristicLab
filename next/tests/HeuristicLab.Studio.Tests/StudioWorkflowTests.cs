@@ -257,7 +257,7 @@ public class StudioWorkflowTests {
         CollectionAssert.AreEqual(files, vm.Workspace.Experiments.Select(e => e.FilePath).ToList());
         Assert.AreEqual("Opened 3 files", vm.Workspace.Status);
         var area = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("experiment"));
-        Assert.AreEqual(Avalonia.Media.Color.Parse("#3E474D"), ((Avalonia.Media.ISolidColorBrush)area.Background!).Color, "filled gunmetal grey");
+        Assert.AreEqual(Avalonia.Media.Color.Parse("#D5CFC6"), ((Avalonia.Media.ISolidColorBrush)area.Background!).Color, "filled (light mode: warm stone)");
         Assert.AreEqual(0, area.BorderThickness.Left, "no border");
         // HeuristicLab's logo at the top right
         var logo = window.GetVisualDescendants().OfType<Image>().Single(i => i.Source is Avalonia.Media.Imaging.Bitmap && i.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Right);

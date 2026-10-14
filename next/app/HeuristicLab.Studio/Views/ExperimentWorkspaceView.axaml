@@ -17,9 +17,7 @@
         <SolidColorBrush x:Key="DisabledBrush" Color="#F0F0F0" />
         <SolidColorBrush x:Key="LineBrush" Color="#9E9E9E" />
         <SolidColorBrush x:Key="InkBrush" Color="#1E1E1E" />
-        <!-- an experiment's area: filled gunmetal grey (no border), light writing on it -->
-        <SolidColorBrush x:Key="ExperimentBrush" Color="#3E474D" />
-        <SolidColorBrush x:Key="ExperimentInkBrush" Color="#EDEDED" />
+        <!-- an experiment's area (no border) and its writing: ExperimentBrush & co. in App.axaml (light / dark) -->
 
         <!-- one building block: squares, name (inline rename), last field; context menu (rename/delete/...) -->
         <DataTemplate x:Key="Block" x:DataType="vm:BlockViewModel">
@@ -121,25 +119,25 @@
             <Setter Property="Foreground" Value="#9A9A9A" />
         </Style>
         <Style Selector="Border.experiment">
-            <Setter Property="Background" Value="{StaticResource ExperimentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ExperimentBrush}" />
             <Setter Property="CornerRadius" Value="0" />
-            <Setter Property="TextElement.Foreground" Value="{StaticResource ExperimentInkBrush}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment Button.toggle, Border.experiment Button.link">
-            <Setter Property="Foreground" Value="{StaticResource ExperimentInkBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment Button.toggle:pointerover /template/ ContentPresenter#PART_ContentPresenter, Border.experiment Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#55606A" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource ExperimentHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource ExperimentInkBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment CheckBox /template/ Border#NormalRectangle">
-            <Setter Property="BorderBrush" Value="{StaticResource ExperimentInkBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment TextBlock.missing">
-            <Setter Property="Foreground" Value="#F2A27E" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
         </Style>
         <Style Selector="Button.picto">
             <Setter Property="Padding" Value="0" />

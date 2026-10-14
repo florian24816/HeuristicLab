@@ -54,11 +54,18 @@
                 <SolidColorBrush x:Key="WindowBrush" Color="White" />
                 <SolidColorBrush x:Key="WarningBrush" Color="#B0563A" />
                 <SolidColorBrush x:Key="ErrorBrush" Color="#C23B4A" />
+                <!-- an experiment's area in the Experiments tab, its writing, a hovered arrow/link -->
+                <SolidColorBrush x:Key="ExperimentBrush" Color="#D5CFC6" />
+                <SolidColorBrush x:Key="ExperimentInkBrush" Color="#1E1E1E" />
+                <SolidColorBrush x:Key="ExperimentHoverBrush" Color="#C4BCB0" />
             </ResourceDictionary>
             <ResourceDictionary x:Key="Dark">
                 <SolidColorBrush x:Key="WindowBrush" Color="#1E1E1E" />
                 <SolidColorBrush x:Key="WarningBrush" Color="#F2A27E" />
                 <SolidColorBrush x:Key="ErrorBrush" Color="#F08A95" />
+                <SolidColorBrush x:Key="ExperimentBrush" Color="#36322E" />
+                <SolidColorBrush x:Key="ExperimentInkBrush" Color="#EDEDED" />
+                <SolidColorBrush x:Key="ExperimentHoverBrush" Color="#4A453F" />
             </ResourceDictionary>
         </ResourceDictionary.ThemeDictionaries>
         <DataTemplate x:Key="CatalogItemTemplate" x:DataType="vm:CatalogItem">

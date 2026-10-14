@@ -216,6 +216,9 @@ public partial class CellViewModel(IItem value, int row, int column, string text
   /// <summary>Like the run tables, in darker greys: columns alternate, every other row weaker.</summary>
   public static readonly Avalonia.Media.Color Grey = Avalonia.Media.Color.Parse("#B5B5B5"), LightGrey = Avalonia.Media.Color.Parse("#CACACA");
 
+  /// <summary>Cell width; read-only wide matrices fit it to their longest value.</summary>
+  public double Width { get; init; } = 140;
+
   public Avalonia.Media.IBrush Background { get; } =
     TableGridViewModel.Brush(column % 2 == 0 ? Grey : LightGrey, row % 2 == 0 ? 1 : TableGridViewModel.WeakRow);
 }
@@ -258,8 +261,9 @@ public partial class CheckedEntryViewModel(CheckedList list, int index, EditCont
 /// order (analyzers), or the parameters of a nested item; anything else read-only text.
 /// </summary>
 public partial class ValueEditorViewModel : ViewModelBase, IMultiField {
-  // wider matrices (e.g. a 130x130 distance matrix) are shown as text rows
-  private const int MaxEditableColumns = 40;
+  // wider matrices (e.g. a 130x130 distance matrix) are shown read-only, in cells fitted to their values;
+  // beyond MaxGridColumns as text rows (a realized row would hold too many cells)
+  private const int MaxEditableColumns = 40, MaxGridColumns = 300;
   private readonly EditContext context;
   private readonly Action edited;
   private readonly CheckedList? checkedList;
@@ -331,7 +335,8 @@ public partial class ValueEditorViewModel : ViewModelBase, IMultiField {
 
   public string TableInfo => Value switch {
     IStringConvertibleArray a => $"Length: {a.Length}",
-    IStringConvertibleMatrix m => $"Rows: {m.Rows}, columns: {m.Columns}" + (m.Columns > MaxEditableColumns ? " (shown as text)" : ""),
+    IStringConvertibleMatrix m => $"Rows: {m.Rows}, columns: {m.Columns}"
+      + (m.Columns > MaxGridColumns ? " (shown as text)" : m.Columns > MaxEditableColumns ? " (read-only)" : ""),
     _ => ""
   };
 
@@ -341,11 +346,26 @@ public partial class ValueEditorViewModel : ViewModelBase, IMultiField {
   public IReadOnlyList<CellRowViewModel> Rows => rows ??= BuildRows();
   private IReadOnlyList<CellRowViewModel>? rows;
 
-  public IReadOnlyList<string> TextRows => Value is IStringConvertibleMatrix { Columns: > MaxEditableColumns } m
+  public IReadOnlyList<string> TextRows => Value is IStringConvertibleMatrix { Columns: > MaxGridColumns } m
     ? ItemInspector.Cells(m).Select((r, i) => $"{i}: {string.Join("  ", r)}").ToList() : [];
 
+  /// <summary>A matrix too wide to edit: the same cells, read-only (text, no text boxes).</summary>
+  public IReadOnlyList<CellRowViewModel> WideRows => wideRows ??= BuildWideRows();
+  private IReadOnlyList<CellRowViewModel>? wideRows;
+
   public bool IsWideMatrix => TextRows.Count > 0;
-  public bool IsGrid => IsTable && !IsWideMatrix;
+  public bool IsWideGrid => WideRows.Count > 0;
+  public bool IsGrid => IsTable && !IsWideMatrix && !IsWideGrid;
+
+  private IReadOnlyList<CellRowViewModel> BuildWideRows() {
+    if (Value is not IStringConvertibleMatrix { Columns: > MaxEditableColumns and <= MaxGridColumns } m) return [];
+    var texts = ItemInspector.Cells(m).ToList();
+    int longest = texts.SelectMany(r => r).Select(t => t.Length).DefaultIfEmpty(1).Max();
+    double width = Math.Clamp(longest * 8 + 14, 40, 140);
+    var item = Value!;
+    var readOnly = context.ReadOnly();
+    return texts.Select((r, i) => new CellRowViewModel(i, r.Select((t, c) => new CellViewModel(item, i, c, t, readOnly, () => { }) { Width = width }).ToList())).ToList();
+  }
 
   private IReadOnlyList<CellRowViewModel> BuildRows() {
     bool editable = !ReadOnly;

@@ -14,7 +14,6 @@
             <Setter Property="CornerRadius" Value="0" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="#1E1E1E" />
-            <Setter Property="Width" Value="140" />
             <Setter Property="MinHeight" Value="24" />
             <Setter Property="Padding" Value="6,2" />
         </Style>
@@ -25,6 +24,11 @@
         <Style Selector="TextBox.cell:focus /template/ Border#PART_BorderElement">
             <Setter Property="BorderThickness" Value="0,0,0,2" />
             <Setter Property="BorderBrush" Value="#F7931D" />
+        </Style>
+        <Style Selector="TextBlock.cell">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
         <Style Selector="TextBox.cell:pointerover, TextBox.cell:focus">
             <Setter Property="Foreground" Value="#1E1E1E" />
@@ -64,7 +68,29 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:CellViewModel">
                                         <Border Background="{Binding Background}">
-                                            <TextBox Classes="cell" Text="{Binding Text, UpdateSourceTrigger=LostFocus}" />
+                                            <TextBox Classes="cell" Text="{Binding Text, UpdateSourceTrigger=LostFocus}" Width="{Binding Width}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <ListBox Classes="cells" ItemsSource="{Binding WideRows}" MaxHeight="360" IsVisible="{Binding IsWideGrid}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CellRowViewModel">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{Binding Index}" Width="44" Opacity="0.6" VerticalAlignment="Center" TextAlignment="Right" Margin="0,0,4,0" />
+                            <ItemsControl ItemsSource="{Binding Cells}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CellViewModel">
+                                        <Border Background="{Binding Background}" Width="{Binding Width}">
+                                            <TextBlock Classes="cell" Text="{Binding Text}" ToolTip.Tip="{Binding Text}" />
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

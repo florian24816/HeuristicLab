@@ -47,8 +47,9 @@
   Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment (ChooseWindow: pick it
   in a list, the delete button is disabled until then; ExperimentTree.DeleteRuns clears every
   optimizer's runs without Prepare; never single runs, never while running; marks it unsaved).
-  Each experiment's area is filled gunmetal grey (#3E474D, Border.experiment, no border) with light
-  writing (checkbox, arrows, links, missing-text in #F2A27E). "Open..." takes several .hl files at once
+  Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
+  warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
+  HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once
   (IFileDialogService.OpenHlFilesAsync, AllowMultiple): each opens as its own experiment.
   Clicking the unsaved disk saves (SaveChangesAsync): to its file, or "Save as..." without one.
   "Rename file..." (experiment detail next to "Save as...", experiment menu; only with a file): renames
@@ -198,6 +199,8 @@
   Problem tab arrays/matrices: flat square cells (TextBox.cell, no border; editing underlined orange),
   shaded like the run tables in darker greys (CellViewModel.Grey #B5B5B5 / LightGrey #CACACA, every
   other row at TableGridViewModel.WeakRow), row numbers kept.
+  Matrices wider than 40 columns (e.g. a distance matrix) use the same cells read-only (TextBlock.cell,
+  width fitted to the longest value, ValueEditorViewModel.WideRows); above 300 columns text rows.
   Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits and dark mode.
   Own LineChart control.
   Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,
