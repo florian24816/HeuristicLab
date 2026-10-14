@@ -177,6 +177,11 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     IsRunning = IsRunningExperiments || algorithmRunning;
   }
 
+  /// <summary>Something started here finished (experiments, an algorithm, a detailed analysis run): title, message.</summary>
+  public event Action<string, string>? Finished;
+
+  public void NotifyFinished(string title, string message) => Finished?.Invoke(title, message);
+
   partial void OnIsRunningChanged(bool value) {
     // blocks stay clickable while running, but their menus offer no changes
     foreach (var block in AllBlocks(Experiments)) {
@@ -711,6 +716,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// its own seed setting (random by default).
   /// </summary>
   private async Task StartAsync(System.Collections.Generic.IReadOnlyList<ExperimentBlockViewModel> experiments) {
+    if (experiments.Count == 0) return;
     IsRunningExperiments = true;
     IsRunning = true;
     stopSource = new CancellationTokenSource();
@@ -755,6 +761,8 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       var reports = started.OfType<RunReport>().ToArray();
       Status = $"{reports.Count(r => r.Outcome == RunOutcome.Completed)} of {reports.Length} experiments completed, " +
                $"{reports.Sum(r => r.Runs.Count)} runs";
+      NotifyFinished(experiments.Count == 1 ? $"{experiments[0].Name} finished" : $"{experiments.Count} experiments finished",
+        experiments.Count == 1 ? experiments[0].RunStatus : Status);
     } finally {
       IsRunningExperiments = false;
       IsRunning = algorithmRunning;

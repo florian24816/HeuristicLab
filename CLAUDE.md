@@ -205,7 +205,14 @@
   other row at TableGridViewModel.WeakRow), row numbers kept.
   Matrices wider than 40 columns (e.g. a distance matrix) use the same cells read-only (TextBlock.cell,
   width fitted to the longest value, ValueEditorViewModel.WideRows); above 300 columns text rows.
-  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits and dark mode.
+  Notifications: square button right of the light/dark one (notification pictogram; off: SwitchOffBrush
+  light grey #E0E0E0 / dark mode #6B6B6B, on: logo orange; MainViewModel.IsNotifying, saved). When on,
+  everything started that finishes (start all/selected experiments, an algorithm's Start, a detailed
+  analysis run; completed, stopped or failed, not a pause) raises ExperimentWorkspaceViewModel.Finished
+  -> Services.DesktopNotifications: Linux notify-send (else gdbus to org.freedesktop.Notifications),
+  Windows a toast via Windows PowerShell's WinRT (PowerShell's AppId, text in env variables), macOS
+  osascript. A failure shows in the status bar. Tests use a fake IDesktopNotifications.
+  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits, dark mode, notifications.
   Own LineChart control.
   Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,
   launchers hl and hl-studio in ~/.local/bin, desktop entry; needs the .NET 10 runtime).

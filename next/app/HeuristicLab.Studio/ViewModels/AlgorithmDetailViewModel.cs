@@ -40,7 +40,8 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     Engines = ItemInspector.Engines();
     Results = new ResultsViewModel(() => Algorithm.Results, context);
     Runs = new RunsViewModel(Algorithm.Runs);
-    Analysis = new AnalysisViewModel(() => Algorithm, running => block.Workspace.SetAlgorithmRunning(running));
+    Analysis = new AnalysisViewModel(() => Algorithm, running => block.Workspace.SetAlgorithmRunning(running),
+      status => block.Workspace.NotifyFinished($"Detailed analysis of {block.Name} finished", status));
     timer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => Tick());
     RefreshProblem();
   }
@@ -309,6 +310,8 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
         startedHere = paused;
         block.Workspace.SetAlgorithmRunning(paused);
         if (paused) Message = "Paused (breakpoint or Pause). Start resumes.";
+        else block.Workspace.NotifyFinished($"{block.Name} finished",
+          $"{(execution is { IsFaulted: true } ? "Failed" : State)} after {ExecutionTime}, {Algorithm.Runs.Count} run{(Algorithm.Runs.Count == 1 ? "" : "s")}");
       }
     }
   }

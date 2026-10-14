@@ -16,6 +16,8 @@ public sealed class StudioSettings {
   public string ResourcePriority { get; set; } = "Normal";
   /// <summary>Dark mode (the button at the top left); light by default.</summary>
   public bool DarkMode { get; set; }
+  /// <summary>Notifications (the button next to it): a message in the system's notification center when started runs finish.</summary>
+  public bool Notifications { get; set; }
 }
 
 public interface ISettingsStore {

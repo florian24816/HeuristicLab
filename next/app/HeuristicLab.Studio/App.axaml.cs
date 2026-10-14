@@ -22,7 +22,7 @@ public partial class App : Application
         {
             var window = new MainWindow();
             var fileDialogs = new FileDialogService(window);
-            var viewModel = new MainViewModel(fileDialogs, new DialogService(window, fileDialogs), new JsonSettingsStore());
+            var viewModel = new MainViewModel(fileDialogs, new DialogService(window, fileDialogs), new JsonSettingsStore(), new DesktopNotifications());
             window.DataContext = viewModel;
             window.Closing += (_, _) => viewModel.SaveSettings();
             desktop.MainWindow = window;
