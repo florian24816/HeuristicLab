@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Globalization;
 using HeuristicLab.Analysis;
 using HeuristicLab.Optimization;
@@ -67,22 +68,28 @@ public sealed class RunTable {
   };
 
   /// <summary>Runs of optimizers in memory; the same run reached from two sources is listed once.</summary>
-  public static RunTable FromRuns(IEnumerable<SourcedRun> runs) {
+  /// <param name="cache">Keeps what was read from each run (the slow part: all its parameters and results), so a
+  /// new filter or grouping does not read the runs again.</param>
+  /// <param name="progress">How many of the runs are done (reported every 50 runs and at the end).</param>
+  public static RunTable FromRuns(IEnumerable<SourcedRun> runs, RunValueCache? cache = null, IProgress<int>? progress = null,
+                                  CancellationToken cancellationToken = default) {
     var seen = new HashSet<IRun>(ReferenceEqualityComparer.Instance);
     var rows = new List<RunRow>();
+    int done = 0;
     foreach (var (source, origin, run) in runs) {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (++done % 50 == 0) progress?.Report(done);
       if (!seen.Add(run)) continue;
       var values = new Dictionary<string, object> { ["source"] = source, ["origin"] = origin, ["run"] = run.Name };
-      var record = OptimizerRunner.ToRecord(run);
-      foreach (var (name, value) in record.Parameters) if (Cell(value) is { } cell) values["param:" + name] = cell;
-      foreach (var (name, value) in record.Results) if (Cell(value) is { } cell) values["result:" + name] = cell;
+      foreach (var (key, value) in cache != null ? cache.Get(run) : RunValueCache.Read(run)) values[key] = value;
       rows.Add(new RunRow(source, values, run));
     }
+    progress?.Report(done);
     return new RunTable(rows);
   }
 
   /// <summary>Scalars as numbers, text and choices (operators by name) as text; arrays and tables are not cells.</summary>
-  private static object? Cell(ItemValue value) => value.Value switch {
+  internal static object? Cell(ItemValue value) => value.Value switch {
     double d => d,
     int i => (double)i,
     long l => (double)l,
@@ -125,6 +132,30 @@ public sealed class RunTable {
     writer.WriteLine(string.Join(",", columns.Select(k => Quote(Column(k)?.ToString() ?? k))));
     foreach (var row in Rows)
       writer.WriteLine(string.Join(",", columns.Select(k => Quote(row.Number(k) is double d ? d.ToString("R", Invariant) : row.Text(k)))));
+  }
+}
+
+/// <summary>
+/// The cells read from each run (parameters and results), kept as long as the run exists. Thread-safe, so
+/// tables can be built off the UI thread.
+/// </summary>
+public sealed class RunValueCache {
+  /// <summary>One cache for a whole front end: every table of the same runs reads each run once.</summary>
+  public static RunValueCache Shared { get; } = new();
+
+  private readonly ConditionalWeakTable<IRun, IReadOnlyDictionary<string, object>> values = new();
+
+  /// <summary>Whether the run was read already (building a table from it is then fast).</summary>
+  public bool Contains(IRun run) => values.TryGetValue(run, out _);
+
+  public IReadOnlyDictionary<string, object> Get(IRun run) => values.GetValue(run, Read);
+
+  public static IReadOnlyDictionary<string, object> Read(IRun run) {
+    var cells = new Dictionary<string, object>();
+    var record = OptimizerRunner.ToRecord(run);
+    foreach (var (name, value) in record.Parameters) if (RunTable.Cell(value) is { } cell) cells["param:" + name] = cell;
+    foreach (var (name, value) in record.Results) if (RunTable.Cell(value) is { } cell) cells["result:" + name] = cell;
+    return cells;
   }
 }
 

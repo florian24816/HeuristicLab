@@ -69,6 +69,17 @@
             <Setter Property="Foreground" Value="#1E1E1E" />
             <Setter Property="Padding" Value="8,0,8,0" />
         </Style>
+        <!-- work in the background (Results tab): a bright layer over what it replaces, an orange bar -->
+        <Style Selector="Border.busy">
+            <Setter Property="Background" Value="#C8FFFFFF" />
+        </Style>
+        <Style Selector="ProgressBar.busy">
+            <Setter Property="Foreground" Value="#F7931D" />
+            <Setter Property="Background" Value="#E0E0E0" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="MinHeight" Value="12" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="#F4E803" />
             <Setter Property="Padding" Value="8,5" />

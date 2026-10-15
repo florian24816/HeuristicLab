@@ -549,13 +549,15 @@ public partial class RunsViewModel(RunCollection runs) : ViewModelBase {
     try { all = runs.ToArray(); } catch (InvalidOperationException) { return; }
     if (all.Length == shown) return;
     shown = all.Length;
-    var records = all.Select(r => (Run: r, Record: OptimizerRunner.ToRecord(r))).ToList();
-    var columns = records.SelectMany(r => r.Record.Results.Where(x => x.Value.Value is double or int or long or bool).Select(x => x.Key))
+    // the runs' numbers and switches, read once per run (shared with the Results tab)
+    var records = all.Select(r => (Run: r, Cells: HeuristicLab.Next.Runtime.Runs.RunValueCache.Shared.Get(r))).ToList();
+    static bool Shown(object v) => v is double || v is "True" or "False";
+    var columns = records.SelectMany(r => r.Cells.Where(x => x.Key.StartsWith("result:", StringComparison.Ordinal) && Shown(x.Value)).Select(x => x.Key[7..]))
       .Distinct().Order(StringComparer.OrdinalIgnoreCase).ToList();
     var selected = Selected?.Run;
     Columns = columns;
     Rows = records.Select(r => new RunTableRow(r.Run.Name,
-      columns.Select(c => r.Record.Results.TryGetValue(c, out var v) ? Text(v) : "").ToList(), r.Run)).ToList();
+      columns.Select(c => r.Cells.TryGetValue("result:" + c, out var v) ? v is double d ? d.ToString("G10", CultureInfo.InvariantCulture) : (string)v : "").ToList(), r.Run)).ToList();
     Grid = new TableGridViewModel(
       [new GridColumn("run", "Run", 170, TableGridViewModel.RunShade), .. columns.Select(c => new GridColumn(c, c, 140))],
       Rows.Select(r => ((object)r, (IReadOnlyList<string>)[r.Name, .. r.Cells])), item => Selected = item as RunTableRow);

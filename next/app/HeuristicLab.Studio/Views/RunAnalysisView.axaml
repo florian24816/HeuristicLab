@@ -74,6 +74,8 @@
                 </WrapPanel>
             </StackPanel>
 
+            <!-- while a large table is built in the background: a bright layer over the views, an orange progress bar -->
+            <Panel>
             <TabControl Padding="0,6,0,0" SelectedIndex="{Binding SelectedView}">
                 <TabItem Header="Table">
                     <DockPanel>
@@ -172,6 +174,13 @@
                     </Grid>
                 </TabItem>
             </TabControl>
+            <Border Classes="busy" IsVisible="{Binding IsBusy}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" Width="380">
+                    <TextBlock Text="{Binding ProgressText}" HorizontalAlignment="Center" FontWeight="SemiBold" Foreground="#1E1E1E" />
+                    <ProgressBar Classes="busy" Minimum="0" Maximum="{Binding ProgressMaximum}" Value="{Binding ProgressValue}" />
+                </StackPanel>
+            </Border>
+            </Panel>
         </DockPanel>
     </Grid>
 </UserControl>

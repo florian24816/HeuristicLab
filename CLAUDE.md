@@ -251,6 +251,16 @@
   RunsView: the table at the top (max 300 px), a selected run's details below it in their own scroll area.
   Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
   it (blue overlay); Results header click sorts.
+  Long tables (user's request): the first 50 rows (TableGridViewModel.Limit, ShownRows), then a button as
+  wide as the table ("Show all N rows" / "Show only the first 50"); rows are drawn only where in view
+  (VirtualizingStackPanel) and their cells built when first drawn (GridRow.Cells lazy).
+  Reading a run (OptimizerRunner.ToRecord: all parameters and results, incl. tours and tables) is the slow
+  part (~0.6 ms per GA run, measured: 1.2 s for 2000): runtime RunValueCache.Shared keeps each run's cells
+  (ConditionalWeakTable, thread-safe), used by the Results tab and the runs tables. Results tab: a rebuild
+  with more than 100 unread runs or 3000 rows is built in the background (RunTable.FromRuns with progress
+  and cancellation; filter, grouping) while a bright layer (Border.busy, #C8FFFFFF) with an orange progress bar
+  ("Processing runs: x of y") covers the views; the filter bar stays usable, each change cancels the running
+  build and starts again; Settled completes when the shown table is current (tests).
   Pickers keep one searchable list (not HeuristicLab's collapsed tree) but show its categories
   (CatalogEntry.Category/CategoryOrder/Priority from [Creatable], Catalog.ByCategory): CatalogItem rows
   tinted per category (CategoryColors: light tint + dark heading color, no orange), the first row of

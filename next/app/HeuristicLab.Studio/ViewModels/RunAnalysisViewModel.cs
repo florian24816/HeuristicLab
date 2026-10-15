@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -261,20 +262,44 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   partial void OnBinsChanged(decimal value) => Rebuild();
 
+  // ---- building the table: small ones at once, large ones in the background with a progress bar
+
+  /// <summary>What was read from each run (the slow part), so a new filter or grouping does not read them again.</summary>
+  private readonly RunValueCache runValues = RunValueCache.Shared;
+  private CancellationTokenSource? pending;
+  private TaskCompletionSource settled = CreateSettled(done: true);
+
+  private static TaskCompletionSource CreateSettled(bool done) {
+    var source = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    if (done) source.SetResult();
+    return source;
+  }
+
+  /// <summary>Done when the table shows the current sources, filters and grouping (a large one is built in the background).</summary>
+  public Task Settled => settled.Task;
+
+  /// <summary>Above this many runs not read yet, or rows in all, the table is built in the background.</summary>
+  public const int BackgroundRuns = 100, BackgroundRows = 3000;
+
+  /// <summary>The table is being built in the background: a bright layer with an orange progress bar covers the views.</summary>
+  [ObservableProperty]
+  public partial bool IsBusy { get; set; }
+
+  [ObservableProperty]
+  public partial double ProgressValue { get; set; }
+
+  [ObservableProperty]
+  public partial double ProgressMaximum { get; set; } = 1;
+
+  [ObservableProperty]
+  public partial string ProgressText { get; set; } = "";
+
   /// <summary>Builds table, groups and every view from the ticked sources, filters and grouping.</summary>
   public void Rebuild() {
     // a rebuild replaces lists that ComboBoxes show; their reaction must not start another one (each one
     // replaced the lists again: an endless recursion, a stack overflow that closed the program)
     if (rebuilding) return;
-    rebuilding = true;
-    try {
-      RebuildNow();
-    } finally {
-      rebuilding = false;
-    }
-  }
-
-  private void RebuildNow() {
+    pending?.Cancel();
     var ticked = AllSources(Sources).Where(s => s.Own).ToList();
     // where each run was made: the deepest optimizer of the tree that holds it (experiments and batch runs
     // hold their children's runs too; a time-limit run takes them over). It is shown if that box is ticked.
@@ -288,10 +313,86 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     var shown = origin.Where(o => o.Value.Own).Select(o => {
       var source = SourceOf(o.Value);
       return new SourcedRun(source.Name, Relative(o.Value.Path, source), o.Key);
+    }).ToList();
+    var stores = ticked.Where(s => s.Folder != null && folderRows.ContainsKey(s.Folder!)).Select(s => (s.Name, Rows: folderRows[s.Folder!])).ToList();
+    var filters = Filters.Select(f => f.Filter).OfType<RunFilter>().ToList();
+    var groupKeys = GroupBy.Select(g => g.Key).ToList();
+    int bins = (int)Bins;
+    int unread = shown.Count(r => !runValues.Contains(r.Run));
+    int rows = shown.Count + stores.Sum(s => s.Rows.Count);
+
+    if (unread <= BackgroundRuns && rows <= BackgroundRows) {
+      pending = null;  // a background build still running is outdated
+      var built = Build(shown, stores, filters, groupKeys, bins, null, CancellationToken.None);
+      Apply(built, ticked.Count);
+      IsBusy = false;
+      settled.TrySetResult();
+      return;
+    }
+
+    // large: in the background; typing on cancels it and starts again
+    var cancel = pending = new CancellationTokenSource();
+    if (settled.Task.IsCompleted) settled = CreateSettled(done: false);
+    IsBusy = true;
+    ProgressValue = 0;
+    ProgressMaximum = Math.Max(1, shown.Count);
+    ProgressText = $"Processing runs: 0 of {shown.Count}";
+    var progress = new Progress<int>(done => {
+      if (cancel.IsCancellationRequested) return;
+      ProgressValue = done;
+      ProgressText = $"Processing runs: {done} of {shown.Count}";
     });
-    var tables = new List<RunTable> { RunTable.FromRuns(shown) };
-    tables.AddRange(ticked.Where(s => s.Folder != null && folderRows.ContainsKey(s.Folder!)).Select(s => RunTable.FromStore(s.Name, folderRows[s.Folder!])));
+    _ = BuildInBackgroundAsync(shown, stores, filters, groupKeys, bins, progress, cancel, ticked.Count);
+  }
+
+  private async Task BuildInBackgroundAsync(List<SourcedRun> shown, List<(string Name, IReadOnlyList<IReadOnlyDictionary<string, string>> Rows)> stores,
+      List<RunFilter> filters, List<string> groupKeys, int bins, IProgress<int> progress, CancellationTokenSource cancel, int tickedCount) {
+    Built built;
+    try {
+      built = await Task.Run(() => Build(shown, stores, filters, groupKeys, bins, progress, cancel.Token), cancel.Token);
+    } catch (OperationCanceledException) {
+      return;  // a newer rebuild took over
+    } catch (Exception e) when (e is InvalidOperationException or ArgumentException or NullReferenceException) {
+      if (ReferenceEquals(pending, cancel)) { IsBusy = false; Status = "The runs could not be read: " + e.Message; settled.TrySetResult(); }
+      return;
+    }
+    if (cancel.IsCancellationRequested || !ReferenceEquals(pending, cancel)) return;
+    Apply(built, tickedCount);
+    IsBusy = false;
+    settled.TrySetResult();
+  }
+
+  /// <summary>All rows, the filtered ones and their groups: built from plain data, so it can run off the UI thread.</summary>
+  private sealed record Built(RunTable All, RunTable Table, IReadOnlyList<RunGroup> Groups);
+
+  private Built Build(List<SourcedRun> shown, List<(string Name, IReadOnlyList<IReadOnlyDictionary<string, string>> Rows)> stores,
+      List<RunFilter> filters, List<string> groupKeys, int bins, IProgress<int>? progress, CancellationToken cancel) {
+    var tables = new List<RunTable> { RunTable.FromRuns(shown, runValues, progress, cancel) };
+    tables.AddRange(stores.Select(s => RunTable.FromStore(s.Name, s.Rows)));
     var all = RunTable.Combine(tables);
+    cancel.ThrowIfCancellationRequested();
+    // a filter on a column no ticked source has does not apply; an operator that does not fit the column becomes its first
+    var fitting = filters.Where(f => all.Column(f.Key) != null).Select(f => {
+      var operators = RunFilter.OperatorsFor(all.Column(f.Key));
+      return operators.Contains(f.Op) ? f : f with { Op = operators[0] };
+    }).ToList();
+    var table = all.Where(fitting);
+    cancel.ThrowIfCancellationRequested();
+    return new Built(all, table, RunGrouping.Group(table, groupKeys, bins));
+  }
+
+  /// <summary>Shows a built table: column choices, filters' operators, the table, groups, charts and statistics.</summary>
+  private void Apply(Built built, int tickedCount) {
+    rebuilding = true;
+    try {
+      ApplyNow(built, tickedCount);
+    } finally {
+      rebuilding = false;
+    }
+  }
+
+  private void ApplyNow(Built built, int tickedCount) {
+    var all = built.All;
     // new lists only when the columns changed (a new list resets every ComboBox showing it)
     var columns = all.Columns.Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
     if (!columns.SequenceEqual(AllColumns)) AllColumns = columns;
@@ -302,10 +403,9 @@ public partial class RunAnalysisViewModel : ViewModelBase {
         filter.Column = AllColumns.FirstOrDefault(c => c.Key == filter.ColumnKey) ?? filter.Column;
       filter.FitOperators(filter.ColumnKey == null ? null : all.Column(filter.ColumnKey));
     }
-    // a filter on a column no ticked source has does not apply
-    Table = all.Where(Filters.Select(f => f.Filter).OfType<RunFilter>().Where(f => all.Column(f.Key) != null));
-    Groups = RunGrouping.Group(Table, GroupBy.Select(g => g.Key).ToList(), (int)Bins);
-    Status = ticked.Count == 0 ? "Tick the experiments, batch runs, time-limit runs or algorithms whose runs you want to analyse."
+    Table = built.Table;
+    Groups = built.Groups;
+    Status = tickedCount == 0 ? "Tick the experiments, batch runs, time-limit runs or algorithms whose runs you want to analyse."
       : $"{Table.Rows.Count} of {all.Rows.Count} runs, {Groups.Count} group{(Groups.Count == 1 ? "" : "s")}";
     ChooseDefaults();
     RebuildRows();
