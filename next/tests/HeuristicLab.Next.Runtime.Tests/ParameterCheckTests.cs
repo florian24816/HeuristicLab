@@ -86,6 +86,14 @@ public class ParameterCheckTests {
   }
 
   [TestMethod]
+  public void NoWarningsBeforeAProblemIsSet() {
+    var ts = (IAlgorithm)Catalog.Find(Catalog.Algorithms(), "TabuSearch")!.CreateInstance();
+    Assert.IsNull(ts.Problem);
+    Assert.IsTrue(ts.Parameters.All(p => ParameterChecks.ParameterWarning(ts, ts, p) == null));
+    Assert.IsNull(ParameterChecks.AlgorithmWarning(ts));
+  }
+
+  [TestMethod]
   public void ProblemsAnAlgorithmCannotRun() {
     IProblem New(string problem) => (IProblem)Catalog.Find(Catalog.Problems(), problem)!.CreateInstance();
     Type Algorithm(string name) => Catalog.Find(Catalog.Algorithms(), name)!.Type;

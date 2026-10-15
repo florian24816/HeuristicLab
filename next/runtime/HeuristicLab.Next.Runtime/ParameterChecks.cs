@@ -30,7 +30,8 @@ public static class ParameterChecks {
     try {
       if (parameter is not IValueParameter vp) return null;
       if (MoveChecks.ParameterWarning(owner, parameter) is { } move) return move;
-      if (vp.Value == null) return MissingChoice(parameter);
+      // without a problem nothing is offered yet (the problem brings the operators): no warning then
+      if (vp.Value == null) return root is IAlgorithm { Problem: null } ? null : MissingChoice(parameter);
       return ChoiceWarning(root, owner, parameter, vp.Value) ?? ValueWarning(root, owner, parameter, vp.Value);
     } catch (Exception e) when (e is InvalidOperationException or NullReferenceException or ArgumentException) {
       return null;

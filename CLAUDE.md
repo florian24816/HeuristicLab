@@ -65,6 +65,8 @@
   into the app (window icon via a :is(Window) style, ApplicationIcon, desktop entry; also drawn at the
   top right of the tab row in MainWindow).
   Click: details/parameters, double-click: rename, right-click: menu.
+  The selected block is covered by a see-through orange layer (Border.selection, #F7931D at 0.38, not
+  hit-testable, under the purple multi-edit layer), besides the name's dark frame.
   Drag and drop (own pointer handling in ExperimentWorkspaceView, logic in the workspace VM:
   BeginDrag/TargetAt/PreviewDrop/EndDrag/Move): algorithms (also dragged by their problem), batch
   runs and time-limit runs (with their content) move anywhere, also into other experiments; upper

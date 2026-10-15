@@ -55,6 +55,9 @@
                         <TextBlock Text="{Binding Badge}" VerticalAlignment="Center" HorizontalAlignment="Center" FontWeight="SemiBold" />
                     </Border>
                 </StackPanel>
+                <!-- the selected block: an orange layer over all of it (the logo orange, see-through) -->
+                <Border Classes="selection" Background="#F7931D" Opacity="0.38" IsVisible="{Binding IsSelected}"
+                        IsHitTestVisible="False" />
                 <!-- editing a field across algorithms: purple over the algorithms taking part (stronger: the shown one) -->
                 <Border Classes="multi" Background="#8E44AD" Opacity="{Binding MultiOpacity}" IsVisible="{Binding IsMultiMember}"
                         IsHitTestVisible="False" />
