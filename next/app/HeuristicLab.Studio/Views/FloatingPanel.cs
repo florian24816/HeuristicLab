@@ -21,8 +21,18 @@ public sealed class FloatingPanel : Border {
   /// <summary>Whether the user moved or resized it (then it is not placed automatically any more).</summary>
   public bool Moved { get; private set; }
 
+  private readonly Control content;
+  private readonly Border grip;
+  private readonly Button? minimizeButton;
+  private double restoredHeight;
+
+  /// <summary>Only the title bar is shown (minimizable panels).</summary>
+  public bool IsMinimized { get; private set; }
+
   /// <param name="titleRight">Shown at the right end of the title bar (e.g. a button to leave fullscreen).</param>
-  public FloatingPanel(Canvas canvas, string title, Control content, Size size, Size minimum, Control? titleRight = null) {
+  /// <param name="minimizable">A button in the title bar folds the panel to its title bar and back.</param>
+  public FloatingPanel(Canvas canvas, string title, Control content, Size size, Size minimum, Control? titleRight = null, bool minimizable = false) {
+    this.content = content;
     this.canvas = canvas;
     this.minimum = minimum;
     Width = size.Width;
@@ -38,6 +48,14 @@ public sealed class FloatingPanel : Border {
     if (titleRight != null) {
       DockPanel.SetDock(titleRight, Dock.Right);
       heading.Children.Add(titleRight);
+    }
+    if (minimizable) {
+      minimizeButton = new Button { Content = "—", Padding = new Thickness(10, 0), MinHeight = 24, VerticalAlignment = VerticalAlignment.Center,
+                                    Margin = new Thickness(6, 0, 0, 0) };
+      ToolTip.SetTip(minimizeButton, "Minimize");
+      minimizeButton.Click += (_, _) => ToggleMinimized();
+      DockPanel.SetDock(minimizeButton, Dock.Right);
+      heading.Children.Add(minimizeButton);
     }
     heading.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
     var titleBar = new Border {
@@ -57,7 +75,7 @@ public sealed class FloatingPanel : Border {
     };
     titleBar.PointerReleased += (_, e) => { dragStart = null; e.Pointer.Capture(null); };
 
-    var grip = new Border {
+    grip = new Border {
       Width = 18, Height = 18, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
       Cursor = new Cursor(StandardCursorType.BottomRightCorner), Background = new SolidColorBrush(Colors.Gray, 0.5), CornerRadius = new CornerRadius(0, 0, 6, 0)
     };
@@ -86,7 +104,22 @@ public sealed class FloatingPanel : Border {
     Canvas.SetTop(this, Math.Clamp(y, 0, Math.Max(0, canvas.Bounds.Height - 40)));
   }
 
+  /// <summary>Folds the panel to its title bar, or opens it again at its former height.</summary>
+  public void ToggleMinimized() {
+    IsMinimized = !IsMinimized;
+    content.IsVisible = grip.IsVisible = !IsMinimized;
+    if (IsMinimized) {
+      restoredHeight = Height;
+      Height = double.NaN;
+    } else Height = restoredHeight;
+    if (minimizeButton != null) {
+      minimizeButton.Content = IsMinimized ? "▢" : "—";
+      ToolTip.SetTip(minimizeButton, IsMinimized ? "Restore" : "Minimize");
+    }
+  }
+
   public void ResizeTo(double width, double height) {
+    if (IsMinimized) ToggleMinimized();
     Width = Math.Max(minimum.Width, width);
     Height = Math.Max(minimum.Height, height);
   }

@@ -47,7 +47,8 @@ public partial class TableGridViewModel : ViewModelBase {
     var colors = new List<Color>();
     int plain = 0;
     foreach (var c in columns) colors.Add(c.Fixed ?? (plain++ % 2 == 0 ? Grey : LightGrey));
-    Header = columns.Select((c, i) => new GridCell(c.Header, Brush(colors[i], 1), c.Width, c.Fixed != null, null)).ToList();
+    // the header row one shade darker than the rows below it
+    Header = columns.Select((c, i) => new GridCell(c.Header, Brush(Darker(colors[i]), 1), c.Width, c.Fixed != null, null)).ToList();
     Rows = rows.Select((r, index) => {
       var row = new GridRow(r.Item);
       double strength = index % 2 == 0 ? 1 : WeakRow;
@@ -76,6 +77,15 @@ public partial class TableGridViewModel : ViewModelBase {
   private void Sort(string key) => sort?.Invoke(key);
 
   private static readonly Dictionary<(Color, double), IBrush> brushes = [];
+
+  /// <summary>The header's shade of a column color.</summary>
+  public static Color Darker(Color color) {
+    static byte Shade(byte c) => (byte)Math.Round(c * HeaderShade);
+    return Color.FromRgb(Shade(color.R), Shade(color.G), Shade(color.B));
+  }
+
+  /// <summary>The header row's colors: the column colors at this brightness.</summary>
+  public const double HeaderShade = 0.9;
 
   public static IBrush Brush(Color color, double strength) {
     lock (brushes) {

@@ -87,6 +87,14 @@ public class StudioThemeTests {
         Assert.AreEqual("lightmode", ShownPictogram(button));
         Assert.AreEqual(Color.Parse("#F7931D"), ((ISolidColorBrush)button.Background!).Color);
         Assert.AreEqual(Color.Parse("#36322E"), ((ISolidColorBrush)area.Background!).Color);
+        // hover texts: dark on light grey in dark mode too
+        var tip = new ToolTip { Content = "hover text" };
+        var host = window.GetVisualDescendants().OfType<Panel>().First();
+        host.Children.Add(tip);
+        Pump();
+        Assert.AreEqual(Color.Parse("#F2F2F2"), ((ISolidColorBrush)tip.Background!).Color);
+        Assert.AreEqual(Color.Parse("#1E1E1E"), ((ISolidColorBrush)tip.Foreground!).Color);
+        host.Children.Remove(tip);
         window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-theme-dark-distances.png"));
         detail.ProblemParameters.Selected = detail.ProblemParameters.Parameters.First(p => p.Name == "Coordinates");
         Pump();

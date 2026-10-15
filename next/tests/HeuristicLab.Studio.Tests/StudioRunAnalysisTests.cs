@@ -28,6 +28,8 @@ public class StudioRunAnalysisTests {
     Assert.AreSame(TableGridViewModel.Brush(TableGridViewModel.LightGrey, 1), first[plain[1]].Background);
     Assert.AreSame(TableGridViewModel.Brush(TableGridViewModel.Grey, TableGridViewModel.WeakRow), grid.Rows[1].Cells[plain[0]].Background);
     Assert.AreSame(first[plain[0]].Background, grid.Rows[2].Cells[plain[0]].Background);
+    // the header one shade darker than the rows
+    Assert.AreSame(TableGridViewModel.Brush(TableGridViewModel.Darker(TableGridViewModel.Grey), 1), grid.Header[plain[0]].Background);
   }
 
   /// <summary>Scrolls the shown table sideways: its fixed cells move along, so they stay at the left edge.</summary>
@@ -262,6 +264,14 @@ public class StudioRunAnalysisTests {
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       Assert.IsTrue(analysis.Chart.Hidden.Contains(analysis.Chart.LegendItems[0].Name) && analysis.Chart.LegendItems[0].IsHidden,
         "a click on a legend entry hides that group");
+      // the table folds to its title bar and opens again at its size
+      full.TablePanel.ToggleMinimized();
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsTrue(full.TablePanel.IsMinimized);
+      Assert.IsFalse(full.TablePanel.GetVisualDescendants().OfType<TableGridView>().Any(v => v.IsEffectivelyVisible), "minimized: only the title bar");
+      full.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-fullscreen-minimized.png"));
+      full.TablePanel.ToggleMinimized();
+      Assert.AreEqual(220, full.TablePanel.Height);
       full.TablePanel.MoveTo(40, 300);
       full.TablePanel.ResizeTo(700, 180);
       Assert.AreEqual(700, full.TablePanel.Width);

@@ -34,7 +34,7 @@ public sealed class ChartsFullscreenWindow : Window {
       new Size(460, 260), new Size(260, 120), leave);
     var table = new ContentControl { Margin = new Thickness(8, 4, 8, 8) };
     table.Bind(ContentControl.ContentProperty, new Binding(nameof(RunAnalysisViewModel.BoxTable)));
-    TablePanel = new FloatingPanel(canvas, "Box plot: numbers per group", table, new Size(900, 220), new Size(320, 120));
+    TablePanel = new FloatingPanel(canvas, "Box plot: numbers per group", table, new Size(900, 220), new Size(320, 120), minimizable: true);
     TablePanel.Bind(IsVisibleProperty, new Binding(nameof(RunAnalysisViewModel.IsBoxPlot)));
 
     Content = new Panel {
@@ -62,7 +62,8 @@ public sealed class ChartsFullscreenWindow : Window {
     if (!TablePanel.Moved) {
       TablePanel.Width = Math.Min(TablePanel.Width, width - 40);
       Canvas.SetLeft(TablePanel, Math.Max(0, (width - TablePanel.Width) / 2));
-      Canvas.SetTop(TablePanel, Math.Max(0, height - TablePanel.Height - 24));
+      double tableHeight = double.IsNaN(TablePanel.Height) ? TablePanel.Bounds.Height : TablePanel.Height;  // minimized: its title bar
+      Canvas.SetTop(TablePanel, Math.Max(0, height - tableHeight - 24));
     }
   }
 

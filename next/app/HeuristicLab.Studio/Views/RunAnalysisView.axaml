@@ -91,7 +91,12 @@
 
                 <TabItem Header="Charts">
                     <DockPanel>
-                        <WrapPanel DockPanel.Dock="Top" ItemSpacing="8" LineSpacing="4" Margin="0,0,0,6">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <!-- fullscreen at the right end, as high as the choices -->
+                        <Button DockPanel.Dock="Right" Content="⛶ Fullscreen" Click="OnFullscreen" IsEnabled="{Binding Chart.HasAny}"
+                                Height="32" VerticalAlignment="Top" VerticalContentAlignment="Center" Padding="12,0" Margin="8,0,0,0"
+                                ToolTip.Tip="The chart fills the screen; legend and box plot table in panels you can move, resize and minimize (F11; Esc leaves)" />
+                        <WrapPanel ItemSpacing="8" LineSpacing="4">
                             <ComboBox ItemsSource="{Binding ChartKinds}" SelectedItem="{Binding ChartKind}" Width="210" />
                             <TextBlock Text="X" VerticalAlignment="Center" IsVisible="{Binding IsScatter}" />
                             <ComboBox ItemsSource="{Binding XChoices}" SelectedItem="{Binding ChartX}" Width="240" IsVisible="{Binding IsScatter}" />
@@ -103,9 +108,8 @@
                             <ComboBox ItemsSource="{Binding CurveRows}" SelectedItem="{Binding CurveRow}" Width="200" IsVisible="{Binding IsCurves}" />
                             <CheckBox Content="Every run" IsChecked="{Binding CurveRuns}" IsVisible="{Binding IsCurves}" />
                             <CheckBox Content="Mean per group" IsChecked="{Binding CurveMean}" IsVisible="{Binding IsCurves}" />
-                            <Button Content="⛶ Fullscreen" Click="OnFullscreen" IsEnabled="{Binding Chart.HasAny}"
-                                    ToolTip.Tip="The chart fills the screen; legend and box plot table in panels you can move and resize (F11; Esc leaves)" />
                         </WrapPanel>
+                        </DockPanel>
                         <TextBlock DockPanel.Dock="Bottom" Text="One color per group; click a legend entry to hide or show a group." FontSize="11" Opacity="0.6" />
                         <!-- the box plot's numbers, in the program's table design -->
                         <ContentControl DockPanel.Dock="Bottom" Content="{Binding BoxTable}" IsVisible="{Binding IsBoxPlot}" MaxHeight="220"

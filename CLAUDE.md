@@ -171,8 +171,9 @@
   numbers per group - RunCharts.BoxStatistics, shared with the chart - in a table below it (BoxTable);
   "Fullscreen" / F11: ChartsFullscreenWindow, chart fills the screen, legend (ChartLegendView over
   VisualsViewModel.LegendItems/Toggle; charts' own legend off via ShowLegend, redraw via HiddenVersion)
-  and the box table in FloatingPanels - Views/FloatingPanel moves by its title bar, resizes at its corner,
-  also used by the detailed analysis fullscreen),
+  and the box table (minimizable to its title bar) in FloatingPanels - Views/FloatingPanel moves by its
+  title bar, resizes at its corner, also used by the detailed analysis fullscreen; the Fullscreen button sits
+  at the right end of the chart choices),
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
   Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05), Run (one run's results with visualizations).
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
@@ -202,7 +203,8 @@
   over white, opaque); fixed columns stay in view when scrolling sideways (Controls.Sticky moves
   them by the ScrollViewer offset, ZIndex above; the header sticks the same way vertically):
   Results: Source #FDE5C8, Origin #FBCD96, Run #F9B462 (palest to closest to the logo orange);
-  Runs: Run #F9B462. Click a row to select it (blue overlay); Results header click sorts.
+  Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
+  it (blue overlay); Results header click sorts.
   Pickers keep one searchable list (not HeuristicLab's collapsed tree) but show its categories
   (CatalogEntry.Category/CategoryOrder/Priority from [Creatable], Catalog.ByCategory): CatalogItem rows
   tinted per category (CategoryColors: light tint + dark heading color, no orange), the first row of
@@ -214,6 +216,7 @@
   MainViewModel.IsDarkMode sets Application.RequestedThemeVariant (light by default, saved in settings).
   Theme-dependent colors live in App.axaml ThemeDictionaries (WindowBrush: dark #1E1E1E instead of
   Fluent's black; WarningBrush, ErrorBrush); blocks, tables and charts keep their own fixed colors.
+  Hover texts (ToolTip style in App.axaml) are dark on #F2F2F2 in both modes (dark mode's were unreadable).
   Problem tab arrays/matrices: flat square cells (TextBox.cell, no border; editing underlined orange),
   shaded like the run tables in darker greys (CellViewModel.Grey #B5B5B5 / LightGrey #CACACA, every
   other row at TableGridViewModel.WeakRow), row numbers kept.

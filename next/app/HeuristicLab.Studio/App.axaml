@@ -17,6 +17,12 @@
             <Setter Property="Background" Value="{DynamicResource WindowBrush}" />
         </Style>
         <FluentTheme />
+        <!-- hover texts look as in light mode in both modes (dark mode's were unreadable) -->
+        <Style Selector="ToolTip">
+            <Setter Property="Background" Value="#F2F2F2" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="BorderBrush" Value="#C8C8C8" />
+        </Style>
         <!-- a field edited across algorithms (Shift+click): purple -->
         <Style Selector="TextBox.multi /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="#E8D5F2" />
