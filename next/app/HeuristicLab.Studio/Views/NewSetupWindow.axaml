@@ -44,7 +44,10 @@
             </Grid>
         </Border>
 
-        <TextBlock Text="{Binding Error}" Foreground="#C23B4A" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <Border Classes="caution" IsVisible="{Binding ProblemWarning, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding ProblemWarning}" TextWrapping="Wrap" />
+        </Border>
+        <TextBlock Text="{Binding Error}" Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <Button Content="Cancel" Click="Cancel" />
             <Button Content="{Binding CreateText}" Classes="accent" Click="Create" />

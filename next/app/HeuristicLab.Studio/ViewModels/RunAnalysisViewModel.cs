@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,13 +25,45 @@ public partial class RunSourceViewModel(RunAnalysisViewModel owner, string name,
   public ObservableCollection<RunSourceViewModel> Children { get; } = [];
   public RunSourceViewModel? Parent { get; init; }
 
-  public int RunCount => Optimizer?.Runs.Count ?? owner.FolderRunCount(Folder);
+  /// <summary>A part of the "Single runs" folder: what it stands for (kept ticked over a refresh) and its runs.</summary>
+  public object? Group { get; init; }
+  public Func<IReadOnlyList<IRun>>? RunList { get; init; }
+
+  /// <summary>The runs it holds (also those of the blocks below it); null for a results folder.</summary>
+  public IReadOnlyList<IRun>? RunsHere => Optimizer != null ? Optimizer.Runs.ToArray() : RunList?.Invoke();
+
+  public int RunCount => RunsHere?.Count ?? owner.FolderRunCount(Folder);
   public string Label => $"{Name}  ({RunCount} run{(RunCount == 1 ? "" : "s")})";
 
-  [ObservableProperty]
-  public partial bool IsChecked { get; set; }
+  /// <summary>Whether the runs made here (not below) are shown.</summary>
+  internal bool Own { get; set; }
 
-  partial void OnIsCheckedChanged(bool value) => owner.Rebuild();
+  /// <summary>
+  /// Ticked: everything here and below is shown; empty: nothing; partly (null): some of it. Ticking or
+  /// unticking applies to everything below; a partly ticked box becomes ticked.
+  /// </summary>
+  public bool? IsChecked {
+    get {
+      bool any = false, all = true;
+      foreach (var node in Subtree().Where(n => n.Counts)) { any |= node.Own; all &= node.Own; }
+      return all ? true : any ? null : false;
+    }
+    set {
+      bool on = value != false;
+      foreach (var node in Subtree()) node.Own = on;
+      owner.TicksChanged();
+    }
+  }
+
+  /// <summary>
+  /// Whether its own tick shows in the boxes: only blocks without children hold runs of their own
+  /// (experiments and batch runs mirror their children's runs, a time-limit run's runs are its algorithm's).
+  /// </summary>
+  internal bool Counts => Children.Count == 0;
+
+  public IEnumerable<RunSourceViewModel> Subtree() => Children.SelectMany(c => c.Subtree()).Prepend(this);
+
+  internal void NotifyChecked() => OnPropertyChanged(nameof(IsChecked));
 
   public string Path => Parent == null ? Name : Parent.Path + " / " + Name;
 }
@@ -49,14 +82,43 @@ public partial class FilterViewModel(RunAnalysisViewModel owner) : ViewModelBase
   [ObservableProperty]
   public partial string Value { get; set; } = "";
 
-  public IReadOnlyList<string> Operators => RunFilter.Operators;
+  /// <summary>The operators that make sense for the chosen column (RunFilter.OperatorsFor); replaced only when they change.</summary>
+  [ObservableProperty]
+  public partial IReadOnlyList<string> Operators { get; set; } = RunFilter.TextOperators;
+
+  /// <summary>What to type, by the column's kind.</summary>
+  [ObservableProperty]
+  public partial string ValueHint { get; set; } = "text";
+
   public RunAnalysisViewModel Owner => owner;
 
-  partial void OnColumnChanged(ColumnChoice? value) => owner.Rebuild();
-  partial void OnOpChanged(string value) => owner.Rebuild();
+  /// <summary>Offers the operators of the column's kind; an operator that does not fit becomes the first one ("=").</summary>
+  public void FitOperators(RunColumn? column) {
+    var operators = RunFilter.OperatorsFor(column);
+    if (!operators.SequenceEqual(Operators)) Operators = operators;
+    ValueHint = column == null ? "value" : column.IsNumeric ? "number" : column.IsYesNo ? "True or False" : "text";
+    if (!Operators.Contains(Op)) Op = Operators[0];
+  }
+
+  /// <summary>
+  /// The column chosen last. A column list replaced under the ComboBox makes it report no selection
+  /// for a moment; the filter keeps its column then (RunAnalysisViewModel.Rebuild shows it again).
+  /// </summary>
+  public string? ColumnKey { get; private set; }
+
+  partial void OnColumnChanged(ColumnChoice? value) {
+    if (value == null) return;  // the list was replaced, not a choice: keep the column
+    ColumnKey = value.Key;
+    owner.Rebuild();
+  }
+  partial void OnOpChanged(string value) {
+    if (value == null) return;  // the operator list was replaced, not a choice
+    owner.Rebuild();
+  }
   partial void OnValueChanged(string value) => owner.Rebuild();
 
-  public RunFilter? Filter => Column == null || Value.Length == 0 ? null : new RunFilter(Column.Key, Op, Value);
+  public RunFilter? Filter => ColumnKey == null || Value.Length == 0 ? null
+    : new RunFilter(ColumnKey, Op != null && Operators.Contains(Op) ? Op : Operators[0], Value);
 }
 
 public sealed record AnalysisRow(RunRow Row, IReadOnlyList<string> Cells);
@@ -125,25 +187,65 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>Re-reads the workspace (new experiments, finished runs); ticked sources stay ticked.</summary>
   [RelayCommand]
   public void RefreshSources() {
-    var ticked = AllSources(Sources).Where(s => s.IsChecked).Select(s => (object?)s.Optimizer ?? s.Folder).OfType<object>().ToHashSet();
+    var before = AllSources(Sources).Where(s => Key(s) != null).ToDictionary(s => Key(s)!, s => s.Own, ReferenceEqualityComparer.Instance);
     rebuilding = true;
     Sources.Clear();
-    foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment, null, ticked));
+    foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment, null, before));
+    if (workspace.Experiments.Count > 0) Sources.Add(SingleRunsNode(before));
     foreach (var folder in folders) {
-      var node = new RunSourceViewModel(this, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), "Results folder", null, folder) { IsChecked = ticked.Contains(folder) };
+      var node = new RunSourceViewModel(this, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), "Results folder", null, folder) {
+        Own = before.GetValueOrDefault(folder)
+      };
       Sources.Add(node);
     }
     rebuilding = false;
-    Rebuild();
+    TicksChanged();
   }
 
-  private RunSourceViewModel Node(BlockViewModel block, RunSourceViewModel? parent, HashSet<object> ticked) {
+  private static object? Key(RunSourceViewModel s) => (object?)s.Optimizer ?? s.Group ?? s.Folder;
+
+  /// <summary>
+  /// "Single runs" (made by Start on one algorithm, kept apart from the experiments): per experiment and
+  /// algorithm, not ticked at first - ticked, they are compared like any other runs.
+  /// </summary>
+  private RunSourceViewModel SingleRunsNode(IReadOnlyDictionary<object, bool> before) {
+    var experiments = workspace.Experiments.ToList();
+    var folder = new RunSourceViewModel(this, "Single runs", "Started on one algorithm", null, null) {
+      Group = RunsBrowserViewModel.SingleRunsKey, RunList = () => experiments.SelectMany(e => e.SingleRuns.Runs).ToList(),
+      Own = before.GetValueOrDefault(RunsBrowserViewModel.SingleRunsKey)
+    };
+    foreach (var experiment in experiments.Where(e => e.SingleRuns.Count > 0)) {
+      var single = experiment.SingleRuns;
+      var node = new RunSourceViewModel(this, experiment.Name, "Experiment", null, null) {
+        Parent = folder, Group = single, RunList = () => single.Runs.ToArray(), Own = before.GetValueOrDefault(single)
+      };
+      foreach (var group in single.Groups)
+        node.Children.Add(new RunSourceViewModel(this, group.Algorithm, "Algorithm", null, null) {
+          Parent = node, Group = group, RunList = () => group.Runs, Own = before.GetValueOrDefault(group)
+        });
+      folder.Children.Add(node);
+    }
+    return folder;
+  }
+
+  /// <summary>Ticks stay as they were; a block that is new here takes its parent's (added to a ticked batch run: ticked).</summary>
+  private RunSourceViewModel Node(BlockViewModel block, RunSourceViewModel? parent, IReadOnlyDictionary<object, bool> before) {
     var optimizer = block switch { ContainerBlockViewModel c => c.Optimizer, AlgorithmBlockViewModel a => (IOptimizer)a.Algorithm, _ => null };
     string kind = optimizer switch { Experiment => "Experiment", BatchRun => "Batch run", TimeLimitRun => "Time-limit run", _ => "Algorithm" };
-    var node = new RunSourceViewModel(this, block.Name, kind, optimizer, null) { Parent = parent, IsChecked = optimizer != null && ticked.Contains(optimizer) };
+    var node = new RunSourceViewModel(this, block.Name, kind, optimizer, null) {
+      Parent = parent,
+      Own = optimizer != null && before.TryGetValue(optimizer, out var own) ? own : parent?.IsChecked == true
+    };
     if (block is ContainerBlockViewModel container)
-      foreach (var child in container.Children) node.Children.Add(Node(child, node, ticked));
+      foreach (var child in container.Children) node.Children.Add(Node(child, node, before));
     return node;
+  }
+
+  /// <summary>A box was ticked or unticked: every box shows its state again, and the runs follow.</summary>
+  public void TicksChanged() {
+    if (rebuilding) return;
+    foreach (var node in AllSources(Sources)) node.NotifyChecked();
+    Rebuild();
   }
 
   private static IEnumerable<RunSourceViewModel> AllSources(IEnumerable<RunSourceViewModel> nodes) =>
@@ -192,30 +294,164 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   partial void OnBinsChanged(decimal value) => Rebuild();
 
+  // ---- building the table: small ones at once, large ones in the background with a progress bar
+
+  /// <summary>What was read from each run (the slow part), so a new filter or grouping does not read them again.</summary>
+  private readonly RunValueCache runValues = RunValueCache.Shared;
+  private CancellationTokenSource? pending;
+  private TaskCompletionSource settled = CreateSettled(done: true);
+
+  private static TaskCompletionSource CreateSettled(bool done) {
+    var source = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    if (done) source.SetResult();
+    return source;
+  }
+
+  /// <summary>Done when the table shows the current sources, filters and grouping (a large one is built in the background).</summary>
+  public Task Settled => settled.Task;
+
+  /// <summary>Above this many runs not read yet, or rows in all, the table is built in the background.</summary>
+  public const int BackgroundRuns = 100, BackgroundRows = 3000;
+
+  /// <summary>The table is being built in the background: a bright layer with an orange progress bar covers the views.</summary>
+  [ObservableProperty]
+  public partial bool IsBusy { get; set; }
+
+  [ObservableProperty]
+  public partial double ProgressValue { get; set; }
+
+  [ObservableProperty]
+  public partial double ProgressMaximum { get; set; } = 1;
+
+  [ObservableProperty]
+  public partial string ProgressText { get; set; } = "";
+
   /// <summary>Builds table, groups and every view from the ticked sources, filters and grouping.</summary>
   public void Rebuild() {
+    // a rebuild replaces lists that ComboBoxes show; their reaction must not start another one (each one
+    // replaced the lists again: an endless recursion, a stack overflow that closed the program)
     if (rebuilding) return;
-    var ticked = AllSources(Sources).Where(s => s.IsChecked).ToList();
-    // where each run was made: the deepest optimizer of the tree that holds it
-    var origin = new Dictionary<IRun, string>(ReferenceEqualityComparer.Instance);
-    foreach (var node in AllSources(Sources).Where(s => s.Optimizer != null))
-      foreach (var run in node.Optimizer!.Runs) origin[run] = node.Path;
-    var tables = new List<RunTable> {
-      RunTable.FromRuns(ticked.Where(s => s.Optimizer != null)
-        .SelectMany(s => s.Optimizer!.Runs.ToArray().Select(r => new SourcedRun(s.Name, Relative(origin.GetValueOrDefault(r, s.Path), s), r))))
-    };
-    tables.AddRange(ticked.Where(s => s.Folder != null && folderRows.ContainsKey(s.Folder!)).Select(s => RunTable.FromStore(s.Name, folderRows[s.Folder!])));
+    pending?.Cancel();
+    var ticked = AllSources(Sources).Where(s => s.Own).ToList();
+    // where each run was made: the deepest optimizer of the tree that holds it (experiments and batch runs
+    // hold their children's runs too; a time-limit run takes them over). It is shown if that box is ticked.
+    var origin = new Dictionary<IRun, RunSourceViewModel>(ReferenceEqualityComparer.Instance);
+    foreach (var node in AllSources(Sources))
+      foreach (var run in node.RunsHere ?? []) origin[run] = node;
+    // runs a container holds alone (a time-limit run takes its algorithm's) belong to that algorithm
+    foreach (var (run, node) in origin.ToList())
+      if (node.Children.Count > 0) origin[run] = FirstLeaf(node);
+    originOf = origin;
+    var shown = origin.Where(o => o.Value.Own).Select(o => {
+      var source = SourceOf(o.Value);
+      return new SourcedRun(source.Name, Relative(o.Value.Path, source), o.Key);
+    }).ToList();
+    var stores = ticked.Where(s => s.Folder != null && folderRows.ContainsKey(s.Folder!)).Select(s => (s.Name, Rows: folderRows[s.Folder!])).ToList();
+    var filters = Filters.Select(f => f.Filter).OfType<RunFilter>().ToList();
+    var groupKeys = GroupBy.Select(g => g.Key).ToList();
+    int bins = (int)Bins;
+    int unread = shown.Count(r => !runValues.Contains(r.Run));
+    int rows = shown.Count + stores.Sum(s => s.Rows.Count);
+
+    if (unread <= BackgroundRuns && rows <= BackgroundRows) {
+      pending = null;  // a background build still running is outdated
+      var built = Build(shown, stores, filters, groupKeys, bins, null, CancellationToken.None);
+      Apply(built, ticked.Count);
+      IsBusy = false;
+      settled.TrySetResult();
+      return;
+    }
+
+    // large: in the background; typing on cancels it and starts again
+    var cancel = pending = new CancellationTokenSource();
+    if (settled.Task.IsCompleted) settled = CreateSettled(done: false);
+    IsBusy = true;
+    ProgressValue = 0;
+    ProgressMaximum = Math.Max(1, shown.Count);
+    ProgressText = $"Processing runs: 0 of {shown.Count}";
+    var progress = new Progress<int>(done => {
+      if (cancel.IsCancellationRequested) return;
+      ProgressValue = done;
+      ProgressText = $"Processing runs: {done} of {shown.Count}";
+    });
+    _ = BuildInBackgroundAsync(shown, stores, filters, groupKeys, bins, progress, cancel, ticked.Count);
+  }
+
+  private async Task BuildInBackgroundAsync(List<SourcedRun> shown, List<(string Name, IReadOnlyList<IReadOnlyDictionary<string, string>> Rows)> stores,
+      List<RunFilter> filters, List<string> groupKeys, int bins, IProgress<int> progress, CancellationTokenSource cancel, int tickedCount) {
+    Built built;
+    try {
+      built = await Task.Run(() => Build(shown, stores, filters, groupKeys, bins, progress, cancel.Token), cancel.Token);
+    } catch (OperationCanceledException) {
+      return;  // a newer rebuild took over
+    } catch (Exception e) when (e is InvalidOperationException or ArgumentException or NullReferenceException) {
+      if (ReferenceEquals(pending, cancel)) { IsBusy = false; Status = "The runs could not be read: " + e.Message; settled.TrySetResult(); }
+      return;
+    }
+    if (cancel.IsCancellationRequested || !ReferenceEquals(pending, cancel)) return;
+    Apply(built, tickedCount);
+    IsBusy = false;
+    settled.TrySetResult();
+  }
+
+  /// <summary>All rows, the filtered ones and their groups: built from plain data, so it can run off the UI thread.</summary>
+  private sealed record Built(RunTable All, RunTable Table, IReadOnlyList<RunGroup> Groups);
+
+  private Built Build(List<SourcedRun> shown, List<(string Name, IReadOnlyList<IReadOnlyDictionary<string, string>> Rows)> stores,
+      List<RunFilter> filters, List<string> groupKeys, int bins, IProgress<int>? progress, CancellationToken cancel) {
+    var tables = new List<RunTable> { RunTable.FromRuns(shown, runValues, progress, cancel) };
+    tables.AddRange(stores.Select(s => RunTable.FromStore(s.Name, s.Rows)));
     var all = RunTable.Combine(tables);
-    AllColumns = all.Columns.Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
-    NumericColumns = all.Columns.Where(c => c.IsNumeric).Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
-    Table = all.Where(Filters.Select(f => f.Filter).OfType<RunFilter>());
-    Groups = RunGrouping.Group(Table, GroupBy.Select(g => g.Key).ToList(), (int)Bins);
-    Status = ticked.Count == 0 ? "Tick the experiments, batch runs, time-limit runs or algorithms whose runs you want to analyse."
+    cancel.ThrowIfCancellationRequested();
+    // a filter on a column no ticked source has does not apply; an operator that does not fit the column becomes its first
+    var fitting = filters.Where(f => all.Column(f.Key) != null).Select(f => {
+      var operators = RunFilter.OperatorsFor(all.Column(f.Key));
+      return operators.Contains(f.Op) ? f : f with { Op = operators[0] };
+    }).ToList();
+    var table = all.Where(fitting);
+    cancel.ThrowIfCancellationRequested();
+    return new Built(all, table, RunGrouping.Group(table, groupKeys, bins));
+  }
+
+  /// <summary>Shows a built table: column choices, filters' operators, the table, groups, charts and statistics.</summary>
+  private void Apply(Built built, int tickedCount) {
+    rebuilding = true;
+    try {
+      ApplyNow(built, tickedCount);
+    } finally {
+      rebuilding = false;
+    }
+  }
+
+  private void ApplyNow(Built built, int tickedCount) {
+    var all = built.All;
+    // new lists only when the columns changed (a new list resets every ComboBox showing it)
+    var columns = all.Columns.Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
+    if (!columns.SequenceEqual(AllColumns)) AllColumns = columns;
+    var numeric = all.Columns.Where(c => c.IsNumeric).Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
+    if (!numeric.SequenceEqual(NumericColumns)) NumericColumns = numeric;
+    foreach (var filter in Filters) {
+      if (filter.ColumnKey != null && filter.Column?.Key != filter.ColumnKey)
+        filter.Column = AllColumns.FirstOrDefault(c => c.Key == filter.ColumnKey) ?? filter.Column;
+      filter.FitOperators(filter.ColumnKey == null ? null : all.Column(filter.ColumnKey));
+    }
+    Table = built.Table;
+    Groups = built.Groups;
+    Status = tickedCount == 0 ? "Tick the experiments, batch runs, time-limit runs or algorithms whose runs you want to analyse."
       : $"{Table.Rows.Count} of {all.Rows.Count} runs, {Groups.Count} group{(Groups.Count == 1 ? "" : "s")}";
     ChooseDefaults();
     RebuildRows();
     RebuildChart();
     RebuildStatistics();
+  }
+
+  private static RunSourceViewModel FirstLeaf(RunSourceViewModel node) => node.Children.Count == 0 ? node : FirstLeaf(node.Children[0]);
+
+  /// <summary>The source a shown run is listed under: the highest box above its origin that is fully ticked.</summary>
+  private static RunSourceViewModel SourceOf(RunSourceViewModel origin) {
+    var source = origin;
+    while (source.Parent is { } parent && parent.IsChecked == true) source = parent;
+    return source;
   }
 
   /// <summary>Origin below the ticked source ("Batch run 1 / GA" under "Experiment 1"); the source itself if the run is its own.</summary>
@@ -226,10 +462,11 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     var quality = NumericColumns.FirstOrDefault(c => c.Key == "result:BestQuality") ?? NumericColumns.FirstOrDefault(c => c.Key.StartsWith("result:", StringComparison.Ordinal));
     if (ChartValue == null || !NumericColumns.Contains(ChartValue)) ChartValue = quality;
     if (StatisticsValue == null || !NumericColumns.Contains(StatisticsValue)) StatisticsValue = quality;
-    XChoices = [new ColumnChoice(RunCharts.RunIndex, "Run (number)"), .. NumericColumns];
+    List<ColumnChoice> xChoices = [new ColumnChoice(RunCharts.RunIndex, "Run (number)"), .. NumericColumns];
+    if (!xChoices.SequenceEqual(XChoices)) XChoices = xChoices;
     if (ChartX == null || !XChoices.Contains(ChartX)) ChartX = XChoices[0];
-    var curves = Table.Curves();
-    CurveTables = curves.Select(c => c.Table).ToList();
+    var curveTables = Table.Curves().Select(c => c.Table).ToList();
+    if (!curveTables.SequenceEqual(CurveTables)) CurveTables = curveTables;
     if (CurveTable == null || !CurveTables.Contains(CurveTable)) CurveTable = CurveTables.FirstOrDefault(t => t == "Qualities") ?? CurveTables.FirstOrDefault();
   }
 
@@ -293,6 +530,50 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     if (fileDialogs == null || await fileDialogs.SaveCsvFileAsync("runs.csv") is not string path) return;
     Export(path);
   }
+
+  /// <summary>Where each run of the workspace was made (from the last rebuild).</summary>
+  private Dictionary<IRun, RunSourceViewModel> originOf = new(ReferenceEqualityComparer.Instance);
+
+  /// <summary>
+  /// The shown runs (filtered, sorted) for Python: &lt;experiment&gt;_structure.py (blocks as attributes, typed
+  /// values), &lt;experiment&gt;_data.json (the values) and &lt;experiment&gt;_analysis.py (examples; kept if it exists).
+  /// </summary>
+  [RelayCommand]
+  private async Task ExportPythonAsync() {
+    var runs = PythonRuns();
+    if (runs.Count == 0) { Status = "Nothing to export: tick runs first."; return; }
+    if (fileDialogs == null || await fileDialogs.SavePythonFileAsync(PythonExport.ModuleName(PythonTitle(runs)) + "_analysis.py") is not string path) return;
+    ExportPython(path);
+  }
+
+  /// <summary>Exports next to this file; its name without _analysis / _structure / _data names the three files.</summary>
+  public IReadOnlyList<string> ExportPython(string path) {
+    var runs = PythonRuns();
+    var name = Path.GetFileNameWithoutExtension(path);
+    foreach (var suffix in new[] { "_analysis", "_structure", "_data" })
+      if (name.EndsWith(suffix, StringComparison.Ordinal) && name.Length > suffix.Length) { name = name[..^suffix.Length]; break; }
+    var files = PythonExport.FilesFor(Path.GetDirectoryName(Path.GetFullPath(path))!, name);
+    var written = PythonExport.Write(files, PythonTitle(runs), runs);
+    Status = $"Exported {runs.Count} runs: {string.Join(", ", written.Select(Path.GetFileName))}"
+             + (written.Contains(files.Analysis) ? "" : $" ({Path.GetFileName(files.Analysis)} kept as it was)");
+    return written;
+  }
+
+  private static string PythonTitle(IReadOnlyList<PythonExportRun> runs) {
+    var roots = runs.Select(r => r.Path[0]).Distinct().ToList();
+    return roots.Count == 1 ? roots[0] : string.Join(", ", roots.Take(3)) + (roots.Count > 3 ? " and more" : "");
+  }
+
+  /// <summary>The shown runs with the path of blocks they were made in (a results folder's runs: the folder).</summary>
+  private List<PythonExportRun> PythonRuns() =>
+    Rows.Select(r => r.Row).Select(row => {
+      if (row.Run != null && originOf.TryGetValue(row.Run, out var node)) {
+        var chain = new List<RunSourceViewModel>();
+        for (var n = node; n != null; n = n.Parent) chain.Insert(0, n);
+        return new PythonExportRun(chain.Select(n => n.Name).ToList(), chain.Select(n => n.Kind).ToList(), row);
+      }
+      return new PythonExportRun([row.Source], ["Results folder"], row);
+    }).ToList();
 
   public void Export(string path) {
     using var writer = new StreamWriter(path);
@@ -370,6 +651,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   public VisualsViewModel Chart { get; } = new();
 
   partial void OnChartKindChanged(string value) {
+    OnPropertyChanged(nameof(IsBoxPlot));
     OnPropertyChanged(nameof(IsScatter));
     OnPropertyChanged(nameof(IsCurves));
     OnPropertyChanged(nameof(NeedsValue));
@@ -398,6 +680,25 @@ public partial class RunAnalysisViewModel : ViewModelBase {
       _ => RunCharts.BoxPlot(Table, Groups, ChartValue.Key)
     };
     Chart.Show(visual == null ? [] : [visual]);
+    BoxTable = IsBoxPlot && ChartValue != null ? BoxGrid(RunCharts.BoxStatistics(Groups, ChartValue.Key)) : null;
+  }
+
+  public bool IsBoxPlot => ChartKind == "Box plot";
+
+  /// <summary>The box plot's numbers per group, in the program's table design (also in fullscreen).</summary>
+  [ObservableProperty]
+  public partial TableGridViewModel? BoxTable { get; set; }
+
+  private static TableGridViewModel BoxGrid(IReadOnlyList<RunCharts.BoxStats> boxes) {
+    GridColumn Number(string key, string header) => new(key, header, 112);
+    var columns = new List<GridColumn> {
+      new("group", "Group", 280, TableGridViewModel.RunShade), Number("n", "n"), Number("min", "Min"), Number("whiskerLow", "Whisker low"),
+      Number("q1", "Q1"), Number("median", "Median"), Number("mean", "Mean"), Number("q3", "Q3"), Number("whiskerHigh", "Whisker high"),
+      Number("max", "Max"), new("outliers", "Outliers", 240)
+    };
+    return new TableGridViewModel(columns, boxes.Select(b => ((object)b, (IReadOnlyList<string>)[
+      b.Group, b.Count.ToString(Invariant), G(b.Min), G(b.WhiskerLow), G(b.Q1), G(b.Median), G(b.Mean), G(b.Q3), G(b.WhiskerHigh), G(b.Max),
+      b.Outliers.Count == 0 ? "none" : $"{b.Outliers.Count}: {string.Join(", ", b.Outliers.Select(G))}"])), _ => { });
   }
 
   // ---- statistics
@@ -414,16 +715,32 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   [ObservableProperty]
   public partial string AllGroupsTest { get; set; } = "";
 
+  /// <summary>Summaries and Pairs in the program's table design.</summary>
+  [ObservableProperty]
+  public partial TableGridViewModel? SummaryGrid { get; set; }
+
+  [ObservableProperty]
+  public partial TableGridViewModel? PairsGrid { get; set; }
+
   partial void OnStatisticsValueChanged(ColumnChoice? value) => RebuildStatistics();
 
   private static string G(double v) => double.IsFinite(v) ? v.ToString("G6", Invariant) : "–";
   private static string P(double p) => double.IsFinite(p) ? (p < 0.0001 ? "< 0.0001" : p.ToString("0.0000", Invariant)) : "–";
 
   private void RebuildStatistics() {
-    if (StatisticsValue == null || Groups.Count == 0) { Summaries = []; Pairs = []; AllGroupsTest = ""; return; }
+    if (StatisticsValue == null || Groups.Count == 0) { Summaries = []; Pairs = []; AllGroupsTest = ""; SummaryGrid = PairsGrid = null; return; }
     var comparison = RunStatistics.Compare(Groups, StatisticsValue.Key);
     Summaries = comparison.Groups.Select(g => new SummaryLine(g.Group, g.Count.ToString(Invariant), G(g.Mean), G(g.StdDev), G(g.Min), G(g.Q1), G(g.Median), G(g.Q3), G(g.Max))).ToList();
     Pairs = comparison.Pairs.Select(p => new PairLine($"{p.A}  vs  {p.B}", P(p.MannWhitneyP), P(p.AdjustedP), P(p.TTestP), G(p.CohensD), G(p.HedgesG), p.AdjustedP < 0.05)).ToList();
+    GridColumn Number(string key, string header) => new(key, header, 110);
+    SummaryGrid = new TableGridViewModel([
+        new("group", "Group", 280, TableGridViewModel.RunShade), Number("n", "n"), Number("mean", "Mean"), Number("sd", "Std. dev."),
+        Number("min", "Min"), Number("q1", "Q1"), Number("median", "Median"), Number("q3", "Q3"), Number("max", "Max")
+      ], Summaries.Select(l => ((object)l, (IReadOnlyList<string>)[l.Group, l.Count, l.Mean, l.StdDev, l.Min, l.Q1, l.Median, l.Q3, l.Max])), _ => { });
+    PairsGrid = new TableGridViewModel([
+        new("pair", "Pair", 380, TableGridViewModel.RunShade), new("mw", "Mann-Whitney", 130), Number("adjusted", "Adjusted"),
+        Number("t", "t-test"), Number("d", "Cohen's d"), Number("g", "Hedges' g")
+      ], Pairs.Select(l => ((object)l, (IReadOnlyList<string>)[l.Pair, l.MannWhitney, l.Significant ? l.Adjusted + "  *" : l.Adjusted, l.TTest, l.CohensD, l.HedgesG])), _ => { });
     AllGroupsTest = comparison.KruskalWallisP is double kw
       ? $"Kruskal-Wallis over all {comparison.Groups.Count} groups: p = {P(kw)}" + (kw < 0.05 ? " - the groups differ (α = 0.05)." : " - no significant difference (α = 0.05).")
       : "Tests need at least two groups with two or more runs each.";

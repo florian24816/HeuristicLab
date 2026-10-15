@@ -9,10 +9,9 @@
         <DockPanel Margin="10">
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
                 <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
-                <Button Content="+ Results folder..." Command="{Binding AddFolderCommand}" ToolTip.Tip="Runs stored by 'hl run --store'" />
             </StackPanel>
             <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
-                       Text="Tick one source to look at its runs, several to compare them. A run reached from two ticked sources counts once." />
+                       Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked)." />
             <TreeView ItemsSource="{Binding Sources}">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate DataType="vm:RunSourceViewModel" ItemsSource="{Binding Children}">
@@ -40,8 +39,8 @@
                             <DataTemplate x:DataType="vm:FilterViewModel">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <ComboBox ItemsSource="{Binding Owner.AllColumns}" SelectedItem="{Binding Column}" Width="220" />
-                                    <ComboBox ItemsSource="{Binding Operators}" SelectedItem="{Binding Op}" Width="90" />
-                                    <TextBox Text="{Binding Value}" Width="120" PlaceholderText="value" />
+                                    <ComboBox ItemsSource="{Binding Operators}" SelectedItem="{Binding Op}" Width="140" />
+                                    <TextBox Text="{Binding Value}" Width="120" PlaceholderText="{Binding ValueHint}" />
                                     <Button Content="✕" Command="{Binding Owner.RemoveFilterCommand}" CommandParameter="{Binding}" ToolTip.Tip="Remove this filter" />
                                 </StackPanel>
                             </DataTemplate>
@@ -75,12 +74,16 @@
                 </WrapPanel>
             </StackPanel>
 
+            <!-- while a large table is built in the background: a bright layer over the views, an orange progress bar -->
+            <Panel>
             <TabControl Padding="0,6,0,0" SelectedIndex="{Binding SelectedView}">
                 <TabItem Header="Table">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
                             <CheckBox Content="All parameters" IsChecked="{Binding ShowAllParameters}" ToolTip.Tip="Else only the parameters that differ between the runs" />
                             <Button Content="Export CSV..." Command="{Binding ExportCommand}" ToolTip.Tip="The table as shown: filtered, sorted, these columns" />
+                            <Button Content="Export to Python..." Command="{Binding ExportPythonCommand}"
+                                    ToolTip.Tip="The shown runs as a Python module named after the experiment: its blocks as attributes (exp.batch_run_1.ga), typed parameters, results and curves, pandas tables via .df and compare(...)" />
                             <TextBlock Text="Click a column title to sort; select a run to see it under Run." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
                         </StackPanel>
                         <ContentControl Content="{Binding Grid}" HorizontalAlignment="Left" VerticalAlignment="Top" />
@@ -89,7 +92,12 @@
 
                 <TabItem Header="Charts">
                     <DockPanel>
-                        <WrapPanel DockPanel.Dock="Top" ItemSpacing="8" LineSpacing="4" Margin="0,0,0,6">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <!-- fullscreen at the right end, as high as the choices -->
+                        <Button DockPanel.Dock="Right" Content="⛶ Fullscreen" Click="OnFullscreen" IsEnabled="{Binding Chart.HasAny}"
+                                Height="32" VerticalAlignment="Top" VerticalContentAlignment="Center" Padding="12,0" Margin="8,0,0,0"
+                                ToolTip.Tip="The chart fills the screen; legend and box plot table in panels you can move, resize and minimize (F11; Esc leaves)" />
+                        <WrapPanel ItemSpacing="8" LineSpacing="4">
                             <ComboBox ItemsSource="{Binding ChartKinds}" SelectedItem="{Binding ChartKind}" Width="210" />
                             <TextBlock Text="X" VerticalAlignment="Center" IsVisible="{Binding IsScatter}" />
                             <ComboBox ItemsSource="{Binding XChoices}" SelectedItem="{Binding ChartX}" Width="240" IsVisible="{Binding IsScatter}" />
@@ -102,7 +110,11 @@
                             <CheckBox Content="Every run" IsChecked="{Binding CurveRuns}" IsVisible="{Binding IsCurves}" />
                             <CheckBox Content="Mean per group" IsChecked="{Binding CurveMean}" IsVisible="{Binding IsCurves}" />
                         </WrapPanel>
+                        </DockPanel>
                         <TextBlock DockPanel.Dock="Bottom" Text="One color per group; click a legend entry to hide or show a group." FontSize="11" Opacity="0.6" />
+                        <!-- the box plot's numbers, in the program's table design -->
+                        <ContentControl DockPanel.Dock="Bottom" Content="{Binding BoxTable}" IsVisible="{Binding IsBoxPlot}" MaxHeight="220"
+                                        HorizontalAlignment="Left" Margin="0,6,0,4" />
                         <ContentControl Content="{Binding Chart}" />
                     </DockPanel>
                 </TabItem>
@@ -116,53 +128,11 @@
                             </StackPanel>
                             <TextBlock Text="{Binding AllGroupsTest}" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBlock Text="Per group" FontWeight="SemiBold" Margin="0,6,0,0" />
-                            <Grid ColumnDefinitions="3*,60,*,*,*,*,*,*,*">
-                                <TextBlock Text="group" Opacity="0.6" /><TextBlock Grid.Column="1" Text="n" Opacity="0.6" />
-                                <TextBlock Grid.Column="2" Text="mean" Opacity="0.6" /><TextBlock Grid.Column="3" Text="sd" Opacity="0.6" />
-                                <TextBlock Grid.Column="4" Text="min" Opacity="0.6" /><TextBlock Grid.Column="5" Text="Q1" Opacity="0.6" />
-                                <TextBlock Grid.Column="6" Text="median" Opacity="0.6" /><TextBlock Grid.Column="7" Text="Q3" Opacity="0.6" />
-                                <TextBlock Grid.Column="8" Text="max" Opacity="0.6" />
-                            </Grid>
-                            <ItemsControl ItemsSource="{Binding Summaries}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:SummaryLine">
-                                        <Grid ColumnDefinitions="3*,60,*,*,*,*,*,*,*" Margin="0,1">
-                                            <TextBlock Text="{Binding Group}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Group}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Count}" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Mean}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="3" Text="{Binding StdDev}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="4" Text="{Binding Min}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="5" Text="{Binding Q1}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="6" Text="{Binding Median}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="7" Text="{Binding Q3}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="8" Text="{Binding Max}" FontFamily="monospace" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <ContentControl Content="{Binding SummaryGrid}" HorizontalAlignment="Left" MaxHeight="320" />
                             <TextBlock Text="Pairs of groups" FontWeight="SemiBold" Margin="0,10,0,0" />
-                            <TextBlock Text="Mann-Whitney U p-value, adjusted for many pairs (Bonferroni-Holm; bold: below 0.05), t-test p-value and effect sizes."
+                            <TextBlock Text="Mann-Whitney U p-value, adjusted for many pairs (Bonferroni-Holm; *: below 0.05), t-test p-value and effect sizes."
                                        FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
-                            <Grid ColumnDefinitions="3*,*,*,*,*,*">
-                                <TextBlock Text="pair" Opacity="0.6" /><TextBlock Grid.Column="1" Text="Mann-Whitney" Opacity="0.6" />
-                                <TextBlock Grid.Column="2" Text="adjusted" Opacity="0.6" /><TextBlock Grid.Column="3" Text="t-test" Opacity="0.6" />
-                                <TextBlock Grid.Column="4" Text="Cohen's d" Opacity="0.6" /><TextBlock Grid.Column="5" Text="Hedges' g" Opacity="0.6" />
-                            </Grid>
-                            <ItemsControl ItemsSource="{Binding Pairs}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:PairLine">
-                                        <Grid ColumnDefinitions="3*,*,*,*,*,*" Margin="0,1">
-                                            <TextBlock Text="{Binding Pair}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Pair}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding MannWhitney}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Adjusted}" FontFamily="monospace"
-                                                       FontWeight="{Binding Significant, Converter={x:Static vm:Converters.BoldIfTrue}}" />
-                                            <TextBlock Grid.Column="3" Text="{Binding TTest}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="4" Text="{Binding CohensD}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="5" Text="{Binding HedgesG}" FontFamily="monospace" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <ContentControl Content="{Binding PairsGrid}" HorizontalAlignment="Left" MaxHeight="400" />
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
@@ -204,6 +174,13 @@
                     </Grid>
                 </TabItem>
             </TabControl>
+            <Border Classes="busy" IsVisible="{Binding IsBusy}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" Width="380">
+                    <TextBlock Text="{Binding ProgressText}" HorizontalAlignment="Center" FontWeight="SemiBold" Foreground="#1E1E1E" />
+                    <ProgressBar Classes="busy" Minimum="0" Maximum="{Binding ProgressMaximum}" Value="{Binding ProgressValue}" />
+                </StackPanel>
+            </Border>
+            </Panel>
         </DockPanel>
     </Grid>
 </UserControl>

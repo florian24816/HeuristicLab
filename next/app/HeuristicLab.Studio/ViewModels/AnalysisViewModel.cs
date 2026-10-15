@@ -29,7 +29,11 @@ public partial class AnalysisViewModel : ViewModelBase {
   private CancellationTokenSource? stop;
   private IReadOnlyList<TracedIteration> iterations = [];
 
-  public AnalysisViewModel(Func<IAlgorithm> algorithm, Action<bool> setRunning) {
+  private readonly Action<string>? finished;
+
+  /// <param name="finished">Called with the final status when a recording ends.</param>
+  public AnalysisViewModel(Func<IAlgorithm> algorithm, Action<bool> setRunning, Action<string>? finished = null) {
+    this.finished = finished;
     this.algorithm = algorithm;
     this.setRunning = setRunning;
   }
@@ -151,6 +155,7 @@ public partial class AnalysisViewModel : ViewModelBase {
         _ => $"{(report.Outcome == RunOutcome.Stopped ? "Stopped" : "Finished")}: {trace.SolutionCount:N0} solutions in {iterations.Count:N0} iterations"
              + (trace.SolutionCount > trace.StorageLimit ? $" (the first {trace.StorageLimit:N0} kept for drawing)" : "") + "."
       };
+      finished?.Invoke(Status);
     } finally {
       IsRecording = false;
       setRunning(false);

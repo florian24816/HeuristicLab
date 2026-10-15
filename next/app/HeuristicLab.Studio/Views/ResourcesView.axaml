@@ -10,7 +10,7 @@
                 <TextBlock Text="Resources" FontSize="20" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding MachineText}" Opacity="0.75" />
                 <TextBlock Text="{Binding Applied}" />
-                <TextBlock Text="{Binding Problems}" Foreground="#B0563A" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Problems}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
             </StackPanel>
 
             <Grid ColumnDefinitions="260,140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="12">

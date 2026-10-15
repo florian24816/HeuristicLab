@@ -17,9 +17,7 @@
         <SolidColorBrush x:Key="DisabledBrush" Color="#F0F0F0" />
         <SolidColorBrush x:Key="LineBrush" Color="#9E9E9E" />
         <SolidColorBrush x:Key="InkBrush" Color="#1E1E1E" />
-        <!-- an experiment's area: filled gunmetal grey (no border), light writing on it -->
-        <SolidColorBrush x:Key="ExperimentBrush" Color="#3E474D" />
-        <SolidColorBrush x:Key="ExperimentInkBrush" Color="#EDEDED" />
+        <!-- an experiment's area (no border) and its writing: ExperimentBrush & co. in App.axaml (light / dark) -->
 
         <!-- one building block: squares, name (inline rename), last field; context menu (rename/delete/...) -->
         <DataTemplate x:Key="Block" x:DataType="vm:BlockViewModel">
@@ -57,6 +55,9 @@
                         <TextBlock Text="{Binding Badge}" VerticalAlignment="Center" HorizontalAlignment="Center" FontWeight="SemiBold" />
                     </Border>
                 </StackPanel>
+                <!-- the selected block: an orange layer over all of it (the logo orange, see-through) -->
+                <Border Classes="selection" Background="#F7931D" Opacity="0.38" IsVisible="{Binding IsSelected}"
+                        IsHitTestVisible="False" />
                 <!-- editing a field across algorithms: purple over the algorithms taking part (stronger: the shown one) -->
                 <Border Classes="multi" Background="#8E44AD" Opacity="{Binding MultiOpacity}" IsVisible="{Binding IsMultiMember}"
                         IsHitTestVisible="False" />
@@ -121,25 +122,25 @@
             <Setter Property="Foreground" Value="#9A9A9A" />
         </Style>
         <Style Selector="Border.experiment">
-            <Setter Property="Background" Value="{StaticResource ExperimentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ExperimentBrush}" />
             <Setter Property="CornerRadius" Value="0" />
-            <Setter Property="TextElement.Foreground" Value="{StaticResource ExperimentInkBrush}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment Button.toggle, Border.experiment Button.link">
-            <Setter Property="Foreground" Value="{StaticResource ExperimentInkBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment Button.toggle:pointerover /template/ ContentPresenter#PART_ContentPresenter, Border.experiment Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#55606A" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource ExperimentHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource ExperimentInkBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment CheckBox /template/ Border#NormalRectangle">
-            <Setter Property="BorderBrush" Value="{StaticResource ExperimentInkBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Border.experiment TextBlock.missing">
-            <Setter Property="Foreground" Value="#F2A27E" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
         </Style>
         <Style Selector="Button.picto">
             <Setter Property="Padding" Value="0" />
@@ -162,8 +163,13 @@
         <Style Selector="Button.picto:pointerover Border.label">
             <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
         </Style>
-        <Style Selector="Button.picto:disabled">
+        <!-- disabled: faded square, pale label (no opacity on the label: it would sink into a dark background) -->
+        <Style Selector="Button.picto:disabled Border.square">
             <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <Style Selector="Button.picto:disabled Border.label">
+            <Setter Property="Background" Value="{StaticResource DisabledBrush}" />
+            <Setter Property="TextElement.Foreground" Value="#9A9A9A" />
         </Style>
         <Style Selector="Button.plain">
             <Setter Property="CornerRadius" Value="0" />
@@ -181,6 +187,9 @@
         </Style>
         <Style Selector="Border.logo">
             <Setter Property="Background" Value="{StaticResource LogoBrush}" />
+        </Style>
+        <Style Selector="Border.eject">
+            <Setter Property="Background" Value="#A8A8A8" />
         </Style>
         <Style Selector="Border.state">
             <Setter Property="Background" Value="{StaticResource StateBrush}" />
@@ -266,7 +275,8 @@
     <Grid ColumnDefinitions="700,4,*">
         <DockPanel Margin="12">
             <!-- global start controls -->
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
+            <!-- the status of what runs is shown in the main window's tab row -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
                 <!-- like the blocks: orange square with the pictogram, then the rectangle with the text -->
                 <Button Classes="picto" Command="{Binding StartAllCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="3">
@@ -286,8 +296,14 @@
                         <Border Classes="label"><TextBlock Text="Stop" /></Border>
                     </StackPanel>
                 </Button>
-                <TextBlock Grid.Column="3" Text="{Binding Status}" VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
-                           ToolTip.Tip="{Binding Status}" />
+                <!-- eject: like the others, but a grey square -->
+                <Button Grid.Column="3" Classes="picto" Command="{Binding EjectCommand}"
+                        ToolTip.Tip="Take experiments out of the workspace (all or chosen ones; save or autosave unsaved ones first)">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Border Classes="square eject"><c:Pictogram Symbol="eject" Foreground="{StaticResource InkBrush}" /></Border>
+                        <Border Classes="label"><TextBlock Text="Eject" /></Border>
+                    </StackPanel>
+                </Button>
             </Grid>
 
             <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto">
@@ -356,7 +372,7 @@
                             <TextBlock Text="{Binding Kind}" Opacity="0.7" />
                             <TextBox Text="{Binding Name}" />
                             <TextBlock Text="{Binding FilePath, FallbackValue='', TargetNullValue='Not saved yet'}" Opacity="0.7" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" TextWrapping="Wrap" Foreground="#B0563A" />
+                            <TextBlock Text="{Binding Missing}" IsVisible="{Binding !IsReady}" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}" />
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="Save as..." Command="{Binding SaveCommand}" />
                                 <Button Content="Rename file..." Command="{Binding RenameFileCommand}"

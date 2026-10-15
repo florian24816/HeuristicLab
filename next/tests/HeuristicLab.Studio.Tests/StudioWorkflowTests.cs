@@ -257,7 +257,7 @@ public class StudioWorkflowTests {
         CollectionAssert.AreEqual(files, vm.Workspace.Experiments.Select(e => e.FilePath).ToList());
         Assert.AreEqual("Opened 3 files", vm.Workspace.Status);
         var area = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("experiment"));
-        Assert.AreEqual(Avalonia.Media.Color.Parse("#3E474D"), ((Avalonia.Media.ISolidColorBrush)area.Background!).Color, "filled gunmetal grey");
+        Assert.AreEqual(Avalonia.Media.Color.Parse("#D5CFC6"), ((Avalonia.Media.ISolidColorBrush)area.Background!).Color, "filled (light mode: warm stone)");
         Assert.AreEqual(0, area.BorderThickness.Left, "no border");
         // HeuristicLab's logo at the top right
         var logo = window.GetVisualDescendants().OfType<Image>().Single(i => i.Source is Avalonia.Media.Imaging.Bitmap && i.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Right);
@@ -315,9 +315,9 @@ public class StudioWorkflowTests {
       foreach (var a in new[] { inBatch, single, other }) ParameterEditor.Apply(a.Algorithm, ["MaximumGenerations=3", "PopulationSize=10"]);
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("picto")).ToList();
-      Assert.AreEqual(3, buttons.Count, "start all, start selected, stop");
+      Assert.AreEqual(4, buttons.Count, "start all, start selected, stop, eject");
       var symbols = buttons.Select(b => b.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().Single().Symbol).ToList();
-      CollectionAssert.AreEqual(new[] { "Experiment_run_all", "Experiment_run_selected", "experiment_stop" }, symbols);
+      CollectionAssert.AreEqual(new[] { "Experiment_run_all", "Experiment_run_selected", "experiment_stop", "eject" }, symbols);
       window.CaptureRenderedFrame()!.Save(Shot("studio-start-buttons.png"));
       await ws.StartAllCommand.ExecuteAsync(null);
       Assert.AreEqual(3, first.Experiment.Runs.Count, "two from the batch run, one from the algorithm");

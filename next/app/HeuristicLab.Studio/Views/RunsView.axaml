@@ -3,18 +3,22 @@
              xmlns:vm="using:HeuristicLab.Studio.ViewModels"
              x:Class="HeuristicLab.Studio.Views.RunsView"
              x:DataType="vm:RunsViewModel">
-    <Grid RowDefinitions="Auto,*,Auto" >
+    <!-- Runs tab (no details here): the table at the top, at most 300 px. Experiments tab: the table reaches
+         down to the window's edge, the selected run's details below it (RunsView.axaml.cs sets the rows) -->
+    <Grid x:Name="Layout" RowDefinitions="Auto,Auto,*">
         <TextBlock Text="No runs yet." Opacity="0.6" IsVisible="{Binding IsEmpty}" />
-        <ContentControl Grid.Row="1" Content="{Binding Grid}" MaxHeight="300" HorizontalAlignment="Left" IsVisible="{Binding !IsEmpty}" />
-        <ItemsControl Grid.Row="2" ItemsSource="{Binding SelectedDetails}" Margin="0,10,0,0" IsVisible="{Binding ShowsDetails}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:NameValue">
-                    <Grid ColumnDefinitions="300,*" Margin="0,1">
-                        <TextBlock Text="{Binding Name}" Opacity="0.75" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Grid.Column="1" Text="{Binding Value}" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <ContentControl x:Name="Table" Grid.Row="1" Content="{Binding Grid}" MaxHeight="300" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="{Binding !IsEmpty}" />
+        <ScrollViewer x:Name="Details" Grid.Row="2" Margin="0,10,0,0" IsVisible="{Binding ShowsDetails}">
+            <ItemsControl ItemsSource="{Binding SelectedDetails}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NameValue">
+                        <Grid ColumnDefinitions="300,*" Margin="0,1">
+                            <TextBlock Text="{Binding Name}" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Text="{Binding Value}" TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
     </Grid>
 </UserControl>

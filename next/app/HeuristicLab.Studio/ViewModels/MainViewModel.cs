@@ -1,6 +1,9 @@
 using System;
 using System.Linq;
+using Avalonia;
+using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using HeuristicLab.Next.Runtime;
 using HeuristicLab.Studio.Services;
 
@@ -20,8 +23,12 @@ public partial class MainViewModel : ViewModelBase {
 
   public MainViewModel() : this(null) { }
 
-  public MainViewModel(IFileDialogService? fileDialogs, IDialogService? dialogs = null, ISettingsStore? settingsStore = null) {
+  private readonly IDesktopNotifications? notifications;
+
+  public MainViewModel(IFileDialogService? fileDialogs, IDialogService? dialogs = null, ISettingsStore? settingsStore = null,
+      IDesktopNotifications? notifications = null) {
     this.settingsStore = settingsStore;
+    this.notifications = notifications;
     var loaded = settingsStore?.Load();
     Workspace = new ExperimentWorkspaceViewModel(dialogs, fileDialogs, optimizer => {
       SelectedTab = RunsTab;
@@ -39,6 +46,11 @@ public partial class MainViewModel : ViewModelBase {
         Runs.Refresh();
       }
     };
+    Workspace.Finished += SendNotification;
+    // before Resources: loading the settings saves nothing
+    IsDarkMode = loaded?.DarkMode ?? false;
+    IsNotifying = loaded?.Notifications ?? false;
+    ApplyTheme();
     var limits = loaded == null ? new ResourceLimits() : new ResourceLimits {
       Cores = loaded.ResourceCores > 0 ? loaded.ResourceCores : Environment.ProcessorCount,
       ThreadsPerAlgorithm = Math.Max(1, loaded.ResourceThreads), ConcurrentExperiments = loaded.ResourceConcurrentExperiments,
@@ -48,13 +60,47 @@ public partial class MainViewModel : ViewModelBase {
     Resources = new ResourcesViewModel(limits, _ => { if (Resources != null) SaveSettings(); }, StopEverything);
   }
 
+  /// <summary>Dark or light mode (the square button at the top left), remembered in the settings.</summary>
+  [ObservableProperty]
+  public partial bool IsDarkMode { get; set; }
+
+  partial void OnIsDarkModeChanged(bool value) {
+    ApplyTheme();
+    if (Resources != null) SaveSettings();
+  }
+
+  [RelayCommand]
+  private void ToggleTheme() => IsDarkMode = !IsDarkMode;
+
+  /// <summary>Notifications on (the square button next to the light/dark one), remembered in the settings.</summary>
+  [ObservableProperty]
+  public partial bool IsNotifying { get; set; }
+
+  partial void OnIsNotifyingChanged(bool value) {
+    if (Resources != null) SaveSettings();
+  }
+
+  [RelayCommand]
+  private void ToggleNotifications() => IsNotifying = !IsNotifying;
+
+  /// <summary>Started experiments, an algorithm or a detailed analysis run finished: tell the notification center.</summary>
+  private async void SendNotification(string title, string message) {
+    if (!IsNotifying || notifications == null) return;
+    if (await notifications.SendAsync(title, message) is string error) Workspace.Status = $"Notification not sent: {error}";
+  }
+
+  private void ApplyTheme() {
+    if (Application.Current is { } app) app.RequestedThemeVariant = IsDarkMode ? ThemeVariant.Dark : ThemeVariant.Light;
+  }
+
   /// <summary>Stores recent files and the resource limits (called on exit and after open/save).</summary>
   public void SaveSettings() {
     var limits = Resources?.Limits ?? new ResourceLimits();
     settingsStore?.Save(new StudioSettings {
       RecentFiles = Workspace.RecentFiles.ToList(),
       ResourceCores = limits.Cores, ResourceThreads = limits.ThreadsPerAlgorithm, ResourceConcurrentExperiments = limits.ConcurrentExperiments,
-      ResourceMemoryGB = limits.MemoryLimitGB, ResourcePriority = limits.Priority.ToString()
+      ResourceMemoryGB = limits.MemoryLimitGB, ResourcePriority = limits.Priority.ToString(), DarkMode = IsDarkMode,
+      Notifications = IsNotifying
     });
   }
 

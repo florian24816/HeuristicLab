@@ -12,7 +12,7 @@
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <Button Content="Open sample" Command="{Binding OpenCommand}" Background="#F2C94C" Foreground="#1E2A1F" />
                 <TextBlock Text="Loading samples ..." IsVisible="{Binding IsLoading}" VerticalAlignment="Center" Opacity="0.7" />
-                <TextBlock Text="{Binding Message}" VerticalAlignment="Center" Foreground="#B0563A" />
+                <TextBlock Text="{Binding Message}" VerticalAlignment="Center" Foreground="{DynamicResource WarningBrush}" />
             </StackPanel>
         </StackPanel>
         <ScrollViewer>
@@ -28,7 +28,7 @@
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                                             <TextBlock Text="{Binding Description}" TextWrapping="Wrap" FontSize="12" Opacity="0.75" />
                                             <TextBlock Text="{Binding Limitation}" IsVisible="{Binding Limitation, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                       TextWrapping="Wrap" FontSize="12" Foreground="#B0563A" />
+                                                       TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource WarningBrush}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>

@@ -49,8 +49,12 @@
             <Setter Property="Fill" Value="#9A9A9A" />
         </Style>
     </UserControl.Styles>
-    <Grid RowDefinitions="Auto,3*,4,2*">
-        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+    <Grid x:Name="Root" RowDefinitions="Auto,3*,4,2*">
+        <DockPanel Margin="0,0,0,6">
+        <!-- fullscreen at the right end (F11; Esc leaves); hidden in the fullscreen window itself -->
+        <Button x:Name="FullscreenButton" DockPanel.Dock="Right" Content="⛶ Fullscreen" Click="OnFullscreen" Margin="8,0,0,0"
+                ToolTip.Tip="The graph fills the screen; the selected operator's parameters in a panel you can move, resize and minimize (F11; Esc leaves)" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
             <Button Content="Back" Command="{Binding BackCommand}" IsEnabled="{Binding CanGoBack}" />
             <Button Content="Open operator graph" Command="{Binding OpenCommand}"
                     ToolTip.Tip="Show the graph inside the selected operator (e.g. the main loop); double-click works too" />
@@ -58,6 +62,7 @@
             <Slider Minimum="0.4" Maximum="1.6" Value="{Binding Zoom}" Width="120" VerticalAlignment="Center" />
             <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
         </StackPanel>
+        </DockPanel>
         <Border Grid.Row="1" BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" MinHeight="200">
             <ScrollViewer HorizontalScrollBarVisibility="Auto">
                 <LayoutTransformControl>
@@ -120,8 +125,8 @@
                 </LayoutTransformControl>
             </ScrollViewer>
         </Border>
-        <GridSplitter Grid.Row="2" ResizeDirection="Rows" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
-        <ScrollViewer Grid.Row="3" Margin="0,8,0,0">
+        <GridSplitter x:Name="EditorSplitter" Grid.Row="2" ResizeDirection="Rows" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+        <ScrollViewer x:Name="EditorArea" Grid.Row="3" Margin="0,8,0,0">
             <ContentControl Content="{Binding SelectedEditor}" />
         </ScrollViewer>
     </Grid>

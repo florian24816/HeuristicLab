@@ -27,41 +27,49 @@ public static class RunCharts {
     };
   }
 
+  /// <summary>A group's box: quartiles, median, mean, whiskers (most extreme runs within 1.5 box lengths of the box) and the outliers beyond them.</summary>
+  public sealed record BoxStats(string Group, int Count, double Min, double WhiskerLow, double Q1, double Median, double Mean,
+                                double Q3, double WhiskerHigh, double Max, IReadOnlyList<double> Outliers);
+
+  /// <summary>The boxes of a box plot, one per group with values (in group order).</summary>
+  public static IReadOnlyList<BoxStats> BoxStatistics(IReadOnlyList<RunGroup> groups, string y) =>
+    groups.Select(g => (g.Name, Values: g.Rows.Select(r => r.Number(y)).OfType<double>().Where(double.IsFinite).Order().ToArray()))
+      .Where(d => d.Values.Length > 0).Select(d => {
+        var s = RunStatistics.Summary(d.Name, d.Values);
+        double iqr = s.Q3 - s.Q1, lowFence = s.Q1 - 1.5 * iqr, highFence = s.Q3 + 1.5 * iqr;
+        return new BoxStats(d.Name, s.Count, s.Min, d.Values.First(v => v >= lowFence), s.Q1, s.Median, s.Mean, s.Q3,
+          d.Values.Last(v => v <= highFence), s.Max, d.Values.Where(v => v < lowFence || v > highFence).ToList());
+      }).ToList();
+
   /// <summary>Distribution per group: box from the lower to the upper quartile, median line, mean diamond, whiskers to the most extreme runs within 1.5 box lengths, outliers as points.</summary>
   public static Visual BoxPlot(RunTable table, IReadOnlyList<RunGroup> groups, string y) {
     var shapes = new List<Shape>();
-    var notes = new List<string>();
-    double? low = null;
-    var data = groups.Select(g => (g.Name, Values: g.Rows.Select(r => r.Number(y)).OfType<double>().Where(double.IsFinite).Order().ToArray())).ToList();
-    var all = data.SelectMany(d => d.Values).ToList();
-    if (all.Count == 0) return new TextVisual("Box plot", $"No numeric values of {Name(table, y)}.");
-    double span = Math.Max(all.Max() - all.Min(), 1e-12);
-    low = all.Min() - span * 0.08;
-    // room below the group names, so they do not sit on the axis
-    shapes.Add(new MarkerShape(new Point2(0, low.Value - span * 0.05), new Rgb(0, 0, 0, 0), 0) { Group = "Labels" });
-    for (int i = 0; i < data.Count; i++) {
-      var (name, values) = data[i];
+    var boxes = BoxStatistics(groups, y);
+    if (boxes.Count == 0) return new TextVisual("Box plot", $"No numeric values of {Name(table, y)}.");
+    double low = boxes.Min(b => b.Min), high = boxes.Max(b => b.Max), span = Math.Max(high - low, 1e-12);
+    var names = groups.Select(g => g.Name).ToList();
+    foreach (var box in boxes) {
+      int i = names.IndexOf(box.Group);
       var color = Rgb.Palette(i);
-      shapes.Add(new TextShape(new Point2(i, low.Value), name, Rgb.Black) { Group = name });
-      if (values.Length == 0) continue;
-      var s = RunStatistics.Summary(name, values);
-      double iqr = s.Q3 - s.Q1, lowFence = s.Q1 - 1.5 * iqr, highFence = s.Q3 + 1.5 * iqr;
-      double whiskerLow = values.First(v => v >= lowFence), whiskerHigh = values.Last(v => v <= highFence);
-      shapes.Add(new LineShape(new Point2(i, whiskerLow), new Point2(i, s.Q1), color, 1.5) { Group = name });
-      shapes.Add(new LineShape(new Point2(i, s.Q3), new Point2(i, whiskerHigh), color, 1.5) { Group = name });
-      shapes.Add(new LineShape(new Point2(i - 0.12, whiskerLow), new Point2(i + 0.12, whiskerLow), color, 1.5) { Group = name });
-      shapes.Add(new LineShape(new Point2(i - 0.12, whiskerHigh), new Point2(i + 0.12, whiskerHigh), color, 1.5) { Group = name });
-      shapes.Add(new RectShape(i - 0.3, s.Q1, 0.6, Math.Max(iqr, span * 1e-4), color.WithAlpha(90), color) { Group = name, StrokeThickness = 1.5 });
-      shapes.Add(new LineShape(new Point2(i - 0.3, s.Median), new Point2(i + 0.3, s.Median), color, 2.5) { Group = name });
-      shapes.Add(new MarkerShape(new Point2(i, s.Mean), color, 8, MarkerKind.Diamond) { Group = name });
-      foreach (var outlier in values.Where(v => v < lowFence || v > highFence))
-        shapes.Add(new MarkerShape(new Point2(i, outlier), color, 5) { Group = name });
-      notes.Add($"{name}: n {s.Count}, median {s.Median.ToString("G6", Invariant)}, mean {s.Mean.ToString("G6", Invariant)}");
+      var name = box.Group;
+      double iqr = box.Q3 - box.Q1;
+      shapes.Add(new LineShape(new Point2(i, box.WhiskerLow), new Point2(i, box.Q1), color, 1.5) { Group = name });
+      shapes.Add(new LineShape(new Point2(i, box.Q3), new Point2(i, box.WhiskerHigh), color, 1.5) { Group = name });
+      shapes.Add(new LineShape(new Point2(i - 0.12, box.WhiskerLow), new Point2(i + 0.12, box.WhiskerLow), color, 1.5) { Group = name });
+      shapes.Add(new LineShape(new Point2(i - 0.12, box.WhiskerHigh), new Point2(i + 0.12, box.WhiskerHigh), color, 1.5) { Group = name });
+      shapes.Add(new RectShape(i - 0.3, box.Q1, 0.6, Math.Max(iqr, span * 1e-4), color.WithAlpha(90), color) { Group = name, StrokeThickness = 1.5 });
+      shapes.Add(new LineShape(new Point2(i - 0.3, box.Median), new Point2(i + 0.3, box.Median), color, 2.5) { Group = name });
+      shapes.Add(new MarkerShape(new Point2(i, box.Mean), color, 8, MarkerKind.Diamond) { Group = name });
+      foreach (var outlier in box.Outliers) shapes.Add(new MarkerShape(new Point2(i, outlier), color, 5) { Group = name });
     }
     return new SceneVisual($"{Name(table, y)} by group", shapes, YUp: true, Uniform: false) {
       Axes = true, XAxisScale = false, YAxisTitle = Name(table, y),
-      Legend = data.Select((d, i) => new LegendEntry(d.Name, Rgb.Palette(i))).ToList(),
-      Notes = ["Box: quartiles · line: median · diamond: mean · whiskers: 1.5 box lengths · dots: outliers", .. notes]
+      Legend = names.Select((n, i) => new LegendEntry(n, Rgb.Palette(i))).ToList(),
+      // the group names under the axis; half a slot of room left and right, a little above and below
+      XCategories = names.Select((n, i) => new AxisCategory(i, n, n)).ToList(),
+      XRange = (-0.5, names.Count - 0.5), YRange = (low - span * 0.06, high + span * 0.06),
+      // the numbers of each box are in the table below the chart (BoxStatistics)
+      Notes = ["Box: quartiles · line: median · diamond: mean · whiskers: most extreme runs within 1.5 box lengths · dots: outliers"]
     };
   }
 
@@ -92,7 +100,7 @@ public static class RunCharts {
   /// </summary>
   public static ChartVisual Curves(IReadOnlyList<RunGroup> groups, string tableName, string rowName, bool runs = true, bool mean = true) {
     var series = new List<PlotSeries>();
-    string xTitle = "Index";
+    string xTitle = "Step (generation / iteration)";
     for (int i = 0; i < groups.Count; i++) {
       var curves = new List<double[]>();
       foreach (var row in groups[i].Rows) {

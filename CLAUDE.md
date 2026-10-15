@@ -44,11 +44,19 @@
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
   Start all / Start selected / Stop are drawn like blocks (Button.picto: orange square with
   Experiment_run_all / Experiment_run_selected / experiment_stop, then a grey rectangle).
+  Eject (next to Stop: grey #A8A8A8 square with the eject pictogram; not while anything runs): EjectWindow -
+  tick experiments ("Eject selected") or "Eject all", Autosave switch; ExperimentWorkspaceViewModel.EjectAsync:
+  unsaved ones (!IsSaved) are saved first with autosave (never saved: "Save as..." file), else UnsavedWindow
+  asks per experiment (Save / Eject without saving / Keep it open); one not saved stays. Files stay on disk.
+  The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
+  logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
+  TextBlock: a string's '_' would be an access key.
   Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment (ChooseWindow: pick it
   in a list, the delete button is disabled until then; ExperimentTree.DeleteRuns clears every
   optimizer's runs without Prepare; never single runs, never while running; marks it unsaved).
-  Each experiment's area is filled gunmetal grey (#3E474D, Border.experiment, no border) with light
-  writing (checkbox, arrows, links, missing-text in #F2A27E). "Open..." takes several .hl files at once
+  Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
+  warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
+  HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once
   (IFileDialogService.OpenHlFilesAsync, AllowMultiple): each opens as its own experiment.
   Clicking the unsaved disk saves (SaveChangesAsync): to its file, or "Save as..." without one.
   "Rename file..." (experiment detail next to "Save as...", experiment menu; only with a file): renames
@@ -57,6 +65,8 @@
   into the app (window icon via a :is(Window) style, ApplicationIcon, desktop entry; also drawn at the
   top right of the tab row in MainWindow).
   Click: details/parameters, double-click: rename, right-click: menu.
+  The selected block is covered by a see-through orange layer (Border.selection, #F7931D at 0.38, not
+  hit-testable, under the purple multi-edit layer), besides the name's dark frame.
   Drag and drop (own pointer handling in ExperimentWorkspaceView, logic in the workspace VM:
   BeginDrag/TargetAt/PreviewDrop/EndDrag/Move): algorithms (also dragged by their problem), batch
   runs and time-limit runs (with their content) move anywhere, also into other experiments; upper
@@ -85,7 +95,37 @@
   g/o:2:MainLoop/n:5:Name/p:Y#choice (EditContext.MultiTarget/ToggleMulti; editors rebuilt when
   MultiVersion changes).
   Parameter lists show the parameter kind's pictogram before the name (constrained = choice,
-  optional = may be empty, else value). Checked operator lists (analyzers) are numbered: a
+  optional = may be empty, else value).
+  Move operators that cannot work (runtime MoveChecks; LS/TS/SA and their improvement operators):
+  HeuristicLab offers every move generator of the encoding, also those for which the problem has no
+  move evaluator/maker/tabu operator (TSP: swap2, scramble -> MoveEvaluator "none"; the run "completes"
+  with 0 evaluated moves and no results, silently), and the generic SingleObjectiveMoveGenerator of
+  encoding-based problems needs an overridden GetNeighbors (none of the built-in ones has it: BestSelector
+  crashes). Such choices are yellow (#F4E803, the unsaved pictogram's, dark writing, both modes) in the
+  open list (ComboBoxItem.warned via ContainerPrepared), the chosen one in the ComboBox, its row's summary
+  in the list (Border.caution) and a text below; a choice with a warning reports it in the detail's message.
+  Choice lists are read again after every edit in their list (ParameterNodeViewModel.RefreshSummary):
+  they used to stay as built, so after a new move generator the old evaluators were still offered and
+  choosing one failed silently (ConstrainedValueParameter "Invalid value."). An empty list is not shown.
+  Runtime ParameterChecks (Warning / ParameterWarning / AlgorithmWarning / ProblemWarning) extends this to
+  LS, TS, SA, GA, Island GA, OSGA, Island OSGA, SASEGASA and NSGA-II; every rule comes from running every
+  choice and edge value on HeuristicLab's problems (probe programs, not in the repo): DiversitySelector
+  without expression trees, the integer SelfAdaptive manipulator outside an ES, PMX/MPX on permutations
+  shorter than 4, context-aware / deterministic-best crossovers on time series prognosis, pair selectors
+  (GenderSpecificSelector, NoSameMates) picking an odd number (Island GA: ceil(15 % of 100) = 15 emigrants),
+  the exponential comparison factor modifier with HeuristicLab's default lower bound 0, AlbaTranslocationMoveGenerator
+  (HeuristicLab bug), CopyCrossover without mutation, GeneralizedRankSelector on multi-objective problems (NSGA-II), NSGA-II on the multi-objective shape-constrained regression (crashes whatever the settings); values: population < 2, elites < 0 or >= population,
+  0 generations, shares outside 0..1, OSGA MaximumSelectionPressure <= 1, odd/0 SelectedParents, < 1 islands,
+  temperatures <= 0, InnerIterations/SampleSize 0, negative tabu tenure, a move Sigma of 0, and
+  FillPopulationWithParents with a population under 100 (OffspringSelector index bug, seen at 20-50).
+  A required choice with nothing offered = HeuristicLab never prepares the algorithm and Start fails
+  "not allowed in execution state Stopped" (SA/TS on job shop, linear assignment, regression, ...):
+  AlgorithmDetailViewModel.AlgorithmWarning (yellow box above the parameters; Start shows it instead).
+  TS cannot even attach some problems (its default move generator is not among its valid ones: "Invalid
+  value."): the problem picker (NewSetupViewModel, checked off the UI thread, WarningsReady) shows such
+  problems yellow with the reason (CatalogItem.Warning). Warnings of nested parameters look at the algorithm
+  (EditContext.Root); every edit refreshes all lists shown (EditContext.Edited). Yellow value fields:
+  Border.warnedvalue around the editor. Checked operator lists (analyzers) are numbered: a
   MultiAnalyzer runs its ticked operators in list order. Nested editors below a list get a
   "<name> selected. Details/Options:" heading. Result lists (algorithm Results tab, Results tab's
   Run view) show the result's kind first: chart (result_diagram_logo: first visualization is a
@@ -100,7 +140,9 @@
   square with operator_single/operator_multiple (own graph inside), corners rounded like the block (10) + rounded block with a gradient
   #EDEDED top right -> #F7931D bottom left; layers centered, ordered by predecessors; curved arrows
   with arrowheads, loops dashed along the right side, labels only when not "Successor", a "Start"
-  arrow; node list order = ItemInspector.Layout order, which MultiEdit keys rely on), Engine (choice,
+  arrow; node list order = ItemInspector.Layout order, which MultiEdit keys rely on; "Fullscreen" / F11:
+  OperatorGraphFullscreenWindow - the graph (OperatorGraphView(showsEditor: false)) fills the screen, the
+  selected operator's parameters in a minimizable FloatingPanel), Engine (choice,
   log); Start/Pause/Stop/Prepare. Parameter editing via runtime ItemInspector/CheckedList:
   bool, text, choices with nested parameters, arrays/matrices, checked lists (analyzers), Show in
   Run (GetsCollected). Views are found by ViewLocator (XyzViewModel -> XyzView), so nested
@@ -136,10 +178,10 @@
   may create nothing (local search at its local optimum keeps iterating) and still counts - the view
   then shows the solution kept from before. Raw
   solutions are drawn with their problem via Visualizations.ForSolution (decoders run in a scope
-  holding the problem's parameters) and combined by Visuals.Composition: current solution red, what
-  it has beyond its ancestors from before its iteration yellow, earlier iterations blue shades,
-  later ones (finished runs) green shades, a selected range's start/end as wide/medium strokes
-  under it; no transparency. Only shapes marked IsSolution are recolored (builders mark them;
+  holding the problem's parameters) and combined by Visuals.Composition: current solution blue (Rgb.Blue, the
+  TSP tours' blue; user's choice 2026-10-15), what it has beyond its ancestors from before its iteration
+  yellow, earlier iterations red shades, later ones (finished runs) green shades, a selected range's start
+  (dark red, wide) / end (dark green, medium) as strokes under it; no transparency. Only shapes marked IsSolution are recolored (builders mark them;
   trees and the lawn are not layered). A selected range plays as an animation (iterations/s);
   "Earlier/Later iterations" inputs always apply (within a range too). Every chart, picture and 3D
   view has a clickable legend: series / shape groups (Shape.Group, else by kind) / items can be
@@ -150,12 +192,37 @@
   default crossover for real vectors is CopyCrossover: only mutations create new solutions there.
   Results tab (RunAnalysisView, runtime Runs.*): ticked sources (any experiment / batch run /
   time-limit run / algorithm of the workspace, results folders) -> RunTable (source, origin
-  relative to the source, run, param:*, result:*; numbers or text; a run from two sources once),
+  relative to the source, run, param:*, result:*; numbers or text). Ticks cascade (RunSourceViewModel:
+  Own per block, IsChecked = true/false/null over the blocks without children): ticking a box ticks
+  everything below, unticking a part leaves its runs out and the boxes above show partly ticked; a
+  run is shown if the block it was made in is ticked (deepest optimizer holding it; a time-limit run's
+  runs belong to its algorithm) and listed under the highest fully ticked box above it (source),
   filters (column op value), grouping by any combination of columns (numbers in N ranges),
-  Table (varying parameters or all, sort, CSV export), Charts (box plot, scatter, histogram,
-  cumulative distribution, curves of a DataTable row per run + group mean; NaN = line gap),
+  Table (varying parameters or all, sort, CSV export - kept as is on purpose: one-to-one comparison with
+  HeuristicLab's; "Export to Python..." next to it: runtime Runs.PythonExport writes three files named after the
+  experiment (ModuleName: importable): <name>_structure.py (blocks as attributes of the blocks above them,
+  exp.batch_run_1.genetic_algorithm_ga - generated classes so editors complete them, checked with pyright;
+  Run.params / results dataclasses typed int/float/bool/str by the values, NAMES map HeuristicLab names,
+  curves = DataTable rows; Block.values/curves/df/curve_df/walk/made_here/label/find/tree, compare(),
+  compare_curves(), PARAMETERS/RESULTS; no values), <name>_data.json (all values, loaded on import) and
+  <name>_analysis.py ("# %%" cells: the syntax on one run, pandas table, seaborn box plot of the quality
+  per block that made runs, curve per step; only fields every exported run has, BestQuality / Qualities
+  preferred, min/max by Maximization; written only if missing - it is the user's), Charts (box plot, scatter, histogram,
+  cumulative distribution, curves of a DataTable row per run + group mean; NaN = line gap; the box plot's
+  numbers per group - RunCharts.BoxStatistics, shared with the chart - in a table below it (BoxTable);
+  "Fullscreen" / F11: ChartsFullscreenWindow, chart fills the screen, legend (ChartLegendView over
+  VisualsViewModel.LegendItems/Toggle; charts' own legend off via ShowLegend, redraw via HiddenVersion)
+  and the box table (minimizable to its title bar) in FloatingPanels - Views/FloatingPanel moves by its
+  title bar, resizes at its corner, also used by the detailed analysis fullscreen; the Fullscreen button sits
+  at the right end of the chart choices),
+  Filters (column, operator, value; FilterViewModel keeps ColumnKey; operators by the column's kind -
+  RunFilter.OperatorsFor: numbers = ≠ < ≤ > ≥, switches (RunColumn.IsYesNo: only True/False) = ≠, text
+  = ≠ contains / does not contain - no "<" on names; an operator that does not fit becomes "="): Rebuild is guarded against reentrancy
+  and replaces AllColumns/NumericColumns/XChoices/CurveTables only when they change - a new list under a
+  filter's ComboBox reset its selection, which rebuilt and replaced the list again: endless recursion, a
+  stack overflow that closed Studio without a message (test StudioFilterTests types filters key by key).
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
-  Bonferroni-Holm, t-test, Cohen's d, Hedges' g), Run (one run's results with visualizations).
+  Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05), Run (one run's results with visualizations).
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
   process affinity (hard limit, Linux/Windows), threads per algorithm (1 = HeuristicLab's default
   SequentialEngine; more = ParallelEngine with that DegreeOfParallelism, set by Resources.Configure
@@ -172,8 +239,8 @@
   algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like
   "hl new", opened as a new experiment), Open..., Open recent (workspace RecentFiles) and Samples...
   Seeds are the algorithms' own Seed/SetSeedRandomly parameters, parallelism is the Resources tab.
-  No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab
-  can still add folders written by "hl run --store"). Runs tab (RunsBrowserViewModel): tree of the
+  No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab's
+  "+ Results folder..." button was removed 2026-10-15; RunAnalysisViewModel.AddFolder still reads "hl run --store" folders). Runs tab (RunsBrowserViewModel): tree of the
   workspace's experiments and blocks, the selected block's runs (RunsViewModel table), the selected
   run's parameters and results with pictures; "Show runs" (block menu / experiment detail) jumps
   there. No Solution tab (removed 2026-10-11; runtime Solutions stays for the CLI). Sweeps and
@@ -183,15 +250,60 @@
   over white, opaque); fixed columns stay in view when scrolling sideways (Controls.Sticky moves
   them by the ScrollViewer offset, ZIndex above; the header sticks the same way vertically):
   Results: Source #FDE5C8, Origin #FBCD96, Run #F9B462 (palest to closest to the logo orange);
-  Runs: Run #F9B462. Click a row to select it (blue overlay); Results header click sorts.
+  RunsView: Runs tab (ShowsDetails false) the table at the top (max 300 px); Experiments tab (experiment,
+  batch/time-limit run, algorithm Runs tab) the table fills the height down to the window's edge, the selected
+  run's details below it (max 240 px; RunsView.axaml.cs sets the rows).
+  Single runs (user's decision 2026-10-15): Start on one algorithm (its detail) makes single runs - when it
+  ends (not paused) the runs it made leave the algorithm (HeuristicLab removes them from its batch run,
+  time-limit run and experiment too) and go to ExperimentBlockViewModel.SingleRuns (ViewModels/SingleRuns.cs),
+  named "Single run k" per algorithm (grouped by the runs' "Algorithm Name"). The algorithm's Runs tab lists
+  its runs and its single runs (RunsViewModel takes a run list). Runs and Results tabs: a "Single runs"
+  folder > experiment > algorithm after the experiments (RunsSourceViewModel/RunSourceViewModel Key/Group +
+  run list); in the Results tab not ticked at first. Saved with the experiment as a run collection
+  "<name>.single-runs.hl" next to its .hl (HeuristicLab opens it; written also when emptied), loaded when the
+  experiment is opened, renamed with "Rename file...". RunValueCache reads a run again when its numbers of
+  parameters/results changed (Studio tags runs with "Resources: ..." after they were first read).
+  Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
+  it (blue overlay); Results header click sorts.
+  Long tables (user's request): the first 50 rows (TableGridViewModel.Limit, ShownRows), then a button as
+  wide as the table ("Show all N rows" / "Show only the first 50"); rows are drawn only where in view
+  (VirtualizingStackPanel) and their cells built when first drawn (GridRow.Cells lazy).
+  Reading a run (OptimizerRunner.ToRecord: all parameters and results, incl. tours and tables) is the slow
+  part (~0.6 ms per GA run, measured: 1.2 s for 2000): runtime RunValueCache.Shared keeps each run's cells
+  (ConditionalWeakTable, thread-safe), used by the Results tab and the runs tables. Results tab: a rebuild
+  with more than 100 unread runs or 3000 rows is built in the background (RunTable.FromRuns with progress
+  and cancellation; filter, grouping) while a bright layer (Border.busy, #C8FFFFFF) with an orange progress bar
+  ("Processing runs: x of y") covers the views; the filter bar stays usable, each change cancels the running
+  build and starts again; Settled completes when the shown table is current (tests).
   Pickers keep one searchable list (not HeuristicLab's collapsed tree) but show its categories
   (CatalogEntry.Category/CategoryOrder/Priority from [Creatable], Catalog.ByCategory): CatalogItem rows
   tinted per category (CategoryColors: light tint + dark heading color, no orange), the first row of
   a category carries its name (CatalogItemTemplate / ListBox.catalog in App.axaml). Algorithm
   picker (CatalogPickerWindow); problem dialog (NewSetupWindow): problem list (searchable, grouped)
   and benchmark instances (searchable, "(none)" always first) side by side.
-  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files and resource limits.
-  Own LineChart control.
+  Light/dark mode: square button at the top left of the tab row (tabs moved right of it), showing the
+  mode it switches to - darkmode pictogram black on grey #BDBDBD, or lightmode on the logo orange;
+  MainViewModel.IsDarkMode sets Application.RequestedThemeVariant (light by default, saved in settings).
+  Theme-dependent colors live in App.axaml ThemeDictionaries (WindowBrush: dark #1E1E1E instead of
+  Fluent's black; WarningBrush, ErrorBrush); blocks, tables and charts keep their own fixed colors.
+  Hover texts (ToolTip style in App.axaml) are dark on #F2F2F2 in both modes (dark mode's were unreadable).
+  Problem tab arrays/matrices: flat square cells (TextBox.cell, no border; editing underlined orange),
+  shaded like the run tables in darker greys (CellViewModel.Grey #B5B5B5 / LightGrey #CACACA, every
+  other row at TableGridViewModel.WeakRow), row numbers kept.
+  Matrices wider than 40 columns (e.g. a distance matrix) use the same cells read-only (TextBlock.cell,
+  width fitted to the longest value, ValueEditorViewModel.WideRows); above 300 columns text rows.
+  Notifications: square button right of the light/dark one (notification pictogram; off: SwitchOffBrush
+  light grey #E0E0E0 / dark mode #6B6B6B, on: logo orange; MainViewModel.IsNotifying, saved). When on,
+  everything started that finishes (start all/selected experiments, an algorithm's Start, a detailed
+  analysis run; completed, stopped or failed, not a pause) raises ExperimentWorkspaceViewModel.Finished
+  -> Services.DesktopNotifications: Linux notify-send (else gdbus to org.freedesktop.Notifications),
+  Windows a toast via Windows PowerShell's WinRT (PowerShell's AppId, text in env variables), macOS
+  osascript. A failure shows in the status bar. Tests use a fake IDesktopNotifications.
+  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits, dark mode, notifications.
+  Own LineChart control. Chart text (LineChart, SceneView legend/scales/titles): 13 px in the full text color
+  (SystemControlForegroundBaseHigh), axis titles semi-bold, y titles vertical beside their scales, margins
+  from the labels' sizes; SceneVisual.XCategories names a category axis under the drawing (wrapped to
+  its slot; the box plot's groups), XRange/YRange widen the drawn area; notes one per line.
   Install for the user: next/tools/install.sh [--prefix DIR] [--uninstall] (Release publish,
   launchers hl and hl-studio in ~/.local/bin, desktop entry; needs the .NET 10 runtime).
   DataFiles.Read/Write block on Parquet.Net's async API: keep that work on the thread pool

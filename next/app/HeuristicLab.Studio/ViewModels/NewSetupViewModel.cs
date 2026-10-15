@@ -111,8 +111,31 @@ public partial class NewSetupViewModel : ViewModelBase {
       .OrderBy(p => p.Entry == null ? "" : p.Entry.CategoryOrder, StringComparer.Ordinal)
       .ThenBy(p => p.Entry?.Priority ?? int.MinValue).ThenBy(p => p.Display, StringComparer.OrdinalIgnoreCase).ToList();
     ProblemFilter = "";
+    problemWarnings = new Dictionary<Choice, string?>();
     ShowProblems();
     SelectedProblem = Problems.FirstOrDefault();
+    WarningsReady = CheckProblemsAsync(value?.Entry, Problems);
+  }
+
+  private Dictionary<Choice, string?> problemWarnings = [];
+
+  /// <summary>Done when the problems are checked (ParameterChecks.ProblemWarning, one new problem each, off the UI thread).</summary>
+  public Task WarningsReady { get; private set; } = Task.CompletedTask;
+
+  /// <summary>Why the chosen problem probably cannot be solved by the algorithm; shown yellow under the lists.</summary>
+  public string? ProblemWarning => SelectedProblem != null ? problemWarnings.GetValueOrDefault(SelectedProblem) : null;
+
+  private async Task CheckProblemsAsync(CatalogEntry? algorithm, IReadOnlyList<Choice> problems) {
+    if (algorithm == null) return;
+    var found = await Task.Run(() => problems.Where(p => p.Entry != null).ToDictionary(p => p, p => {
+      try { return ParameterChecks.ProblemWarning(algorithm.Type, (IProblem)p.Entry!.CreateInstance()); } catch { return null; }
+    }));
+    if (!ReferenceEquals(problems, Problems)) return;  // another algorithm was chosen meanwhile
+    problemWarnings = found;
+    var selected = SelectedProblem;
+    ShowProblems();
+    SelectedProblemItem = VisibleProblems.FirstOrDefault(i => ReferenceEquals(i.Value, selected));
+    OnPropertyChanged(nameof(ProblemWarning));
   }
 
   partial void OnProblemFilterChanged(string value) {
@@ -125,7 +148,8 @@ public partial class NewSetupViewModel : ViewModelBase {
       || c.Display.Contains(ProblemFilter, StringComparison.OrdinalIgnoreCase)
       || c.Category.Contains(ProblemFilter, StringComparison.OrdinalIgnoreCase)
       || (c.Entry?.Description.Contains(ProblemFilter, StringComparison.OrdinalIgnoreCase) ?? false);
-    VisibleProblems = CatalogItem.Group(Problems.Where(Matches).Select(c => (c.Display, c.Entry?.Description ?? "", c.Category, (object?)c)));
+    VisibleProblems = CatalogItem.Group(Problems.Where(Matches).Select(c => (c.Display, c.Entry?.Description ?? "", c.Category, (object?)c)),
+      v => v is Choice c ? problemWarnings.GetValueOrDefault(c) : null);
     SelectedProblemItem = VisibleProblems.FirstOrDefault(i => ReferenceEquals(i.Value, SelectedProblem));
   }
 
@@ -142,6 +166,7 @@ public partial class NewSetupViewModel : ViewModelBase {
   }
 
   partial void OnSelectedProblemChanged(Choice? value) {
+    OnPropertyChanged(nameof(ProblemWarning));
     var problem = value?.Entry?.CreateInstance() as IProblem
                   ?? (SelectedAlgorithm?.Entry?.CreateInstance() as IAlgorithm)?.Problem;
     if (!ReferenceEquals(SelectedProblemItem?.Value, value))

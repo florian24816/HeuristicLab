@@ -24,6 +24,13 @@ public sealed class EditContext(Action<string> report, Func<bool> canEdit, Actio
 
   public bool IsMultiTarget(string? key) => key != null && MultiTarget?.Invoke() == key;
 
+  /// <summary>The algorithm (or other item) whose parameters are edited: checks of nested parameters look at it (ParameterChecks).</summary>
+  public Func<IParameterizedItem?>? Root { get; init; }
+
+  /// <summary>A value changed somewhere: every list shown reads its choices and warnings again (they depend on each other).</summary>
+  public event Action? Edited;
+  public void NotifyEdited() => Edited?.Invoke();
+
   /// <summary>The same context without editing (read-only views of a value).</summary>
   public EditContext ReadOnly() => new(report, () => false);
 
@@ -48,6 +55,7 @@ public partial class ParameterListViewModel : ViewModelBase {
     Parameters = ItemInspector.Parameters(item)
       .Select(p => new ParameterNodeViewModel(p, context, this, path == null ? null : MultiEdit.Parameter(path, p.Name))).ToList();
     Selected = Parameters.FirstOrDefault();
+    context.Edited += RefreshSummaries;
   }
 
   public IParameterizedItem Item { get; }
@@ -74,7 +82,10 @@ public partial class ParameterListViewModel : ViewModelBase {
   public void RefreshEditability() { foreach (var p in Parameters) p.RefreshEditability(); }
 }
 
-public sealed record ChoiceItem(string Display, IItem Item);
+/// <param name="Warning">Why this choice probably does not work (MoveChecks), shown yellow; null if nothing speaks against it.</param>
+public sealed record ChoiceItem(string Display, IItem Item, string? Warning = null) {
+  public bool IsWarned => Warning != null;
+}
 
 /// <summary>One parameter: type, "Show in Run", value choice (for selections) and the value editor.</summary>
 public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
@@ -87,8 +98,18 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     this.context = context;
     Owner = owner;
     Path = path;
-    Choices = ItemInspector.Choices(parameter)?.Select(v => new ChoiceItem(v is INamedItem n ? n.Name : v.ItemName, v)).ToList() ?? [];
+    IsChoice = ItemInspector.Choices(parameter) != null;
+    choices = BuildChoices();
   }
+
+  /// <summary>
+  /// The offered values with their warnings. They change with other parameters (a new move generator
+  /// gives other move evaluators and makers), so they are read again after every edit in the list.
+  /// </summary>
+  private List<ChoiceItem> BuildChoices() =>
+    ItemInspector.Choices(parameter)?.Select(v => new ChoiceItem(v is INamedItem n ? n.Name : v.ItemName, v, ParameterChecks.Warning(Root, Owner.Item, parameter, v))).ToList() ?? [];
+
+  private IParameterizedItem Root => context.Root?.Invoke() ?? Owner.Item;
 
   public ParameterListViewModel Owner { get; }
   public string Name => parameter.Name;
@@ -139,8 +160,18 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     }
   }
 
-  public IReadOnlyList<ChoiceItem> Choices { get; }
-  public bool IsChoice => Choices.Count > 0;
+  private List<ChoiceItem> choices;
+  public IReadOnlyList<ChoiceItem> Choices => choices;
+
+  /// <summary>A selection among offered values (also when none is offered now: then the list is empty).</summary>
+  public bool IsChoice { get; }
+
+  /// <summary>Why the current value (or its absence) probably does not work: yellow in the list and below the choice.</summary>
+  public string? Warning => ParameterChecks.ParameterWarning(Root, Owner.Item, parameter);
+  public bool HasWarning => Warning != null;
+
+  /// <summary>Something is offered (an empty list is not shown; its warning says why it is empty).</summary>
+  public bool HasChoices => Choices.Count > 0;
 
   public ChoiceItem? SelectedChoice {
     get => Choices.FirstOrDefault(c => ReferenceEquals(c.Item, ItemInspector.Value(parameter)));
@@ -149,6 +180,9 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
       if (!context.BeginEdit()) { OnPropertyChanged(); return; }
       vp.Value = value.Item;
       ValueChanged();
+      // feedback: this choice, or what it changed in the other parameters (e.g. no move evaluator left)
+      if (Owner.Parameters.Select(p => p.Warning is { } w ? $"{p.Name}: {w}" : null).FirstOrDefault(w => w != null) is { } warning)
+        context.Report(warning);
     }
   }
 
@@ -169,7 +203,10 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     ValueChanged();
   }
 
-  private void ValueEdited() => Owner.RefreshSummaries();
+  private void ValueEdited() {
+    context.NotifyEdited();
+    if (Warning is { } warning) context.Report($"{Name}: {warning}");
+  }
 
   private void ValueChanged() {
     editor = null;
@@ -177,10 +214,19 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     OnPropertyChanged(nameof(SelectedChoice));
     OnPropertyChanged(nameof(DataType));
     OnPropertyChanged(nameof(CanClear));
-    Owner.RefreshSummaries();
+    context.NotifyEdited();
   }
 
   public void RefreshSummary() {
+    var fresh = BuildChoices();
+    if (!fresh.SequenceEqual(choices)) {
+      choices = fresh;
+      OnPropertyChanged(nameof(Choices));
+      OnPropertyChanged(nameof(HasChoices));
+      OnPropertyChanged(nameof(SelectedChoice));
+    }
+    OnPropertyChanged(nameof(Warning));
+    OnPropertyChanged(nameof(HasWarning));
     OnPropertyChanged(nameof(Summary));
     OnPropertyChanged(nameof(KindPictogram));
     OnPropertyChanged(nameof(KindTip));
@@ -212,6 +258,15 @@ public partial class CellViewModel(IItem value, int row, int column, string text
     }
   }
   private readonly IItem valueItem = value;
+
+  /// <summary>Like the run tables, in darker greys: columns alternate, every other row weaker.</summary>
+  public static readonly Avalonia.Media.Color Grey = Avalonia.Media.Color.Parse("#B5B5B5"), LightGrey = Avalonia.Media.Color.Parse("#CACACA");
+
+  /// <summary>Cell width; read-only wide matrices fit it to their longest value.</summary>
+  public double Width { get; init; } = 140;
+
+  public Avalonia.Media.IBrush Background { get; } =
+    TableGridViewModel.Brush(column % 2 == 0 ? Grey : LightGrey, row % 2 == 0 ? 1 : TableGridViewModel.WeakRow);
 }
 
 /// <summary>One item of a checked list (e.g. an analyzer): enabled or not, with its own parameters.</summary>
@@ -252,8 +307,9 @@ public partial class CheckedEntryViewModel(CheckedList list, int index, EditCont
 /// order (analyzers), or the parameters of a nested item; anything else read-only text.
 /// </summary>
 public partial class ValueEditorViewModel : ViewModelBase, IMultiField {
-  // wider matrices (e.g. a 130x130 distance matrix) are shown as text rows
-  private const int MaxEditableColumns = 40;
+  // wider matrices (e.g. a 130x130 distance matrix) are shown read-only, in cells fitted to their values;
+  // beyond MaxGridColumns as text rows (a realized row would hold too many cells)
+  private const int MaxEditableColumns = 40, MaxGridColumns = 300;
   private readonly EditContext context;
   private readonly Action edited;
   private readonly CheckedList? checkedList;
@@ -325,7 +381,8 @@ public partial class ValueEditorViewModel : ViewModelBase, IMultiField {
 
   public string TableInfo => Value switch {
     IStringConvertibleArray a => $"Length: {a.Length}",
-    IStringConvertibleMatrix m => $"Rows: {m.Rows}, columns: {m.Columns}" + (m.Columns > MaxEditableColumns ? " (shown as text)" : ""),
+    IStringConvertibleMatrix m => $"Rows: {m.Rows}, columns: {m.Columns}"
+      + (m.Columns > MaxGridColumns ? " (shown as text)" : m.Columns > MaxEditableColumns ? " (read-only)" : ""),
     _ => ""
   };
 
@@ -335,11 +392,26 @@ public partial class ValueEditorViewModel : ViewModelBase, IMultiField {
   public IReadOnlyList<CellRowViewModel> Rows => rows ??= BuildRows();
   private IReadOnlyList<CellRowViewModel>? rows;
 
-  public IReadOnlyList<string> TextRows => Value is IStringConvertibleMatrix { Columns: > MaxEditableColumns } m
+  public IReadOnlyList<string> TextRows => Value is IStringConvertibleMatrix { Columns: > MaxGridColumns } m
     ? ItemInspector.Cells(m).Select((r, i) => $"{i}: {string.Join("  ", r)}").ToList() : [];
 
+  /// <summary>A matrix too wide to edit: the same cells, read-only (text, no text boxes).</summary>
+  public IReadOnlyList<CellRowViewModel> WideRows => wideRows ??= BuildWideRows();
+  private IReadOnlyList<CellRowViewModel>? wideRows;
+
   public bool IsWideMatrix => TextRows.Count > 0;
-  public bool IsGrid => IsTable && !IsWideMatrix;
+  public bool IsWideGrid => WideRows.Count > 0;
+  public bool IsGrid => IsTable && !IsWideMatrix && !IsWideGrid;
+
+  private IReadOnlyList<CellRowViewModel> BuildWideRows() {
+    if (Value is not IStringConvertibleMatrix { Columns: > MaxEditableColumns and <= MaxGridColumns } m) return [];
+    var texts = ItemInspector.Cells(m).ToList();
+    int longest = texts.SelectMany(r => r).Select(t => t.Length).DefaultIfEmpty(1).Max();
+    double width = Math.Clamp(longest * 8 + 14, 40, 140);
+    var item = Value!;
+    var readOnly = context.ReadOnly();
+    return texts.Select((r, i) => new CellRowViewModel(i, r.Select((t, c) => new CellViewModel(item, i, c, t, readOnly, () => { }) { Width = width }).ToList())).ToList();
+  }
 
   private IReadOnlyList<CellRowViewModel> BuildRows() {
     bool editable = !ReadOnly;

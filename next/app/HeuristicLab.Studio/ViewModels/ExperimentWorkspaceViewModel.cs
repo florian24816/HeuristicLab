@@ -160,7 +160,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>Experiments or a single algorithm are running (or paused): the tree cannot change.</summary>
   [ObservableProperty]
-  [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StartSelectedCommand), nameof(StopCommand))]
+  [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StartSelectedCommand), nameof(StopCommand), nameof(EjectCommand))]
   [NotifyPropertyChangedFor(nameof(IsEditable))]
   public partial bool IsRunning { get; set; }
 
@@ -176,6 +176,11 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     algorithmRunning = running;
     IsRunning = IsRunningExperiments || algorithmRunning;
   }
+
+  /// <summary>Something started here finished (experiments, an algorithm, a detailed analysis run): title, message.</summary>
+  public event Action<string, string>? Finished;
+
+  public void NotifyFinished(string title, string message) => Finished?.Invoke(title, message);
 
   partial void OnIsRunningChanged(bool value) {
     // blocks stay clickable while running, but their menus offer no changes
@@ -327,6 +332,13 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   private ExperimentBlockViewModel AddExperiment(Experiment experiment, string? path) {
     var block = new ExperimentBlockViewModel(this, experiment, path);
+    if (path != null) {
+      try {
+        block.SingleRuns.Load(path);
+      } catch (Exception e) when (e is IOException or InvalidOperationException or UnauthorizedAccessException) {
+        Status = $"Its single runs ({Path.GetFileName(SingleRuns.FileFor(path))}) could not be read: {e.Message}";
+      }
+    }
     Experiments.Add(block);
     Selected = block;
     OnPropertyChanged(nameof(HasExperiments));
@@ -342,7 +354,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
     var path = await fileDialogs.SaveHlFileAsync(Path.GetFileName(block.FilePath) ?? block.Name + ".hl");
     if (path == null) return;
-    await Task.Run(() => Documents.Save(block.Experiment, path));
+    await Task.Run(() => { Documents.Save(block.Experiment, path); block.SingleRuns.Save(path); });
     block.FilePath = path;
     block.IsModified = false;
     Remember(path);
@@ -363,7 +375,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       return;
     }
     try {
-      await Task.Run(() => Documents.Save(block.Experiment, block.FilePath));
+      await Task.Run(() => { Documents.Save(block.Experiment, block.FilePath); block.SingleRuns.Save(block.FilePath); });
       block.IsModified = false;
       Remember(block.FilePath);
       Status = $"Saved {block.Name} to {Path.GetFileName(block.FilePath)}";
@@ -403,6 +415,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
     try {
       File.Move(path, target);
+      SingleRuns.Move(path, target);
     } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
       Status = $"Could not rename {Path.GetFileName(path)}: {e.Message}";
       return false;
@@ -504,6 +517,46 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     block.SetProblem(problem);
     if (block.Problem != null) Selected = block.Problem;
     RefreshState();
+  }
+
+  // ---- ejecting experiments
+
+  private bool CanEject() => !IsRunning && Experiments.Count > 0;
+
+  /// <summary>Asks which experiments to eject (all or ticked) and whether to autosave, then ejects them.</summary>
+  [RelayCommand(CanExecute = nameof(CanEject))]
+  private async Task EjectAsync() {
+    if (dialogs == null || !CanEject()) return;
+    var all = Experiments.ToList();
+    var choice = await dialogs.ChooseEjectAsync(all.Select(e => e.Name).ToList(), all.Select(e => !e.IsSaved).ToList());
+    if (choice == null) return;
+    await EjectAsync(choice.Experiments.Where(i => i >= 0 && i < all.Count).Select(i => all[i]).ToList(), choice.Autosave);
+  }
+
+  /// <summary>
+  /// Takes experiments out of the workspace (their files stay). An unsaved one is saved first with
+  /// autosave (to its file, or a file chosen as with "Save as..."); without, the user decides for each:
+  /// save, eject without saving, or keep it. One that could not be saved stays. Returns the ejected ones.
+  /// </summary>
+  public async Task<IReadOnlyList<ExperimentBlockViewModel>> EjectAsync(IReadOnlyList<ExperimentBlockViewModel> experiments, bool autosave) {
+    var ejected = new List<ExperimentBlockViewModel>();
+    if (IsRunning) { Status = "Experiments can be ejected when nothing runs."; return ejected; }
+    var kept = new List<string>();
+    foreach (var experiment in experiments) {
+      if (!experiment.IsSaved) {
+        var answer = autosave ? UnsavedChoice.Save : dialogs == null ? UnsavedChoice.Keep : await dialogs.AskUnsavedAsync(experiment.Name);
+        if (answer == UnsavedChoice.Save) await SaveChangesAsync(experiment);
+        if (answer == UnsavedChoice.Keep || (answer == UnsavedChoice.Save && !experiment.IsSaved)) { kept.Add(experiment.Name); continue; }
+      }
+      if (Selected != null && IsWithin(Selected, experiment)) Selected = null;
+      Experiments.Remove(experiment);
+      ejected.Add(experiment);
+    }
+    OnPropertyChanged(nameof(HasExperiments));
+    RefreshState();
+    Status = $"Ejected {ejected.Count} experiment{(ejected.Count == 1 ? "" : "s")}"
+             + (kept.Count > 0 ? $"; kept (not saved): {string.Join(", ", kept)}" : "") + ".";
+    return ejected;
   }
 
   /// <summary>
@@ -685,6 +738,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     RefreshMultiEdit();
     StartAllCommand.NotifyCanExecuteChanged();
     StartSelectedCommand.NotifyCanExecuteChanged();
+    EjectCommand.NotifyCanExecuteChanged();
   }
 
   [RelayCommand(CanExecute = nameof(CanStartAll))]
@@ -711,6 +765,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// its own seed setting (random by default).
   /// </summary>
   private async Task StartAsync(System.Collections.Generic.IReadOnlyList<ExperimentBlockViewModel> experiments) {
+    if (experiments.Count == 0) return;
     IsRunningExperiments = true;
     IsRunning = true;
     stopSource = new CancellationTokenSource();
@@ -755,6 +810,8 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       var reports = started.OfType<RunReport>().ToArray();
       Status = $"{reports.Count(r => r.Outcome == RunOutcome.Completed)} of {reports.Length} experiments completed, " +
                $"{reports.Sum(r => r.Runs.Count)} runs";
+      NotifyFinished(experiments.Count == 1 ? $"{experiments[0].Name} finished" : $"{experiments.Count} experiments finished",
+        experiments.Count == 1 ? experiments[0].RunStatus : Status);
     } finally {
       IsRunningExperiments = false;
       IsRunning = algorithmRunning;

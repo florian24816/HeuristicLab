@@ -143,6 +143,39 @@ public class StudioBlockDesignTests {
     Assert.IsTrue(new FileInfo(shot).Length > 5_000);
   }
 
+  [TestMethod]
+  public async Task TheSelectedBlockIsCoveredOrange() {
+    await session.Dispatch(() => {
+      var vm = new MainViewModel(null, null);
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1200, Height = 700 };
+      window.Show();
+      var experiment = ws.NewExperiment();
+      var first = ws.AddAlgorithm(experiment, TabuSearch);
+      var second = ws.AddAlgorithm(experiment, TabuSearch);
+      ws.Selected = first;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Avalonia.Controls.Border Layer(object block) => window.GetVisualDescendantsOf<Avalonia.Controls.Border>()
+        .Single(b => b.Classes.Contains("selection") && b.DataContext == block);
+      var layer = Layer(first);
+      Assert.IsTrue(layer.IsEffectivelyVisible);
+      Assert.AreEqual(Avalonia.Media.Color.Parse("#F7931D"), ((Avalonia.Media.ISolidColorBrush)layer.Background!).Color);
+      Assert.IsTrue(layer.Opacity is > 0 and < 1, "see-through: the block stays readable");
+      Assert.IsFalse(layer.IsHitTestVisible, "clicks reach the block");
+      var block = window.GetVisualDescendantsOf<Avalonia.Controls.Border>().First(b => b.Classes.Contains("block") && b.DataContext == first);
+      Assert.AreEqual(block.Bounds.Width, layer.Bounds.Width, 1, "over the whole block");
+      Assert.IsFalse(Layer(second).IsEffectivelyVisible);
+      Assert.IsFalse(window.GetVisualDescendantsOf<Avalonia.Controls.Border>().Any(b => b.Classes.Contains("selection") && b.DataContext == experiment && b.IsEffectivelyVisible));
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selected-block.png"));
+      ws.Selected = second;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsFalse(Layer(first).IsEffectivelyVisible);
+      Assert.IsTrue(Layer(second).IsEffectivelyVisible);
+      window.Close();
+      return true;
+    }, CancellationToken.None);
+  }
+
   private sealed class SaveDialogs(string path) : HeuristicLab.Studio.Services.IFileDialogService {
     public int SaveAsked { get; private set; }
     public Task<string?> OpenHlFileAsync() => Task.FromResult<string?>(null);

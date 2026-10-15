@@ -11,13 +11,21 @@ using HeuristicLab.Optimization;
 
 namespace HeuristicLab.Studio.ViewModels;
 
-/// <summary>An experiment, batch run, time-limit run or algorithm of the workspace, with its runs.</summary>
-public sealed class RunsSourceViewModel(string name, string kind, IOptimizer optimizer) {
+/// <summary>
+/// An experiment, batch run, time-limit run or algorithm of the workspace with its runs, or a part of the
+/// "Single runs" folder (all of them, an experiment's, an algorithm's).
+/// </summary>
+public sealed class RunsSourceViewModel(string name, string kind, object key, Func<IReadOnlyList<IRun>> runs) {
+  public RunsSourceViewModel(string name, string kind, IOptimizer optimizer) : this(name, kind, optimizer, () => optimizer.Runs.ToArray()) { }
+
   public string Name { get; } = name;
   public string Kind { get; } = kind;
-  public IOptimizer Optimizer { get; } = optimizer;
+  /// <summary>What it stands for (the optimizer, or a part of the single runs): kept selected over a refresh.</summary>
+  public object Key { get; } = key;
+  public IOptimizer? Optimizer => Key as IOptimizer;
+  public IReadOnlyList<IRun> Runs => runs();
   public ObservableCollection<RunsSourceViewModel> Children { get; } = [];
-  public int RunCount => Optimizer.Runs.Count;
+  public int RunCount => Runs.Count;
   public string Label => $"{Name}  ({RunCount} run{(RunCount == 1 ? "" : "s")})";
 }
 
@@ -61,12 +69,30 @@ public partial class RunsBrowserViewModel : ViewModelBase {
   /// <summary>Re-reads the workspace (new experiments, finished runs); the selected block and run stay selected.</summary>
   [RelayCommand]
   public void Refresh() {
-    var selected = SelectedSource?.Optimizer;
+    var selected = SelectedSource?.Key;
     var run = SelectedRun;
     Sources.Clear();
     foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment));
+    if (workspace.Experiments.Count > 0) Sources.Add(SingleRunsNode(workspace.Experiments));
     OnPropertyChanged(nameof(HasSources));
-    Select(selected, run);
+    SelectKey(selected, run);
+  }
+
+  /// <summary>The key of the "Single runs" folder (all single runs of the workspace).</summary>
+  public static readonly object SingleRunsKey = new();
+
+  /// <summary>"Single runs": runs made by Start on one algorithm, per experiment and algorithm.</summary>
+  internal static RunsSourceViewModel SingleRunsNode(IEnumerable<ExperimentBlockViewModel> experiments) {
+    var list = experiments.ToList();
+    var folder = new RunsSourceViewModel("Single runs", "Started on one algorithm", SingleRunsKey,
+      () => list.SelectMany(e => e.SingleRuns.Runs).ToList());
+    foreach (var experiment in list.Where(e => e.SingleRuns.Count > 0)) {
+      var single = experiment.SingleRuns;
+      var node = new RunsSourceViewModel(experiment.Name, "Experiment", single, () => single.Runs.ToArray());
+      foreach (var group in single.Groups) node.Children.Add(new RunsSourceViewModel(group.Algorithm, "Algorithm", group, () => group.Runs));
+      folder.Children.Add(node);
+    }
+    return folder;
   }
 
   /// <summary>Deletes all runs of one experiment, chosen and confirmed in a dialog.</summary>
@@ -77,8 +103,10 @@ public partial class RunsBrowserViewModel : ViewModelBase {
   }
 
   /// <summary>Selects the block of this optimizer (and a run of it); the first experiment if it is not in the workspace.</summary>
-  public void Select(IOptimizer? optimizer, IRun? run = null) {
-    var node = All(Sources).FirstOrDefault(s => ReferenceEquals(s.Optimizer, optimizer)) ?? Sources.FirstOrDefault();
+  public void Select(IOptimizer? optimizer, IRun? run = null) => SelectKey(optimizer, run);
+
+  private void SelectKey(object? key, IRun? run = null) {
+    var node = All(Sources).FirstOrDefault(s => ReferenceEquals(s.Key, key)) ?? Sources.FirstOrDefault();
     if (!ReferenceEquals(node, SelectedSource)) SelectedSource = node;
     else Runs?.Refresh();
     if (Runs == null) return;
@@ -99,7 +127,7 @@ public partial class RunsBrowserViewModel : ViewModelBase {
 
   partial void OnSelectedSourceChanged(RunsSourceViewModel? value) {
     if (Runs != null) Runs.PropertyChanged -= OnRunsChanged;
-    Runs = value == null ? null : new RunsViewModel(value.Optimizer.Runs) { ShowsDetails = false };
+    Runs = value == null ? null : new RunsViewModel(() => value.Runs) { ShowsDetails = false };
     if (Runs != null) {
       Runs.PropertyChanged += OnRunsChanged;
       Runs.Refresh();

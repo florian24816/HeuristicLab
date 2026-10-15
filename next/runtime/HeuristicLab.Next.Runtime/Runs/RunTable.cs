@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Globalization;
 using HeuristicLab.Analysis;
 using HeuristicLab.Optimization;
@@ -6,7 +7,8 @@ namespace HeuristicLab.Next.Runtime.Runs;
 
 /// <param name="Key">"source", "origin", "run", "param:X", "result:Y", "label:Z" or a results folder's own keys.</param>
 /// <param name="Kind">Run, Parameter, Result or Label.</param>
-public sealed record RunColumn(string Key, string Name, string Kind, bool IsNumeric) {
+/// <param name="IsYesNo">Text that is only True or False (switches such as SetSeedRandomly).</param>
+public sealed record RunColumn(string Key, string Name, string Kind, bool IsNumeric, bool IsYesNo = false) {
   public override string ToString() => Kind is "Parameter" or "Result" ? $"{Name} ({Kind.ToLowerInvariant()})" : Name;
 }
 
@@ -37,7 +39,12 @@ public sealed class RunTable {
   public RunTable(IReadOnlyList<RunRow> rows) {
     Rows = rows;
     var keys = rows.SelectMany(r => r.Values.Keys).Distinct().ToList();
-    Columns = keys.Select(k => new RunColumn(k, NameOf(k), KindOf(k), rows.All(r => !r.Values.TryGetValue(k, out var v) || v is double)))
+    static bool YesNo(object v) => v is string s && (s.Equals("True", StringComparison.OrdinalIgnoreCase) || s.Equals("False", StringComparison.OrdinalIgnoreCase));
+    Columns = keys.Select(k => {
+        var values = rows.Select(r => r.Values.TryGetValue(k, out var v) ? v : null).OfType<object>().ToList();
+        bool numeric = values.All(v => v is double);
+        return new RunColumn(k, NameOf(k), KindOf(k), numeric, !numeric && values.Count > 0 && values.All(YesNo));
+      })
       .OrderBy(c => c.Kind switch { "Run" => 0, "Label" => 1, "Parameter" => 2, _ => 3 })
       .ThenBy(c => c.Kind == "Run" ? Array.IndexOf(RunKeys, c.Key) : 0)
       .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
@@ -61,22 +68,28 @@ public sealed class RunTable {
   };
 
   /// <summary>Runs of optimizers in memory; the same run reached from two sources is listed once.</summary>
-  public static RunTable FromRuns(IEnumerable<SourcedRun> runs) {
+  /// <param name="cache">Keeps what was read from each run (the slow part: all its parameters and results), so a
+  /// new filter or grouping does not read the runs again.</param>
+  /// <param name="progress">How many of the runs are done (reported every 50 runs and at the end).</param>
+  public static RunTable FromRuns(IEnumerable<SourcedRun> runs, RunValueCache? cache = null, IProgress<int>? progress = null,
+                                  CancellationToken cancellationToken = default) {
     var seen = new HashSet<IRun>(ReferenceEqualityComparer.Instance);
     var rows = new List<RunRow>();
+    int done = 0;
     foreach (var (source, origin, run) in runs) {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (++done % 50 == 0) progress?.Report(done);
       if (!seen.Add(run)) continue;
       var values = new Dictionary<string, object> { ["source"] = source, ["origin"] = origin, ["run"] = run.Name };
-      var record = OptimizerRunner.ToRecord(run);
-      foreach (var (name, value) in record.Parameters) if (Cell(value) is { } cell) values["param:" + name] = cell;
-      foreach (var (name, value) in record.Results) if (Cell(value) is { } cell) values["result:" + name] = cell;
+      foreach (var (key, value) in cache != null ? cache.Get(run) : RunValueCache.Read(run)) values[key] = value;
       rows.Add(new RunRow(source, values, run));
     }
+    progress?.Report(done);
     return new RunTable(rows);
   }
 
   /// <summary>Scalars as numbers, text and choices (operators by name) as text; arrays and tables are not cells.</summary>
-  private static object? Cell(ItemValue value) => value.Value switch {
+  internal static object? Cell(ItemValue value) => value.Value switch {
     double d => d,
     int i => (double)i,
     long l => (double)l,
@@ -122,11 +135,57 @@ public sealed class RunTable {
   }
 }
 
-/// <param name="Op">=, ≠, &lt;, ≤, &gt;, ≥ or contains; numbers compare as numbers.</param>
+/// <summary>
+/// The cells read from each run (parameters and results), kept as long as the run exists. Thread-safe, so
+/// tables can be built off the UI thread.
+/// </summary>
+public sealed class RunValueCache {
+  /// <summary>One cache for a whole front end: every table of the same runs reads each run once.</summary>
+  public static RunValueCache Shared { get; } = new();
+
+  // with the numbers of parameters and results read: a run can still get parameters after it was made
+  // (e.g. the "Resources: ..." ones Studio adds when a run ends), then it is read again
+  private sealed record Entry(int Parameters, int Results, IReadOnlyDictionary<string, object> Cells);
+  private readonly ConditionalWeakTable<IRun, Entry> values = new();
+
+  /// <summary>Whether the run was read already as it is now (building a table from it is then fast).</summary>
+  public bool Contains(IRun run) => values.TryGetValue(run, out var entry) && Current(run, entry);
+
+  public IReadOnlyDictionary<string, object> Get(IRun run) {
+    if (values.TryGetValue(run, out var entry) && Current(run, entry)) return entry.Cells;
+    entry = new Entry(run.Parameters.Count, run.Results.Count, Read(run));
+    values.AddOrUpdate(run, entry);
+    return entry.Cells;
+  }
+
+  private static bool Current(IRun run, Entry entry) => entry.Parameters == run.Parameters.Count && entry.Results == run.Results.Count;
+
+  public static IReadOnlyDictionary<string, object> Read(IRun run) {
+    var cells = new Dictionary<string, object>();
+    var record = OptimizerRunner.ToRecord(run);
+    foreach (var (name, value) in record.Parameters) if (RunTable.Cell(value) is { } cell) cells["param:" + name] = cell;
+    foreach (var (name, value) in record.Results) if (RunTable.Cell(value) is { } cell) cells["result:" + name] = cell;
+    return cells;
+  }
+}
+
+/// <param name="Op">=, ≠, &lt;, ≤, &gt;, ≥, contains or does not contain; numbers compare as numbers.</param>
 public sealed record RunFilter(string Key, string Op, string Value) {
-  public static readonly IReadOnlyList<string> Operators = ["=", "≠", "<", "≤", ">", "≥", "contains"];
+  public const string Contains = "contains", NotContains = "does not contain";
+  public static readonly IReadOnlyList<string> Operators = ["=", "≠", "<", "≤", ">", "≥", Contains, NotContains];
+  public static readonly IReadOnlyList<string> NumberOperators = ["=", "≠", "<", "≤", ">", "≥"];
+  public static readonly IReadOnlyList<string> YesNoOperators = ["=", "≠"];
+  public static readonly IReadOnlyList<string> TextOperators = ["=", "≠", Contains, NotContains];
+
+  /// <summary>
+  /// The operators that make sense for a column: numbers are ordered, text is not (a name "less than"
+  /// another one would only compare letters), and a switch is only true or false.
+  /// </summary>
+  public static IReadOnlyList<string> OperatorsFor(RunColumn? column) =>
+    column == null ? TextOperators : column.IsNumeric ? NumberOperators : column.IsYesNo ? YesNoOperators : TextOperators;
 
   public bool Matches(RunRow row) {
+    if (Op == NotContains) return !row.Text(Key).Contains(Value, StringComparison.OrdinalIgnoreCase);
     if (row.Number(Key) is double x && double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var y))
       return Op switch { "=" => x == y, "≠" => x != y, "<" => x < y, "≤" => x <= y, ">" => x > y, "≥" => x >= y, _ => row.Text(Key).Contains(Value, StringComparison.OrdinalIgnoreCase) };
     string text = row.Text(Key);

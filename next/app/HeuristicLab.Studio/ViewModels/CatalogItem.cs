@@ -8,17 +8,25 @@ namespace HeuristicLab.Studio.ViewModels;
 /// <summary>
 /// A row of a categorized list (algorithms, problems): tinted with its category's color, the first
 /// row of a category carries the category's name as heading. Value is what the row stands for.
+/// A row with a warning (e.g. a problem the algorithm cannot run) is yellow and says why.
 /// </summary>
-public sealed record CatalogItem(string Display, string Description, string Category, IBrush Tint, IBrush Accent, bool StartsGroup, object? Value) {
+public sealed record CatalogItem(string Display, string Description, string Category, IBrush Tint, IBrush Accent, bool StartsGroup, object? Value,
+                                 string? Warning = null) {
   public bool HasDescription => Description.Length > 0;
+  public bool IsWarned => Warning != null;
+
+  /// <summary>The yellow of the unsaved pictogram, used for everything that probably does not work.</summary>
+  public static readonly IBrush Caution = new ImmutableSolidColorBrush(Color.Parse("#F4E803"));
 
   /// <summary>Rows in the given order, a heading wherever the category changes.</summary>
-  public static IReadOnlyList<CatalogItem> Group(IEnumerable<(string Display, string Description, string Category, object? Value)> rows) {
+  public static IReadOnlyList<CatalogItem> Group(IEnumerable<(string Display, string Description, string Category, object? Value)> rows,
+                                                 Func<object?, string?>? warning = null) {
     var items = new List<CatalogItem>();
     string? previous = null;
     foreach (var (display, description, category, value) in rows) {
       var (tint, accent) = CategoryColors.For(category);
-      items.Add(new CatalogItem(display, description, category, tint, accent, category != previous, value));
+      var warned = warning?.Invoke(value);
+      items.Add(new CatalogItem(display, description, category, warned != null ? Caution : tint, accent, category != previous, value, warned));
       previous = category;
     }
     return items;

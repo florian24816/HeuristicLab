@@ -75,10 +75,19 @@ public class LineChart : Control {
   public static readonly StyledProperty<string?> TopAxisTitleProperty =
     AvaloniaProperty.Register<LineChart, string?>(nameof(TopAxisTitle));
 
+  /// <summary>False: no legend above the plot (it is shown elsewhere, e.g. in a floating panel in fullscreen).</summary>
+  public static readonly StyledProperty<bool> ShowLegendProperty = AvaloniaProperty.Register<LineChart, bool>(nameof(ShowLegend), true);
+  /// <summary>Changes when the shared hidden set was changed from outside: draw again.</summary>
+  public static readonly StyledProperty<int> HiddenVersionProperty = AvaloniaProperty.Register<LineChart, int>(nameof(HiddenVersion));
+
   static LineChart() {
     AffectsRender<LineChart>(SeriesProperty, XAxisTitleProperty, ForegroundProperty, MarkersProperty, YAxisTitleProperty,
-      SecondYAxisTitleProperty, EmptyTextProperty, SelectionStartProperty, SelectionEndProperty, TopAxisProperty, TopAxisTitleProperty);
+      SecondYAxisTitleProperty, EmptyTextProperty, SelectionStartProperty, SelectionEndProperty, TopAxisProperty, TopAxisTitleProperty,
+      ShowLegendProperty, HiddenVersionProperty);
   }
+
+  public bool ShowLegend { get => GetValue(ShowLegendProperty); set => SetValue(ShowLegendProperty, value); }
+  public int HiddenVersion { get => GetValue(HiddenVersionProperty); set => SetValue(HiddenVersionProperty, value); }
 
   public double? SelectionStart { get => GetValue(SelectionStartProperty); set => SetValue(SelectionStartProperty, value); }
   public double? SelectionEnd { get => GetValue(SelectionEndProperty); set => SetValue(SelectionEndProperty, value); }
@@ -110,13 +119,13 @@ public class LineChart : Control {
     InvalidateVisual();
   }
 
-  private List<(Rect Area, ChartSeries Series)> LayoutLegend(IReadOnlyList<ChartSeries> all, IBrush foreground, double width) {
+  private List<(Rect Area, ChartSeries Series)> LayoutLegend(IReadOnlyList<ChartSeries> all, IBrush foreground, double left, double width) {
     var result = new List<(Rect, ChartSeries)>();
-    double x = LeftMargin, y = 2, max = Math.Max(LeftMargin + 100, width - 150);  // room for the axis titles on the right
+    double x = left, y = 2, max = Math.Max(left + 100, width - 8);
     foreach (var s in all) {
-      double w = 18 + MakeText(s.Name + (s.SecondYAxis ? " (right)" : ""), foreground).Width + 16;
-      if (x + w > max && x > LeftMargin) { x = LeftMargin; y += 16; }
-      result.Add((new Rect(x, y, w, 15), s));
+      double w = 20 + MakeText(s.Name + (s.SecondYAxis ? " (right)" : ""), foreground).Width + 18;
+      if (x + w > max && x > left) { x = left; y += 20; }
+      result.Add((new Rect(x, y, w, 18), s));
       x += w;
     }
     return result;
@@ -149,8 +158,10 @@ public class LineChart : Control {
   public string? SecondYAxisTitle { get => GetValue(SecondYAxisTitleProperty); set => SetValue(SecondYAxisTitleProperty, value); }
   public string EmptyText { get => GetValue(EmptyTextProperty); set => SetValue(EmptyTextProperty, value); }
 
-  private const double LeftMargin = 72, RightMargin = 16, SecondAxisMargin = 64, TopMargin = 28, BottomMargin = 40, FontSize = 11;
+  // scales, legend and axis titles: 13 px, titles semi-bold; margins follow the labels' sizes
+  private const double RightMargin = 16, TopMargin = 32, FontSize = 13;
   private static readonly Typeface Font = new(FontFamily.Default);
+  private static readonly Typeface TitleFont = new(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold);
 
   private sealed record Axis(double Min, double Max, double[] Ticks);
 
@@ -180,16 +191,23 @@ public class LineChart : Control {
     bool topAxis = TopAxis is { Count: > 0 };
     var foreground = Foreground ?? Brushes.Gray;
     var all = (Series ?? []).Where(s => s.Points.Count > 0).ToList();
-    var legend = LayoutLegend(all, foreground, bounds.Width);
-    double legendExtra = legend.Count > 0 ? legend.Max(l => l.Area.Bottom) - 17 : 0;
     var series = all.Where(s => !hiddenSeries.Contains(s.Name)).ToList();
     var first = series.Where(s => !s.SecondYAxis).ToList();
     var second = series.Where(s => s.SecondYAxis).ToList();
     if (first.Count == 0) { first = second; second = []; }
-    double right = second.Count > 0 ? SecondAxisMargin : RightMargin;
+    var y1 = YAxis(first);
+    var y2 = second.Count > 0 ? YAxis(second) : null;
+    // left: the scale's labels and the vertical title; right: the second scale and its title
+    double TicksWidth(Axis axis) => axis.Ticks.Select(t => MakeText(Label(t), foreground).Width).DefaultIfEmpty(0).Max();
+    double titleHeight = MakeTitle("Ag", foreground).Height;
+    double left = 12 + TicksWidth(y1) + 8 + (string.IsNullOrEmpty(YAxisTitle) ? 0 : titleHeight + 6);
+    double right = y2 != null ? 12 + TicksWidth(y2) + 8 + (string.IsNullOrEmpty(SecondYAxisTitle) ? 0 : titleHeight + 6) : RightMargin;
+    var legend = ShowLegend ? LayoutLegend(all, foreground, left, bounds.Width) : [];
+    double legendExtra = legend.Count > 0 ? legend.Max(l => l.Area.Bottom) - 20 : 0;
     double plotTop = TopMargin + Math.Max(0, legendExtra) + (topAxis ? 22 : 0);
-    var plot = new Rect(LeftMargin, plotTop,
-      Math.Max(1, bounds.Width - LeftMargin - right), Math.Max(1, bounds.Height - plotTop - BottomMargin));
+    double tickHeight = MakeText("0", foreground).Height;
+    double bottomMargin = 8 + tickHeight + (string.IsNullOrEmpty(XAxisTitle) ? 0 : 6 + titleHeight) + 10;
+    var plot = new Rect(left, plotTop, Math.Max(1, bounds.Width - left - right), Math.Max(1, bounds.Height - plotTop - bottomMargin));
     var gridPen = new Pen(new SolidColorBrush(Colors.Gray, 0.25), 1);
     var axisPen = new Pen(foreground, 1);
 
@@ -221,8 +239,6 @@ public class LineChart : Control {
     }
     xTicks = xTicks.Where(x => x >= xMin - 1e-9 && x <= xMax + 1e-9).ToArray();
 
-    var y1 = YAxis(first);
-    var y2 = second.Count > 0 ? YAxis(second) : null;
     double MapX(double x) => plot.Left + (x - xMin) / (xMax - xMin) * plot.Width;
     lastPlot = plot; lastXMin = xMin; lastXMax = xMax;
     double MapY(double y, Axis axis) => plot.Bottom - (y - axis.Min) / (axis.Max - axis.Min) * plot.Height;
@@ -238,14 +254,19 @@ public class LineChart : Control {
     foreach (var x in xTicks) {
       var px = MapX(x);
       context.DrawLine(gridPen, new Point(px, plot.Top), new Point(px, plot.Bottom));
-      DrawText(context, Label(x), foreground, new Point(px, plot.Bottom + 10), center: true);
+      DrawText(context, Label(x), foreground, new Point(px, plot.Bottom + 8 + tickHeight / 2), center: true);
     }
     context.DrawLine(axisPen, plot.BottomLeft, plot.BottomRight);
     context.DrawLine(axisPen, plot.BottomLeft, plot.TopLeft);
     if (y2 != null) context.DrawLine(axisPen, plot.BottomRight, plot.TopRight);
-    DrawText(context, XAxisTitle, foreground, new Point(plot.Center.X, plot.Bottom + 28), center: true);
-    var yTitles = string.Join("   |   ", new[] { YAxisTitle, y2 != null ? SecondYAxisTitle + " (right)" : null }.Where(t => !string.IsNullOrEmpty(t)));
-    if (yTitles.Length > 0) DrawText(context, yTitles, foreground, new Point(bounds.Width - 4, 10), alignRight: true);
+    if (!string.IsNullOrEmpty(XAxisTitle)) {
+      var title = MakeTitle(XAxisTitle, foreground);
+      context.DrawText(title, new Point(plot.Center.X - title.Width / 2, plot.Bottom + 8 + tickHeight + 6));
+    }
+    // the axis titles stand vertically beside their scales
+    if (!string.IsNullOrEmpty(YAxisTitle)) DrawVertical(context, MakeTitle(YAxisTitle, foreground), 12 + titleHeight / 2, plot.Center.Y);
+    if (y2 != null && !string.IsNullOrEmpty(SecondYAxisTitle))
+      DrawVertical(context, MakeTitle(SecondYAxisTitle, foreground), bounds.Width - 12 - titleHeight / 2, plot.Center.Y);
 
     var markerPen = new Pen(foreground, 1, new DashStyle([4, 3], 0));
     foreach (var marker in Markers ?? []) {
@@ -290,8 +311,8 @@ public class LineChart : Control {
           var fill = new SolidColorBrush(s.Color, s.Kind == SeriesKind.Histogram && series.Count(o => o.IsColumns) > 1 ? 0.55 : 0.85);
           var outline = new Pen(new SolidColorBrush(Colors.White, 0.7), 0.5);
           foreach (var p in finite) {
-            double left = MapX(p.X - width / 2), rightEdge = MapX(p.X + width / 2), top = MapY(p.Y, axis);
-            context.DrawRectangle(fill, outline, new Rect(new Point(left, Math.Min(top, baseline)), new Point(rightEdge, Math.Max(top, baseline))));
+            double leftEdge = MapX(p.X - width / 2), rightEdge = MapX(p.X + width / 2), top = MapY(p.Y, axis);
+            context.DrawRectangle(fill, outline, new Rect(new Point(leftEdge, Math.Min(top, baseline)), new Point(rightEdge, Math.Max(top, baseline))));
           }
           continue;
         }
@@ -327,16 +348,26 @@ public class LineChart : Control {
     foreach (var (area, s) in legend) {
       bool off = hiddenSeries.Contains(s.Name);
       var brush = new SolidColorBrush(s.Color);
-      if (off) context.DrawRectangle(null, new Pen(brush, 1.2), new Rect(area.X, area.Y + 3, 12, 9));
-      else context.DrawRectangle(brush, null, s.IsColumns ? new Rect(area.X, area.Y + 3, 12, 9) : new Rect(area.X, area.Y + 6, 14, 3));
+      if (off) context.DrawRectangle(null, new Pen(brush, 1.2), new Rect(area.X, area.Y + 4, 14, 10));
+      else context.DrawRectangle(brush, null, s.IsColumns ? new Rect(area.X, area.Y + 4, 14, 10) : new Rect(area.X, area.Y + 7, 16, 4));
       var text = MakeText(s.Name + (s.SecondYAxis ? " (right)" : ""), off ? new SolidColorBrush(Colors.Gray, 0.6) : foreground);
-      context.DrawText(text, new Point(area.X + 18, area.Y + 8 - text.Height / 2));
+      context.DrawText(text, new Point(area.X + 20, area.Y + 9 - text.Height / 2));
       legendAreas.Add((area, s.Name));
     }
   }
 
   private static FormattedText MakeText(string text, IBrush brush) =>
     new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, FontSize, brush);
+
+  private static FormattedText MakeTitle(string text, IBrush brush) =>
+    new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, TitleFont, FontSize, brush);
+
+  /// <summary>Text turned a quarter left (reading upwards), centered on this point.</summary>
+  private static void DrawVertical(DrawingContext context, FormattedText text, double x, double y) {
+    using (context.PushTransform(Matrix.CreateTranslation(-text.Width / 2, -text.Height / 2) * Matrix.CreateRotation(-Math.PI / 2)
+                                 * Matrix.CreateTranslation(x, y)))
+      context.DrawText(text, new Point(0, 0));
+  }
 
   private static void DrawText(DrawingContext context, string text, IBrush brush, Point anchor,
                                bool alignRight = false, bool center = false) {
