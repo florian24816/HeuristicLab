@@ -1,4 +1,7 @@
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.VisualTree;
 using HeuristicLab.Core;
 using HeuristicLab.Next.Runtime;
 using HeuristicLab.Next.Runtime.Visuals;
@@ -184,6 +187,24 @@ public class StudioAlgorithmDetailTests {
       CollectionAssert.IsSubsetOf(new[] { "NumberOfSolutions", "Parallel" }, operatorParameters);
       Assert.IsTrue(graph.SelectedEditor.HasBreakpoint);
       Shot("graph");
+
+      // fullscreen: the graph fills the screen, the selected operator's parameters float in a panel
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var graphView = window.GetVisualDescendants().OfType<OperatorGraphView>().Single(v => v.IsEffectivelyVisible);
+      var full = graphView.OpenFullscreen()!;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsFalse(full.Graph.GetVisualDescendants().OfType<Button>().Any(b => b.Content is "⛶ Fullscreen" && b.IsEffectivelyVisible));
+      Assert.AreSame(graph.SelectedEditor, full.EditorPanel.GetVisualDescendants().OfType<ContentControl>().First(c => c.Content is ValueEditorViewModel).Content,
+        "the selected operator's parameters in the panel");
+      graph.Selected = graph.Nodes.Single(n => n.Name == "RandomCreator");
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsTrue(full.EditorPanel.GetVisualDescendants().OfType<ContentControl>().Any(c => ReferenceEquals(c.Content, graph.SelectedEditor)), "follows the selection");
+      full.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-detail-graph-fullscreen.png"));
+      full.EditorPanel.ToggleMinimized();
+      Assert.IsTrue(full.EditorPanel.IsMinimized);
+      full.Close();
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsNull(graphView.Fullscreen);
       graph.Selected = graph.Nodes.Single(n => n.Name == "TabuSearchMainLoop");
       graph.OpenCommand.Execute(null);
       Assert.IsTrue(graph.CanGoBack);
@@ -236,6 +257,14 @@ public class StudioAlgorithmDetailTests {
       detail.SelectedTab = AlgorithmDetailViewModel.RunsTab;
       detail.Runs.Selected = detail.Runs.Rows[0];
       Assert.IsTrue(detail.Runs.SelectedDetails.Any(d => d.Name == "Parameter: MaximumIterations"));
+      // the runs table right below the tab, not in the middle of the space
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var runsTable = window.GetVisualDescendants().OfType<TableGridView>().Single(v => v.IsEffectivelyVisible);
+      var tabs = window.GetVisualDescendants().OfType<TabItem>().Single(t => t.IsEffectivelyVisible && t.Header is "Runs" && t.IsSelected);
+      double gap = runsTable.TranslatePoint(default, window)!.Value.Y - tabs.TranslatePoint(new Avalonia.Point(0, tabs.Bounds.Height), window)!.Value.Y;
+      Assert.IsTrue(gap < 40, $"the table starts {gap:0} px below the tab");
+      Assert.IsTrue(runsTable.TranslatePoint(new Avalonia.Point(0, runsTable.Bounds.Height), window)!.Value.Y < window.Bounds.Height - 100,
+        "the run's details do not push the table out of sight");
       Shot("runs");
       window.Close();
       return files;

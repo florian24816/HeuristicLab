@@ -179,6 +179,16 @@ public class StudioRunAnalysisTests {
       ParameterEditor.Apply(ts.Algorithm, ["MaximumIterations=10"]);
       await ws.StartAllCommand.ExecuteAsync(null);
 
+      // the experiment's runs table right below its "Runs" heading
+      ws.Selected = experiment;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var heading = window.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().First(t => t.Text == "Runs" && t.IsEffectivelyVisible && t.FontWeight == Avalonia.Media.FontWeight.SemiBold);
+      var experimentRuns = window.GetVisualDescendants().OfType<TableGridView>().First(v => v.IsEffectivelyVisible);
+      double below = Avalonia.VisualExtensions.TranslatePoint(experimentRuns, default, window)!.Value.Y
+                     - Avalonia.VisualExtensions.TranslatePoint(heading, new Avalonia.Point(0, heading.Bounds.Height), window)!.Value.Y;
+      Assert.IsTrue(below is >= 0 and < 30, $"the table starts {below:0} px below its heading");
+      Shot("experiment-runs");
+
       vm.SelectedTab = MainViewModel.ResultsTab;
       var analysis = vm.RunAnalysis;
       var root = analysis.Sources.Single();

@@ -101,7 +101,9 @@
   square with operator_single/operator_multiple (own graph inside), corners rounded like the block (10) + rounded block with a gradient
   #EDEDED top right -> #F7931D bottom left; layers centered, ordered by predecessors; curved arrows
   with arrowheads, loops dashed along the right side, labels only when not "Successor", a "Start"
-  arrow; node list order = ItemInspector.Layout order, which MultiEdit keys rely on), Engine (choice,
+  arrow; node list order = ItemInspector.Layout order, which MultiEdit keys rely on; "Fullscreen" / F11:
+  OperatorGraphFullscreenWindow - the graph (OperatorGraphView(showsEditor: false)) fills the screen, the
+  selected operator's parameters in a minimizable FloatingPanel), Engine (choice,
   log); Start/Pause/Stop/Prepare. Parameter editing via runtime ItemInspector/CheckedList:
   bool, text, choices with nested parameters, arrays/matrices, checked lists (analyzers), Show in
   Run (GetsCollected). Views are found by ViewLocator (XyzViewModel -> XyzView), so nested
@@ -192,8 +194,8 @@
   algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like
   "hl new", opened as a new experiment), Open..., Open recent (workspace RecentFiles) and Samples...
   Seeds are the algorithms' own Seed/SetSeedRandomly parameters, parallelism is the Resources tab.
-  No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab
-  can still add folders written by "hl run --store"). Runs tab (RunsBrowserViewModel): tree of the
+  No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab's
+  "+ Results folder..." button was removed 2026-10-15; RunAnalysisViewModel.AddFolder still reads "hl run --store" folders). Runs tab (RunsBrowserViewModel): tree of the
   workspace's experiments and blocks, the selected block's runs (RunsViewModel table), the selected
   run's parameters and results with pictures; "Show runs" (block menu / experiment detail) jumps
   there. No Solution tab (removed 2026-10-11; runtime Solutions stays for the CLI). Sweeps and
@@ -203,6 +205,7 @@
   over white, opaque); fixed columns stay in view when scrolling sideways (Controls.Sticky moves
   them by the ScrollViewer offset, ZIndex above; the header sticks the same way vertically):
   Results: Source #FDE5C8, Origin #FBCD96, Run #F9B462 (palest to closest to the logo orange);
+  RunsView: the table at the top (max 300 px), a selected run's details below it in their own scroll area.
   Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
   it (blue overlay); Results header click sorts.
   Pickers keep one searchable list (not HeuristicLab's collapsed tree) but show its categories

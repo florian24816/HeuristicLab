@@ -9,7 +9,6 @@
         <DockPanel Margin="10">
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
                 <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
-                <Button Content="+ Results folder..." Command="{Binding AddFolderCommand}" ToolTip.Tip="Runs stored by 'hl run --store'" />
             </StackPanel>
             <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
                        Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked)." />
