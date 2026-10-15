@@ -77,11 +77,21 @@ public partial class FilterViewModel(RunAnalysisViewModel owner) : ViewModelBase
   public IReadOnlyList<string> Operators => RunFilter.Operators;
   public RunAnalysisViewModel Owner => owner;
 
-  partial void OnColumnChanged(ColumnChoice? value) => owner.Rebuild();
+  /// <summary>
+  /// The column chosen last. A column list replaced under the ComboBox makes it report no selection
+  /// for a moment; the filter keeps its column then (RunAnalysisViewModel.Rebuild shows it again).
+  /// </summary>
+  public string? ColumnKey { get; private set; }
+
+  partial void OnColumnChanged(ColumnChoice? value) {
+    if (value == null) return;  // the list was replaced, not a choice: keep the column
+    ColumnKey = value.Key;
+    owner.Rebuild();
+  }
   partial void OnOpChanged(string value) => owner.Rebuild();
   partial void OnValueChanged(string value) => owner.Rebuild();
 
-  public RunFilter? Filter => Column == null || Value.Length == 0 ? null : new RunFilter(Column.Key, Op, Value);
+  public RunFilter? Filter => ColumnKey == null || Value.Length == 0 ? null : new RunFilter(ColumnKey, Op, Value);
 }
 
 public sealed record AnalysisRow(RunRow Row, IReadOnlyList<string> Cells);
@@ -234,7 +244,18 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   /// <summary>Builds table, groups and every view from the ticked sources, filters and grouping.</summary>
   public void Rebuild() {
+    // a rebuild replaces lists that ComboBoxes show; their reaction must not start another one (each one
+    // replaced the lists again: an endless recursion, a stack overflow that closed the program)
     if (rebuilding) return;
+    rebuilding = true;
+    try {
+      RebuildNow();
+    } finally {
+      rebuilding = false;
+    }
+  }
+
+  private void RebuildNow() {
     var ticked = AllSources(Sources).Where(s => s.Own).ToList();
     // where each run was made: the deepest optimizer of the tree that holds it (experiments and batch runs
     // hold their children's runs too; a time-limit run takes them over). It is shown if that box is ticked.
@@ -252,9 +273,16 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     var tables = new List<RunTable> { RunTable.FromRuns(shown) };
     tables.AddRange(ticked.Where(s => s.Folder != null && folderRows.ContainsKey(s.Folder!)).Select(s => RunTable.FromStore(s.Name, folderRows[s.Folder!])));
     var all = RunTable.Combine(tables);
-    AllColumns = all.Columns.Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
-    NumericColumns = all.Columns.Where(c => c.IsNumeric).Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
-    Table = all.Where(Filters.Select(f => f.Filter).OfType<RunFilter>());
+    // new lists only when the columns changed (a new list resets every ComboBox showing it)
+    var columns = all.Columns.Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
+    if (!columns.SequenceEqual(AllColumns)) AllColumns = columns;
+    var numeric = all.Columns.Where(c => c.IsNumeric).Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
+    if (!numeric.SequenceEqual(NumericColumns)) NumericColumns = numeric;
+    foreach (var filter in Filters)
+      if (filter.ColumnKey != null && filter.Column?.Key != filter.ColumnKey)
+        filter.Column = AllColumns.FirstOrDefault(c => c.Key == filter.ColumnKey) ?? filter.Column;
+    // a filter on a column no ticked source has does not apply
+    Table = all.Where(Filters.Select(f => f.Filter).OfType<RunFilter>().Where(f => all.Column(f.Key) != null));
     Groups = RunGrouping.Group(Table, GroupBy.Select(g => g.Key).ToList(), (int)Bins);
     Status = ticked.Count == 0 ? "Tick the experiments, batch runs, time-limit runs or algorithms whose runs you want to analyse."
       : $"{Table.Rows.Count} of {all.Rows.Count} runs, {Groups.Count} group{(Groups.Count == 1 ? "" : "s")}";
@@ -281,10 +309,11 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     var quality = NumericColumns.FirstOrDefault(c => c.Key == "result:BestQuality") ?? NumericColumns.FirstOrDefault(c => c.Key.StartsWith("result:", StringComparison.Ordinal));
     if (ChartValue == null || !NumericColumns.Contains(ChartValue)) ChartValue = quality;
     if (StatisticsValue == null || !NumericColumns.Contains(StatisticsValue)) StatisticsValue = quality;
-    XChoices = [new ColumnChoice(RunCharts.RunIndex, "Run (number)"), .. NumericColumns];
+    List<ColumnChoice> xChoices = [new ColumnChoice(RunCharts.RunIndex, "Run (number)"), .. NumericColumns];
+    if (!xChoices.SequenceEqual(XChoices)) XChoices = xChoices;
     if (ChartX == null || !XChoices.Contains(ChartX)) ChartX = XChoices[0];
-    var curves = Table.Curves();
-    CurveTables = curves.Select(c => c.Table).ToList();
+    var curveTables = Table.Curves().Select(c => c.Table).ToList();
+    if (!curveTables.SequenceEqual(CurveTables)) CurveTables = curveTables;
     if (CurveTable == null || !CurveTables.Contains(CurveTable)) CurveTable = CurveTables.FirstOrDefault(t => t == "Qualities") ?? CurveTables.FirstOrDefault();
   }
 
