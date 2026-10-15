@@ -1,0 +1,421 @@
+I need your help to describe claude the gui i want. it will be built with alvonia (c sharp). I made pictures of powerpoint slides i made for the design. this is just the design for the selection of the building blocks of an experiment. yellow means button which can be clicked. grey means cant be clicked. green means can be renamed/ parameters adjusted or deleted. Can you describe it as good as possible so claude gets what i want?
+five.jpg
+four.jpg
+one.jpg
+six.jpg
+three.jpg
+two.jpg
+
+Yes — your slides describe a hierarchical experiment builder, not a fixed form. The important part is that adding a batch creates another level inside the experiment, with its own building blocks and its own “add” button.
+
+Below is a prompt you can paste into Claude together with the six images. I’ve separated what the images clearly show from details that still need clarification, so Claude does not silently invent behavior.
+GUI specification: hierarchical experiment builder in C# / Avalonia
+
+I want you to implement the experiment-building part of a desktop application using C# and Avalonia.
+
+The attached PowerPoint mockups show different states of the same interface. They are not six separate screens, and their attachment order is not the order of the workflow.
+
+This specification covers selecting, configuring, and arranging the building blocks of an experiment. It does not specify the algorithm implementations, execution engine, or results display.
+1. Meaning of the colors
+
+The colors in the mockups communicate interaction behavior:
+Color	Meaning
+Yellow	An enabled button that the user can click.
+Grey	A disabled button that the user cannot click.
+Green	An existing, editable building block. The user can rename it, adjust its parameters, or delete it, as applicable to that block.
+
+Important distinctions:
+
+    Green does not mean “success,” “finished,” or “currently running.”
+
+    Yellow does not mean “warning.”
+
+    Grey means disabled, not simply unselected.
+
+    Green blocks are not static labels. They represent objects the user can interact with and configure.
+
+For the initial implementation, preserve these color meanings so that I can compare the interface with my mockups.
+2. Overall concept
+
+The interface is a workspace containing experiments.
+
+An experiment has a name and contains an ordered collection of building blocks. The available building-block types shown in the mockups are:
+
+    An algorithm, for example Tabusearch.
+
+    A batch run, for example Batch 1 (10 wh).
+
+    A time-limit run.
+
+An algorithm has an associated problem selection. The example in the mockups is TSP ch130.
+
+A batch is a container: it can contain its own building blocks. Its contents appear indented below the batch heading.
+
+The main structure should be understood like this:
+
+text
+Experiment workspace
+├── Global start controls
+├── Experiment
+│   ├── Algorithm ───────────── Associated problem
+│   ├── Batch
+│   │   ├── Algorithm ───────── Associated problem
+│   │   ├── Algorithm ───────── Associated problem
+│   │   └── Add building block to this batch
+│   └── Add building block to this experiment
+└── Other experiments, if present
+
+This is a hierarchy, not a flat list of unrelated controls.
+3. Layout
+Global controls
+
+At the top of the mockups, there are two controls labelled:
+
+text
+Alle Experimente starten
+
+Both appear grey in some states and yellow in others.
+
+Their distinct purposes are not explained by the mockups. Do not invent two different execution modes just because there are two buttons. Keep this as an explicit clarification point before assigning separate behavior to them.
+Experiment heading
+
+An existing experiment appears below the global controls as a green heading:
+
+text
+Neues Experiment 1
+
+This represents the experiment object. It must support renaming, configuration where applicable, and deletion.
+Algorithm/problem rows
+
+Inside an experiment, an algorithm appears on the left, with its problem selection on the right:
+
+text
+[Tabusearch]                  [TSP ch130]
+
+When no problem has been selected, show an enabled yellow button in the problem position:
+
+text
+[Tabusearch]                  [+ Problem hinzufügen]
+
+After a problem is selected, replace that yellow button with a green editable problem block.
+
+Keep the visual relationship clear: the problem belongs to the algorithm on the same row. It is not an unrelated global problem selection.
+Container contents
+
+A batch heading appears at the same content level as other building blocks within the experiment.
+
+Its child rows appear underneath it, with additional indentation. Algorithm/problem alignment should also remain clear within the batch.
+
+Every container has its own “add building block” button after its current children.
+4. States shown in the mockups
+
+The images illustrate the following progression. Their supplied order is not chronological.
+State A: Empty workspace
+
+Visible elements:
+
+    Two grey, disabled “Alle Experimente starten” controls at the top.
+
+    A yellow button:
+
+text
++ Neues Experiment erstellen/öffnen
+
+No experiment exists yet.
+
+The button represents creating a new experiment or opening an existing one. The exact choice mechanism — separate actions, a menu, or a dialog — is not specified by the mockup.
+State B: An experiment exists but has no building blocks
+
+Visible elements:
+
+    A green experiment heading: Neues Experiment 1.
+
+    A yellow button inside the experiment:
+
+text
++ Batch Run / Time-Limit Run / Algorithmus hinzufügen
+
+In this particular mockup, both global start controls are yellow.
+
+Preserve that observation rather than automatically assuming that an empty experiment must disable them. Their final enable/disable rules need clarification.
+State C: An algorithm exists without a problem
+
+The experiment contains:
+
+text
+Tabusearch                   + Problem hinzufügen
+
++ Batch Run / Time-Limit Run / Algorithmus hinzufügen
+
+Here:
+
+    Tabusearch is green.
+
+    “Problem hinzufügen” is yellow.
+
+    The experiment-level add button is yellow.
+
+    Both global start controls are grey.
+
+The algorithm exists, but its problem selection is incomplete.
+State D: The algorithm has a selected problem
+
+The algorithm row now appears as:
+
+text
+Tabusearch                   TSP ch130
+
+Both objects are green and editable.
+
+The experiment-level add button remains below the row.
+
+Both global start controls are yellow in this mockup.
+State E: A batch has been added to the experiment
+
+The experiment now contains:
+
+text
+Tabusearch                   TSP ch130
+
+Batch 1 (10 wh)
+    + Batch Run / Time-Limit Run / Algorithmus hinzufügen
+
++ Batch Run / Time-Limit Run / Algorithmus hinzufügen
+
+Important:
+
+    The batch is a green editable container.
+
+    The batch has its own add button.
+
+    The experiment still has its separate add button.
+
+    The batch-level add button inserts a child into the batch.
+
+    The experiment-level add button inserts a child directly into the experiment, outside the batch.
+
+The label 10 wh appears to indicate ten repetitions. Treat that interpretation as provisional until confirmed.
+State F: The batch contains multiple algorithm entries
+
+The expanded batch contains three algorithm/problem rows:
+
+text
+Tabusearch                   TSP ch130
+
+Batch 1 (10 wh)
+    Tabusearch               TSP ch130
+    Tabusearch               + Problem hinzufügen
+    Tabusearch               TSP ch130
+
+    + Batch Run / Time-Limit Run / Algorithmus hinzufügen
+
++ Batch Run / Time-Limit Run / Algorithmus hinzufügen
+
+Important:
+
+    These are three separate algorithm entries, not three labels for the same object.
+
+    Each entry has its own problem selection.
+
+    The second entry has no selected problem.
+
+    The batch-level add button remains below the batch’s children.
+
+    The experiment-level add button remains outside the batch.
+
+    Both global start controls are grey in this state.
+
+The screenshots show disabled start controls when a displayed algorithm lacks its required problem selection, including when that algorithm is inside a batch. However, the full validation rules are not yet specified.
+5. Adding building blocks
+
+The yellow button:
+
+text
++ Batch Run / Time-Limit Run / Algorithmus hinzufügen
+
+is one entry point for choosing which type of building block to add.
+
+When clicked, it should present the available choices:
+
+    Add algorithm.
+
+    Add batch run.
+
+    Add time-limit run.
+
+A menu or selection dialog would be a possible implementation; the mockups do not prescribe the exact selection UI.
+
+The essential requirement is scope:
+
+text
+Add button belonging to experiment
+→ Adds a building block directly to that experiment.
+
+Add button belonging to batch
+→ Adds a building block inside that batch.
+
+Do not implement all add buttons as a single global action that always appends to the experiment root.
+
+After insertion:
+
+    Show the new object in the correct container.
+
+    Keep the container’s add button after its children.
+
+    Reflow the layout to make room for the new content.
+
+    Preserve the order of existing objects.
+
+6. Editing and deleting green objects
+
+Every green object represents an existing item rather than an action button.
+
+The interface must provide a discoverable way to perform the applicable operations:
+
+    Rename the object.
+
+    Edit its parameters.
+
+    Delete it.
+
+The mockups do not specify whether these operations use inline editing, a context menu, an edit dialog, or another mechanism. Propose a consistent approach rather than treating green objects as non-interactive text.
+
+Examples of editable objects shown:
+
+    Experiment: Neues Experiment 1.
+
+    Algorithm: Tabusearch.
+
+    Problem: TSP ch130.
+
+    Batch: Batch 1 (10 wh).
+
+Each occurrence must refer to its own underlying object. Editing one algorithm entry must not unintentionally edit all entries with the same display name.
+
+Deleting a container raises an additional question: whether its children are deleted too and whether confirmation is required. Do not silently choose that behavior without documenting it.
+7. Dynamic layout requirements
+
+Treat the PowerPoint slides as structural mockups, not as instructions to reproduce exact pixel coordinates.
+
+The implementation should preserve:
+
+    The hierarchy of experiments and their building blocks.
+
+    Left/right association between algorithms and problems.
+
+    Indentation for batch contents.
+
+    Separate add controls for separate containers.
+
+    Enabled, disabled, and editable states.
+
+Do not reproduce PowerPoint artifacts such as spell-check underlines.
+
+Use a content-driven layout rather than hardcoded screen positions. Adding another algorithm or expanding a batch should push later content down instead of causing overlap.
+
+The workspace should remain usable when its content exceeds the window height, with scrolling as needed.
+
+The smaller text in the nested batch example indicates subordinate content. The essential requirement is a clear visual hierarchy, not the exact font sizes used in PowerPoint.
+8. Data and implementation expectations
+
+Use a structure that preserves ownership and nesting explicitly.
+
+As a proposed implementation model:
+
+text
+Workspace
+    Experiments[]
+
+Experiment
+    Name
+    Children[]
+
+AlgorithmEntry
+    Name
+    Parameters
+    SelectedProblem, which may be absent
+
+ProblemSelection
+    Name
+    Parameters
+
+BatchRun
+    Name
+    RepetitionCount
+    Children[]
+
+TimeLimitRun
+    Name
+    TimeLimit
+    Further structure to be clarified
+
+These are conceptual objects, not mandatory class names.
+
+The UI should reflect the underlying structure. It should not be a collection of separately positioned labels and buttons with no meaningful relationship between them.
+
+Use C# and Avalonia, preferably with MVVM, commands for actions, and observable collections for changing child lists.
+
+Model container-specific insertion explicitly, so the action knows which experiment or batch it belongs to.
+
+The batch’s add button offers the same types as the experiment’s add button, suggesting possible further nesting. Confirm whether nested batches and time-limit containers are intended before implementing unlimited recursive nesting.
+9. Details that must not be invented
+
+The mockups leave these points unresolved:
+
+    Why are there two identically labelled global start controls? Are both intentional, and what distinguishes them?
+
+    What are the exact start-button validation rules? The empty-experiment mockup shows enabled buttons, while incomplete algorithm selections show disabled buttons.
+
+    Does 10 wh mean ten repetitions, and what exactly is repeated?
+
+    What does a time-limit run contain, and how is its time limit applied?
+
+    Can batches contain other batches or time-limit runs?
+
+    Does an algorithm accept exactly one problem, or can it accept multiple problems? The mockups only demonstrate one problem position per algorithm row.
+
+    How should creating versus opening an experiment be offered?
+
+    What should happen when deleting a container with children?
+
+Do not silently fill in these gaps with execution behavior that the screenshots do not establish.
+10. Acceptance criteria
+
+The implementation should allow me to reproduce all the illustrated states:
+
+    Empty workspace with a create/open action.
+
+    An existing empty experiment.
+
+    An algorithm with no selected problem.
+
+    An algorithm with a selected problem.
+
+    An experiment containing an algorithm and an empty batch.
+
+    A batch containing multiple independent algorithm entries, including one without a problem.
+
+It must also satisfy these structural checks:
+
+    Adding inside a batch does not add at the experiment root.
+
+    Adding at the experiment root does not add inside the batch.
+
+    Algorithm/problem pairs remain visually associated.
+
+    Each container retains its own add button after its children.
+
+    Green objects support the applicable edit/delete actions.
+
+    Disabled grey buttons cannot trigger their commands.
+
+    Adding content does not cause controls to overlap.
+
+Before implementing, summarize your understanding of the hierarchy and identify the unresolved points that affect behavior. Then implement the experiment-selection GUI without inventing an execution engine.
+
+The state descriptions above follow your six mockups, including the separate experiment-level and batch-level add controls and the grey/yellow changes of the start buttons.
+Avalonia C# UI builder: translate your PowerPoint wireframes into production XAML layouts, ViewModels, and navigation flows
+Computer
+Design-system audit: turn your selection-screen PowerPoint mockups into an Avalonia UI spec with styles, data templates, and color tokens
+
+
