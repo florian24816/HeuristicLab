@@ -160,7 +160,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>Experiments or a single algorithm are running (or paused): the tree cannot change.</summary>
   [ObservableProperty]
-  [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StartSelectedCommand), nameof(StopCommand))]
+  [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StartSelectedCommand), nameof(StopCommand), nameof(EjectCommand))]
   [NotifyPropertyChangedFor(nameof(IsEditable))]
   public partial bool IsRunning { get; set; }
 
@@ -511,6 +511,46 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     RefreshState();
   }
 
+  // ---- ejecting experiments
+
+  private bool CanEject() => !IsRunning && Experiments.Count > 0;
+
+  /// <summary>Asks which experiments to eject (all or ticked) and whether to autosave, then ejects them.</summary>
+  [RelayCommand(CanExecute = nameof(CanEject))]
+  private async Task EjectAsync() {
+    if (dialogs == null || !CanEject()) return;
+    var all = Experiments.ToList();
+    var choice = await dialogs.ChooseEjectAsync(all.Select(e => e.Name).ToList(), all.Select(e => !e.IsSaved).ToList());
+    if (choice == null) return;
+    await EjectAsync(choice.Experiments.Where(i => i >= 0 && i < all.Count).Select(i => all[i]).ToList(), choice.Autosave);
+  }
+
+  /// <summary>
+  /// Takes experiments out of the workspace (their files stay). An unsaved one is saved first with
+  /// autosave (to its file, or a file chosen as with "Save as..."); without, the user decides for each:
+  /// save, eject without saving, or keep it. One that could not be saved stays. Returns the ejected ones.
+  /// </summary>
+  public async Task<IReadOnlyList<ExperimentBlockViewModel>> EjectAsync(IReadOnlyList<ExperimentBlockViewModel> experiments, bool autosave) {
+    var ejected = new List<ExperimentBlockViewModel>();
+    if (IsRunning) { Status = "Experiments can be ejected when nothing runs."; return ejected; }
+    var kept = new List<string>();
+    foreach (var experiment in experiments) {
+      if (!experiment.IsSaved) {
+        var answer = autosave ? UnsavedChoice.Save : dialogs == null ? UnsavedChoice.Keep : await dialogs.AskUnsavedAsync(experiment.Name);
+        if (answer == UnsavedChoice.Save) await SaveChangesAsync(experiment);
+        if (answer == UnsavedChoice.Keep || (answer == UnsavedChoice.Save && !experiment.IsSaved)) { kept.Add(experiment.Name); continue; }
+      }
+      if (Selected != null && IsWithin(Selected, experiment)) Selected = null;
+      Experiments.Remove(experiment);
+      ejected.Add(experiment);
+    }
+    OnPropertyChanged(nameof(HasExperiments));
+    RefreshState();
+    Status = $"Ejected {ejected.Count} experiment{(ejected.Count == 1 ? "" : "s")}"
+             + (kept.Count > 0 ? $"; kept (not saved): {string.Join(", ", kept)}" : "") + ".";
+    return ejected;
+  }
+
   /// <summary>
   /// Deletes a block. Containers go with all their children, after a confirmation when they have
   /// any; a problem block only clears its algorithm's problem; an experiment leaves the workspace
@@ -690,6 +730,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     RefreshMultiEdit();
     StartAllCommand.NotifyCanExecuteChanged();
     StartSelectedCommand.NotifyCanExecuteChanged();
+    EjectCommand.NotifyCanExecuteChanged();
   }
 
   [RelayCommand(CanExecute = nameof(CanStartAll))]

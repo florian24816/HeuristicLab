@@ -185,6 +185,9 @@
         <Style Selector="Border.logo">
             <Setter Property="Background" Value="{StaticResource LogoBrush}" />
         </Style>
+        <Style Selector="Border.eject">
+            <Setter Property="Background" Value="#A8A8A8" />
+        </Style>
         <Style Selector="Border.state">
             <Setter Property="Background" Value="{StaticResource StateBrush}" />
         </Style>
@@ -269,7 +272,8 @@
     <Grid ColumnDefinitions="700,4,*">
         <DockPanel Margin="12">
             <!-- global start controls -->
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
+            <!-- the status of what runs is shown in the main window's tab row -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
                 <!-- like the blocks: orange square with the pictogram, then the rectangle with the text -->
                 <Button Classes="picto" Command="{Binding StartAllCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="3">
@@ -289,8 +293,14 @@
                         <Border Classes="label"><TextBlock Text="Stop" /></Border>
                     </StackPanel>
                 </Button>
-                <TextBlock Grid.Column="3" Text="{Binding Status}" VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
-                           ToolTip.Tip="{Binding Status}" />
+                <!-- eject: like the others, but a grey square -->
+                <Button Grid.Column="3" Classes="picto" Command="{Binding EjectCommand}"
+                        ToolTip.Tip="Take experiments out of the workspace (all or chosen ones; save or autosave unsaved ones first)">
+                    <StackPanel Orientation="Horizontal" Spacing="3">
+                        <Border Classes="square eject"><c:Pictogram Symbol="eject" Foreground="{StaticResource InkBrush}" /></Border>
+                        <Border Classes="label"><TextBlock Text="Eject" /></Border>
+                    </StackPanel>
+                </Button>
             </Grid>
 
             <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto">

@@ -23,7 +23,17 @@ public interface IDialogService {
   Task<string?> AskTextAsync(string title, string message, string initial) => Task.FromResult<string?>(null);
   /// <summary>Picks one of the items and confirms it with the action button; the item's index, null if cancelled.</summary>
   Task<int?> ChooseAsync(string title, string message, System.Collections.Generic.IReadOnlyList<string> items, string action) => Task.FromResult<int?>(null);
+  /// <summary>Which experiments to eject (indices) and whether to autosave; null when cancelled.</summary>
+  Task<EjectChoice?> ChooseEjectAsync(System.Collections.Generic.IReadOnlyList<string> names, System.Collections.Generic.IReadOnlyList<bool> unsaved) =>
+    Task.FromResult<EjectChoice?>(null);
+  /// <summary>An unsaved experiment about to be ejected: save, eject without saving, or keep it.</summary>
+  Task<UnsavedChoice> AskUnsavedAsync(string name) => Task.FromResult(UnsavedChoice.Keep);
 }
+
+/// <param name="Experiments">Indices of the experiments to eject.</param>
+public sealed record EjectChoice(System.Collections.Generic.IReadOnlyList<int> Experiments, bool Autosave);
+
+public enum UnsavedChoice { Save, Discard, Keep }
 
 public sealed class DialogService(Window owner, IFileDialogService fileDialogs) : IDialogService {
   public async Task<SetupResult?> NewSetupAsync() {
@@ -60,4 +70,10 @@ public sealed class DialogService(Window owner, IFileDialogService fileDialogs) 
 
   public async Task<int?> ChooseAsync(string title, string message, System.Collections.Generic.IReadOnlyList<string> items, string action) =>
     await new ChooseWindow(title, message, items, action).ShowDialog<int?>(owner);
+
+  public async Task<EjectChoice?> ChooseEjectAsync(System.Collections.Generic.IReadOnlyList<string> names, System.Collections.Generic.IReadOnlyList<bool> unsaved) =>
+    await new EjectWindow(names, unsaved).ShowDialog<EjectChoice?>(owner);
+
+  public async Task<UnsavedChoice> AskUnsavedAsync(string name) =>
+    await new UnsavedWindow(name).ShowDialog<UnsavedChoice>(owner);
 }

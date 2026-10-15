@@ -44,6 +44,13 @@
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
   Start all / Start selected / Stop are drawn like blocks (Button.picto: orange square with
   Experiment_run_all / Experiment_run_selected / experiment_stop, then a grey rectangle).
+  Eject (next to Stop: grey #A8A8A8 square with the eject pictogram; not while anything runs): EjectWindow -
+  tick experiments ("Eject selected") or "Eject all", Autosave switch; ExperimentWorkspaceViewModel.EjectAsync:
+  unsaved ones (!IsSaved) are saved first with autosave (never saved: "Save as..." file), else UnsavedWindow
+  asks per experiment (Save / Eject without saving / Keep it open); one not saved stays. Files stay on disk.
+  The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
+  logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
+  TextBlock: a string's '_' would be an access key.
   Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment (ChooseWindow: pick it
   in a list, the delete button is disabled until then; ExperimentTree.DeleteRuns clears every
   optimizer's runs without Prepare; never single runs, never while running; marks it unsaved).

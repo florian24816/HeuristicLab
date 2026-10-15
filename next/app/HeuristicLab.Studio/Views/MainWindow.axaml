@@ -97,6 +97,9 @@
                 ToolTip.Tip="Notifications: a message in the system's notification center when started experiments, an algorithm or a detailed analysis run finish">
             <controls:Pictogram Symbol="notification" Foreground="Black" />
         </Button>
+        <!-- what runs (and other news of the Experiments tab): between the tabs and the logo -->
+        <TextBlock Classes="runstatus" Text="{Binding Workspace.Status}" ToolTip.Tip="{Binding Workspace.Status}"
+                   Margin="700,18,62,0" VerticalAlignment="Top" TextAlignment="Right" TextTrimming="CharacterEllipsis" Opacity="0.8" />
         <!-- HeuristicLab's logo at the top right, in the tab row -->
         <Image Source="/Assets/HeuristicLab.ico" Width="32" Height="32" Margin="0,10,14,0"
                HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False"
