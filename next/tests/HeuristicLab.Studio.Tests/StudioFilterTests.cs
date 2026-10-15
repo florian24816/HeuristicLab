@@ -77,7 +77,7 @@ public class StudioFilterTests {
           for (int c = 0; c < columns.ItemCount; c++) {
             int index = c;
             Step($"view {view} {kind}: column {index}", () => columns.SelectedIndex = index);
-            foreach (var op in new[] { 2, 6 }) {
+            foreach (var op in new[] { 1, ops.ItemCount - 1 }.Distinct()) {
               Step($"op {op}", () => ops.SelectedIndex = op);
               Step("focus", () => value.Focus());
               foreach (var text in new[] { "1", "e", "-", "." }) Step($"type {text} into column {index}", () => window.KeyTextInput(text));
@@ -103,6 +103,24 @@ public class StudioFilterTests {
       foreach (var key in "Tabu") { window.KeyTextInput(key.ToString()); Pump(); }
       Assert.AreEqual(1, analysis.Table.Rows.Count);
       Assert.AreEqual("param:Algorithm Type", ((ColumnChoice)column.SelectedItem!).Key, "the column is still chosen");
+      // operators by the column's kind: text is not ordered, numbers are, a switch is only = or ≠
+      var filterVm = analysis.Filters.Single();
+      CollectionAssert.AreEqual(new[] { "=", "≠", "contains", "does not contain" }, filterVm.Operators.ToList(), "text: no <");
+      CollectionAssert.AreEquivalent(filterVm.Operators.ToList(), ((ComboBox)last.Children[1]).Items.Cast<string>().ToList());
+      ((TextBox)last.Children[2]).Text = "";
+      Pump();
+      column.SelectedItem = analysis.AllColumns.Single(c => c.Key == "param:PopulationSize");
+      Pump();
+      CollectionAssert.AreEqual(new[] { "=", "≠", "<", "≤", ">", "≥" }, filterVm.Operators.ToList(), "numbers: no contains");
+      Assert.AreEqual("=", filterVm.Op, "contains does not fit a number: back to =");
+      Assert.AreEqual("number", ((TextBox)last.Children[2]).PlaceholderText);
+      column.SelectedItem = analysis.AllColumns.Single(c => c.Key == "param:SetSeedRandomly");
+      Pump();
+      CollectionAssert.AreEqual(new[] { "=", "≠" }, filterVm.Operators.ToList(), "a switch");
+      ((TextBox)last.Children[2]).Text = "true";
+      Pump();
+      Assert.AreEqual(all, analysis.Table.Rows.Count, "every run sets its seed randomly");
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-filter-operators.png"));
       analysis.RemoveFilterCommand.Execute(analysis.Filters.Single());
       Pump();
       Assert.AreEqual(all, analysis.Table.Rows.Count);

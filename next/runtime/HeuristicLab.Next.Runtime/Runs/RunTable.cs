@@ -6,7 +6,8 @@ namespace HeuristicLab.Next.Runtime.Runs;
 
 /// <param name="Key">"source", "origin", "run", "param:X", "result:Y", "label:Z" or a results folder's own keys.</param>
 /// <param name="Kind">Run, Parameter, Result or Label.</param>
-public sealed record RunColumn(string Key, string Name, string Kind, bool IsNumeric) {
+/// <param name="IsYesNo">Text that is only True or False (switches such as SetSeedRandomly).</param>
+public sealed record RunColumn(string Key, string Name, string Kind, bool IsNumeric, bool IsYesNo = false) {
   public override string ToString() => Kind is "Parameter" or "Result" ? $"{Name} ({Kind.ToLowerInvariant()})" : Name;
 }
 
@@ -37,7 +38,12 @@ public sealed class RunTable {
   public RunTable(IReadOnlyList<RunRow> rows) {
     Rows = rows;
     var keys = rows.SelectMany(r => r.Values.Keys).Distinct().ToList();
-    Columns = keys.Select(k => new RunColumn(k, NameOf(k), KindOf(k), rows.All(r => !r.Values.TryGetValue(k, out var v) || v is double)))
+    static bool YesNo(object v) => v is string s && (s.Equals("True", StringComparison.OrdinalIgnoreCase) || s.Equals("False", StringComparison.OrdinalIgnoreCase));
+    Columns = keys.Select(k => {
+        var values = rows.Select(r => r.Values.TryGetValue(k, out var v) ? v : null).OfType<object>().ToList();
+        bool numeric = values.All(v => v is double);
+        return new RunColumn(k, NameOf(k), KindOf(k), numeric, !numeric && values.Count > 0 && values.All(YesNo));
+      })
       .OrderBy(c => c.Kind switch { "Run" => 0, "Label" => 1, "Parameter" => 2, _ => 3 })
       .ThenBy(c => c.Kind == "Run" ? Array.IndexOf(RunKeys, c.Key) : 0)
       .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
@@ -122,11 +128,23 @@ public sealed class RunTable {
   }
 }
 
-/// <param name="Op">=, ≠, &lt;, ≤, &gt;, ≥ or contains; numbers compare as numbers.</param>
+/// <param name="Op">=, ≠, &lt;, ≤, &gt;, ≥, contains or does not contain; numbers compare as numbers.</param>
 public sealed record RunFilter(string Key, string Op, string Value) {
-  public static readonly IReadOnlyList<string> Operators = ["=", "≠", "<", "≤", ">", "≥", "contains"];
+  public const string Contains = "contains", NotContains = "does not contain";
+  public static readonly IReadOnlyList<string> Operators = ["=", "≠", "<", "≤", ">", "≥", Contains, NotContains];
+  public static readonly IReadOnlyList<string> NumberOperators = ["=", "≠", "<", "≤", ">", "≥"];
+  public static readonly IReadOnlyList<string> YesNoOperators = ["=", "≠"];
+  public static readonly IReadOnlyList<string> TextOperators = ["=", "≠", Contains, NotContains];
+
+  /// <summary>
+  /// The operators that make sense for a column: numbers are ordered, text is not (a name "less than"
+  /// another one would only compare letters), and a switch is only true or false.
+  /// </summary>
+  public static IReadOnlyList<string> OperatorsFor(RunColumn? column) =>
+    column == null ? TextOperators : column.IsNumeric ? NumberOperators : column.IsYesNo ? YesNoOperators : TextOperators;
 
   public bool Matches(RunRow row) {
+    if (Op == NotContains) return !row.Text(Key).Contains(Value, StringComparison.OrdinalIgnoreCase);
     if (row.Number(Key) is double x && double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var y))
       return Op switch { "=" => x == y, "≠" => x != y, "<" => x < y, "≤" => x <= y, ">" => x > y, "≥" => x >= y, _ => row.Text(Key).Contains(Value, StringComparison.OrdinalIgnoreCase) };
     string text = row.Text(Key);

@@ -213,7 +213,9 @@
   and the box table (minimizable to its title bar) in FloatingPanels - Views/FloatingPanel moves by its
   title bar, resizes at its corner, also used by the detailed analysis fullscreen; the Fullscreen button sits
   at the right end of the chart choices),
-  Filters (column, operator, value; FilterViewModel keeps ColumnKey): Rebuild is guarded against reentrancy
+  Filters (column, operator, value; FilterViewModel keeps ColumnKey; operators by the column's kind -
+  RunFilter.OperatorsFor: numbers = ≠ < ≤ > ≥, switches (RunColumn.IsYesNo: only True/False) = ≠, text
+  = ≠ contains / does not contain - no "<" on names; an operator that does not fit becomes "="): Rebuild is guarded against reentrancy
   and replaces AllColumns/NumericColumns/XChoices/CurveTables only when they change - a new list under a
   filter's ComboBox reset its selection, which rebuilt and replaced the list again: endless recursion, a
   stack overflow that closed Studio without a message (test StudioFilterTests types filters key by key).

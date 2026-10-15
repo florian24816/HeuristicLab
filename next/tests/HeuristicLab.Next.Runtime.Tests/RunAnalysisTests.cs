@@ -95,4 +95,18 @@ public class RunAnalysisTests {
     Assert.IsTrue(combined.Column("result:BestQuality")!.IsNumeric);
     Assert.AreEqual(2, RunGrouping.Group(combined, ["source"]).Count);
   }
+
+  [TestMethod]
+  public void FilterOperatorsFitTheColumnKind() {
+    var rows = new List<RunRow> {
+      new("s", new Dictionary<string, object> { ["param:Algorithm Name"] = "GA", ["param:PopulationSize"] = 20.0, ["param:SetSeedRandomly"] = "True" }, null),
+      new("s", new Dictionary<string, object> { ["param:Algorithm Name"] = "TS", ["param:PopulationSize"] = 60.0, ["param:SetSeedRandomly"] = "False" }, null)
+    };
+    var table = new RunTable(rows);
+    CollectionAssert.DoesNotContain(RunFilter.OperatorsFor(table.Column("param:Algorithm Name")).ToList(), "<");
+    CollectionAssert.DoesNotContain(RunFilter.OperatorsFor(table.Column("param:PopulationSize")).ToList(), RunFilter.Contains);
+    CollectionAssert.AreEqual(new[] { "=", "≠" }, RunFilter.OperatorsFor(table.Column("param:SetSeedRandomly")).ToList());
+    Assert.AreEqual(1, table.Where([new RunFilter("param:Algorithm Name", RunFilter.NotContains, "g")]).Rows.Count);
+    Assert.AreEqual(1, table.Where([new RunFilter("param:SetSeedRandomly", "=", "true")]).Rows.Count);
+  }
 }

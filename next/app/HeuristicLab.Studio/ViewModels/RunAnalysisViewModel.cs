@@ -74,8 +74,23 @@ public partial class FilterViewModel(RunAnalysisViewModel owner) : ViewModelBase
   [ObservableProperty]
   public partial string Value { get; set; } = "";
 
-  public IReadOnlyList<string> Operators => RunFilter.Operators;
+  /// <summary>The operators that make sense for the chosen column (RunFilter.OperatorsFor); replaced only when they change.</summary>
+  [ObservableProperty]
+  public partial IReadOnlyList<string> Operators { get; set; } = RunFilter.TextOperators;
+
+  /// <summary>What to type, by the column's kind.</summary>
+  [ObservableProperty]
+  public partial string ValueHint { get; set; } = "text";
+
   public RunAnalysisViewModel Owner => owner;
+
+  /// <summary>Offers the operators of the column's kind; an operator that does not fit becomes the first one ("=").</summary>
+  public void FitOperators(RunColumn? column) {
+    var operators = RunFilter.OperatorsFor(column);
+    if (!operators.SequenceEqual(Operators)) Operators = operators;
+    ValueHint = column == null ? "value" : column.IsNumeric ? "number" : column.IsYesNo ? "True or False" : "text";
+    if (!Operators.Contains(Op)) Op = Operators[0];
+  }
 
   /// <summary>
   /// The column chosen last. A column list replaced under the ComboBox makes it report no selection
@@ -88,10 +103,14 @@ public partial class FilterViewModel(RunAnalysisViewModel owner) : ViewModelBase
     ColumnKey = value.Key;
     owner.Rebuild();
   }
-  partial void OnOpChanged(string value) => owner.Rebuild();
+  partial void OnOpChanged(string value) {
+    if (value == null) return;  // the operator list was replaced, not a choice
+    owner.Rebuild();
+  }
   partial void OnValueChanged(string value) => owner.Rebuild();
 
-  public RunFilter? Filter => ColumnKey == null || Value.Length == 0 ? null : new RunFilter(ColumnKey, Op, Value);
+  public RunFilter? Filter => ColumnKey == null || Value.Length == 0 ? null
+    : new RunFilter(ColumnKey, Op != null && Operators.Contains(Op) ? Op : Operators[0], Value);
 }
 
 public sealed record AnalysisRow(RunRow Row, IReadOnlyList<string> Cells);
@@ -278,9 +297,11 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     if (!columns.SequenceEqual(AllColumns)) AllColumns = columns;
     var numeric = all.Columns.Where(c => c.IsNumeric).Select(c => new ColumnChoice(c.Key, c.ToString())).ToList();
     if (!numeric.SequenceEqual(NumericColumns)) NumericColumns = numeric;
-    foreach (var filter in Filters)
+    foreach (var filter in Filters) {
       if (filter.ColumnKey != null && filter.Column?.Key != filter.ColumnKey)
         filter.Column = AllColumns.FirstOrDefault(c => c.Key == filter.ColumnKey) ?? filter.Column;
+      filter.FitOperators(filter.ColumnKey == null ? null : all.Column(filter.ColumnKey));
+    }
     // a filter on a column no ticked source has does not apply
     Table = all.Where(Filters.Select(f => f.Filter).OfType<RunFilter>().Where(f => all.Column(f.Key) != null));
     Groups = RunGrouping.Group(Table, GroupBy.Select(g => g.Key).ToList(), (int)Bins);
