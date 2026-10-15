@@ -66,9 +66,16 @@
             </TabItem>
 
             <TabItem Header="Algorithm">
-                <ScrollViewer>
-                    <ContentControl Content="{Binding AlgorithmParameters}" />
-                </ScrollViewer>
+                <DockPanel>
+                    <!-- the algorithm cannot run with this problem (ParameterChecks.AlgorithmWarning) -->
+                    <Border DockPanel.Dock="Top" Classes="caution" Margin="0,0,0,8"
+                            IsVisible="{Binding AlgorithmWarning, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <TextBlock Text="{Binding AlgorithmWarning}" TextWrapping="Wrap" />
+                    </Border>
+                    <ScrollViewer>
+                        <ContentControl Content="{Binding AlgorithmParameters}" />
+                    </ScrollViewer>
+                </DockPanel>
             </TabItem>
 
             <TabItem Header="Results">

@@ -33,7 +33,10 @@
             <Border Classes="caution" IsVisible="{Binding HasWarning}">
                 <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" />
             </Border>
-            <ContentControl Content="{Binding Editor}" />
+            <!-- a value that probably does not work: its field yellow too (App.axaml: Border.warnedvalue) -->
+            <Border Classes.warnedvalue="{Binding HasWarning}">
+                <ContentControl Content="{Binding Editor}" />
+            </Border>
         </StackPanel>
     </Border>
 </UserControl>

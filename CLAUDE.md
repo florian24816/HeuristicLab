@@ -104,7 +104,26 @@
   in the list (Border.caution) and a text below; a choice with a warning reports it in the detail's message.
   Choice lists are read again after every edit in their list (ParameterNodeViewModel.RefreshSummary):
   they used to stay as built, so after a new move generator the old evaluators were still offered and
-  choosing one failed silently (ConstrainedValueParameter "Invalid value."). An empty list is not shown. Checked operator lists (analyzers) are numbered: a
+  choosing one failed silently (ConstrainedValueParameter "Invalid value."). An empty list is not shown.
+  Runtime ParameterChecks (Warning / ParameterWarning / AlgorithmWarning / ProblemWarning) extends this to
+  LS, TS, SA, GA, Island GA, OSGA, Island OSGA, SASEGASA and NSGA-II; every rule comes from running every
+  choice and edge value on HeuristicLab's problems (probe programs, not in the repo): DiversitySelector
+  without expression trees, the integer SelfAdaptive manipulator outside an ES, PMX/MPX on permutations
+  shorter than 4, context-aware / deterministic-best crossovers on time series prognosis, pair selectors
+  (GenderSpecificSelector, NoSameMates) picking an odd number (Island GA: ceil(15 % of 100) = 15 emigrants),
+  the exponential comparison factor modifier with HeuristicLab's default lower bound 0, AlbaTranslocationMoveGenerator
+  (HeuristicLab bug), CopyCrossover without mutation, GeneralizedRankSelector on multi-objective problems (NSGA-II), NSGA-II on the multi-objective shape-constrained regression (crashes whatever the settings); values: population < 2, elites < 0 or >= population,
+  0 generations, shares outside 0..1, OSGA MaximumSelectionPressure <= 1, odd/0 SelectedParents, < 1 islands,
+  temperatures <= 0, InnerIterations/SampleSize 0, negative tabu tenure, a move Sigma of 0, and
+  FillPopulationWithParents with a population under 100 (OffspringSelector index bug, seen at 20-50).
+  A required choice with nothing offered = HeuristicLab never prepares the algorithm and Start fails
+  "not allowed in execution state Stopped" (SA/TS on job shop, linear assignment, regression, ...):
+  AlgorithmDetailViewModel.AlgorithmWarning (yellow box above the parameters; Start shows it instead).
+  TS cannot even attach some problems (its default move generator is not among its valid ones: "Invalid
+  value."): the problem picker (NewSetupViewModel, checked off the UI thread, WarningsReady) shows such
+  problems yellow with the reason (CatalogItem.Warning). Warnings of nested parameters look at the algorithm
+  (EditContext.Root); every edit refreshes all lists shown (EditContext.Edited). Yellow value fields:
+  Border.warnedvalue around the editor. Checked operator lists (analyzers) are numbered: a
   MultiAnalyzer runs its ticked operators in list order. Nested editors below a list get a
   "<name> selected. Details/Options:" heading. Result lists (algorithm Results tab, Results tab's
   Run view) show the result's kind first: chart (result_diagram_logo: first visualization is a

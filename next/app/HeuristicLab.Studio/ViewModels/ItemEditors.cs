@@ -24,6 +24,13 @@ public sealed class EditContext(Action<string> report, Func<bool> canEdit, Actio
 
   public bool IsMultiTarget(string? key) => key != null && MultiTarget?.Invoke() == key;
 
+  /// <summary>The algorithm (or other item) whose parameters are edited: checks of nested parameters look at it (ParameterChecks).</summary>
+  public Func<IParameterizedItem?>? Root { get; init; }
+
+  /// <summary>A value changed somewhere: every list shown reads its choices and warnings again (they depend on each other).</summary>
+  public event Action? Edited;
+  public void NotifyEdited() => Edited?.Invoke();
+
   /// <summary>The same context without editing (read-only views of a value).</summary>
   public EditContext ReadOnly() => new(report, () => false);
 
@@ -48,6 +55,7 @@ public partial class ParameterListViewModel : ViewModelBase {
     Parameters = ItemInspector.Parameters(item)
       .Select(p => new ParameterNodeViewModel(p, context, this, path == null ? null : MultiEdit.Parameter(path, p.Name))).ToList();
     Selected = Parameters.FirstOrDefault();
+    context.Edited += RefreshSummaries;
   }
 
   public IParameterizedItem Item { get; }
@@ -99,7 +107,9 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
   /// gives other move evaluators and makers), so they are read again after every edit in the list.
   /// </summary>
   private List<ChoiceItem> BuildChoices() =>
-    ItemInspector.Choices(parameter)?.Select(v => new ChoiceItem(v is INamedItem n ? n.Name : v.ItemName, v, MoveChecks.Warning(Owner.Item, parameter, v))).ToList() ?? [];
+    ItemInspector.Choices(parameter)?.Select(v => new ChoiceItem(v is INamedItem n ? n.Name : v.ItemName, v, ParameterChecks.Warning(Root, Owner.Item, parameter, v))).ToList() ?? [];
+
+  private IParameterizedItem Root => context.Root?.Invoke() ?? Owner.Item;
 
   public ParameterListViewModel Owner { get; }
   public string Name => parameter.Name;
@@ -157,7 +167,7 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
   public bool IsChoice { get; }
 
   /// <summary>Why the current value (or its absence) probably does not work: yellow in the list and below the choice.</summary>
-  public string? Warning => MoveChecks.ParameterWarning(Owner.Item, parameter);
+  public string? Warning => ParameterChecks.ParameterWarning(Root, Owner.Item, parameter);
   public bool HasWarning => Warning != null;
 
   /// <summary>Something is offered (an empty list is not shown; its warning says why it is empty).</summary>
@@ -193,7 +203,10 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     ValueChanged();
   }
 
-  private void ValueEdited() => Owner.RefreshSummaries();
+  private void ValueEdited() {
+    context.NotifyEdited();
+    if (Warning is { } warning) context.Report($"{Name}: {warning}");
+  }
 
   private void ValueChanged() {
     editor = null;
@@ -201,7 +214,7 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     OnPropertyChanged(nameof(SelectedChoice));
     OnPropertyChanged(nameof(DataType));
     OnPropertyChanged(nameof(CanClear));
-    Owner.RefreshSummaries();
+    context.NotifyEdited();
   }
 
   public void RefreshSummary() {

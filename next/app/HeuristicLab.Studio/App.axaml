@@ -58,6 +58,17 @@
         <Style Selector="ComboBox.warned">
             <Setter Property="Foreground" Value="#1E1E1E" />
         </Style>
+        <Style Selector="Border.warnedvalue TextBox.field /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="#F4E803" />
+        </Style>
+        <Style Selector="Border.warnedvalue TextBox.field, Border.warnedvalue TextBox.field:focus, Border.warnedvalue TextBox.field:pointerover">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Border.warnedvalue CheckBox.field">
+            <Setter Property="Background" Value="#F4E803" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="Padding" Value="8,0,8,0" />
+        </Style>
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="#F4E803" />
             <Setter Property="Padding" Value="8,5" />
@@ -112,6 +123,8 @@
                 <TextBlock Text="{Binding Display}" FontWeight="SemiBold" Foreground="#1E1E1E" />
                 <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" Foreground="#1E1E1E" Opacity="0.7"
                            FontSize="12" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Warning}" IsVisible="{Binding IsWarned}" Foreground="#1E1E1E" FontSize="12"
+                           FontWeight="SemiBold" TextWrapping="Wrap" />
             </StackPanel>
         </DataTemplate>
       </ResourceDictionary>

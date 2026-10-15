@@ -35,8 +35,10 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     this.block = block;
     context = new EditContext(m => Message = m, () => CanEdit, block.MarkModified) {
       MultiTarget = () => block.Workspace.MultiEditKeyFor(block),
-      ToggleMulti = key => block.Workspace.ToggleMultiEdit(block, key)
+      ToggleMulti = key => block.Workspace.ToggleMultiEdit(block, key),
+      Root = () => Algorithm
     };
+    context.Edited += () => OnPropertyChanged(nameof(AlgorithmWarning));
     Engines = ItemInspector.Engines();
     Results = new ResultsViewModel(() => Algorithm.Results, context);
     Runs = new RunsViewModel(Algorithm.Runs);
@@ -102,6 +104,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   /// </summary>
   public void RefreshProblem() {
     OnPropertyChanged(nameof(HasProblem));
+    OnPropertyChanged(nameof(AlgorithmWarning));
     RebuildEditors();
     var problem = Algorithm.Problem;
     if (problem == null) {
@@ -235,6 +238,9 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   public string State => Algorithm.ExecutionState.ToString();
   public string ExecutionTime => Algorithm.ExecutionTime.ToString(@"hh\:mm\:ss\.f", CultureInfo.InvariantCulture);
 
+  /// <summary>Why the algorithm cannot run with its problem at all (a needed operator is missing): yellow above its parameters.</summary>
+  public string? AlgorithmWarning => ParameterChecks.AlgorithmWarning(Algorithm);
+
   /// <summary>Parameters can change only while the algorithm is prepared or stopped and no experiment runs.</summary>
   public bool CanEdit => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Stopped && !block.Workspace.IsRunningExperiments;
 
@@ -244,6 +250,11 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     Message = HasBreakpoints() && Algorithm is EngineAlgorithm { Engine: not null } a && a.Engine.GetType().Name != "DebugEngine"
       ? "Breakpoints only pause the Debug Engine (Engine tab)." : null;
     if (Algorithm.ExecutionState == ExecutionState.Stopped) Algorithm.Prepare(clearRuns: false);
+    // HeuristicLab does not prepare an algorithm that misses an operator; its Start would only say "not allowed"
+    if (Algorithm.ExecutionState == ExecutionState.Stopped) {
+      Message = AlgorithmWarning ?? "HeuristicLab does not prepare this algorithm with these settings, so it cannot start.";
+      return;
+    }
     HeuristicLab.Next.Runtime.Resources.Configure(Algorithm);
     block.Workspace.SetAlgorithmRunning(true);
     startedHere = true;
