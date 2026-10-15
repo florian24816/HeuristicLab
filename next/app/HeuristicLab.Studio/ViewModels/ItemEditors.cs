@@ -74,7 +74,10 @@ public partial class ParameterListViewModel : ViewModelBase {
   public void RefreshEditability() { foreach (var p in Parameters) p.RefreshEditability(); }
 }
 
-public sealed record ChoiceItem(string Display, IItem Item);
+/// <param name="Warning">Why this choice probably does not work (MoveChecks), shown yellow; null if nothing speaks against it.</param>
+public sealed record ChoiceItem(string Display, IItem Item, string? Warning = null) {
+  public bool IsWarned => Warning != null;
+}
 
 /// <summary>One parameter: type, "Show in Run", value choice (for selections) and the value editor.</summary>
 public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
@@ -87,8 +90,16 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     this.context = context;
     Owner = owner;
     Path = path;
-    Choices = ItemInspector.Choices(parameter)?.Select(v => new ChoiceItem(v is INamedItem n ? n.Name : v.ItemName, v)).ToList() ?? [];
+    IsChoice = ItemInspector.Choices(parameter) != null;
+    choices = BuildChoices();
   }
+
+  /// <summary>
+  /// The offered values with their warnings. They change with other parameters (a new move generator
+  /// gives other move evaluators and makers), so they are read again after every edit in the list.
+  /// </summary>
+  private List<ChoiceItem> BuildChoices() =>
+    ItemInspector.Choices(parameter)?.Select(v => new ChoiceItem(v is INamedItem n ? n.Name : v.ItemName, v, MoveChecks.Warning(Owner.Item, parameter, v))).ToList() ?? [];
 
   public ParameterListViewModel Owner { get; }
   public string Name => parameter.Name;
@@ -139,8 +150,18 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
     }
   }
 
-  public IReadOnlyList<ChoiceItem> Choices { get; }
-  public bool IsChoice => Choices.Count > 0;
+  private List<ChoiceItem> choices;
+  public IReadOnlyList<ChoiceItem> Choices => choices;
+
+  /// <summary>A selection among offered values (also when none is offered now: then the list is empty).</summary>
+  public bool IsChoice { get; }
+
+  /// <summary>Why the current value (or its absence) probably does not work: yellow in the list and below the choice.</summary>
+  public string? Warning => MoveChecks.ParameterWarning(Owner.Item, parameter);
+  public bool HasWarning => Warning != null;
+
+  /// <summary>Something is offered (an empty list is not shown; its warning says why it is empty).</summary>
+  public bool HasChoices => Choices.Count > 0;
 
   public ChoiceItem? SelectedChoice {
     get => Choices.FirstOrDefault(c => ReferenceEquals(c.Item, ItemInspector.Value(parameter)));
@@ -149,6 +170,9 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
       if (!context.BeginEdit()) { OnPropertyChanged(); return; }
       vp.Value = value.Item;
       ValueChanged();
+      // feedback: this choice, or what it changed in the other parameters (e.g. no move evaluator left)
+      if (Owner.Parameters.Select(p => p.Warning is { } w ? $"{p.Name}: {w}" : null).FirstOrDefault(w => w != null) is { } warning)
+        context.Report(warning);
     }
   }
 
@@ -181,6 +205,15 @@ public partial class ParameterNodeViewModel : ViewModelBase, IMultiField {
   }
 
   public void RefreshSummary() {
+    var fresh = BuildChoices();
+    if (!fresh.SequenceEqual(choices)) {
+      choices = fresh;
+      OnPropertyChanged(nameof(Choices));
+      OnPropertyChanged(nameof(HasChoices));
+      OnPropertyChanged(nameof(SelectedChoice));
+    }
+    OnPropertyChanged(nameof(Warning));
+    OnPropertyChanged(nameof(HasWarning));
     OnPropertyChanged(nameof(Summary));
     OnPropertyChanged(nameof(KindPictogram));
     OnPropertyChanged(nameof(KindTip));

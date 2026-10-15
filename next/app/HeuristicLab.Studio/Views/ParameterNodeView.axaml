@@ -19,8 +19,20 @@
                 <Button Content="Clear value" Command="{Binding ClearCommand}" IsVisible="{Binding CanClear}" />
             </StackPanel>
             <!-- Shift+click on the choice: choose it across all algorithms of this type (purple) -->
-            <ComboBox Classes="field" Classes.multi="{Binding IsMultiTarget}" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" IsVisible="{Binding IsChoice}"
-                      HorizontalAlignment="Stretch" DisplayMemberBinding="{Binding Display, x:DataType=vm:ChoiceItem}" />
+            <!-- choices that probably do not work are yellow (still selectable); the reason as hover text and below -->
+            <ComboBox Classes="field" Classes.multi="{Binding IsMultiTarget}" Classes.warned="{Binding HasWarning}"
+                      ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" IsVisible="{Binding HasChoices}"
+                      HorizontalAlignment="Stretch"
+                      ContainerPrepared="OnChoicePrepared">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ChoiceItem">
+                        <TextBlock Text="{Binding Display}" ToolTip.Tip="{Binding Warning}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Border Classes="caution" IsVisible="{Binding HasWarning}">
+                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" />
+            </Border>
             <ContentControl Content="{Binding Editor}" />
         </StackPanel>
     </Border>

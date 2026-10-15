@@ -17,7 +17,12 @@
                                      Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
                         <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="2" Text="{Binding Summary}" Opacity="0.65" MaxWidth="150" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" Margin="8,0,0,0" />
+                                   TextTrimming="CharacterEllipsis" Margin="8,0,0,0" IsVisible="{Binding !HasWarning}" />
+                        <!-- a value that probably does not work (or none fits): yellow -->
+                        <Border Grid.Column="2" Classes="caution summary" Margin="8,0,0,0" IsVisible="{Binding HasWarning}"
+                                ToolTip.Tip="{Binding Warning}">
+                            <TextBlock Text="{Binding Summary}" MaxWidth="150" TextTrimming="CharacterEllipsis" />
+                        </Border>
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>

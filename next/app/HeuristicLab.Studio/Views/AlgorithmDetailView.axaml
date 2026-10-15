@@ -31,7 +31,8 @@
                 <Button Content="&#x21BA; Prepare" Command="{Binding PrepareCommand}" ToolTip.Tip="Reset results (runs are kept)" />
                 <TextBlock Text="{Binding State}" VerticalAlignment="Center" Margin="8,0,0,0" />
                 <TextBlock Text="{Binding ExecutionTime}" VerticalAlignment="Center" FontFamily="monospace" />
-                <TextBlock Text="{Binding Message}" VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Message}" VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding Message}" />
             </StackPanel>
         </Border>
 

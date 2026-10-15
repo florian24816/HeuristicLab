@@ -93,7 +93,18 @@
   g/o:2:MainLoop/n:5:Name/p:Y#choice (EditContext.MultiTarget/ToggleMulti; editors rebuilt when
   MultiVersion changes).
   Parameter lists show the parameter kind's pictogram before the name (constrained = choice,
-  optional = may be empty, else value). Checked operator lists (analyzers) are numbered: a
+  optional = may be empty, else value).
+  Move operators that cannot work (runtime MoveChecks; LS/TS/SA and their improvement operators):
+  HeuristicLab offers every move generator of the encoding, also those for which the problem has no
+  move evaluator/maker/tabu operator (TSP: swap2, scramble -> MoveEvaluator "none"; the run "completes"
+  with 0 evaluated moves and no results, silently), and the generic SingleObjectiveMoveGenerator of
+  encoding-based problems needs an overridden GetNeighbors (none of the built-in ones has it: BestSelector
+  crashes). Such choices are yellow (#F4E803, the unsaved pictogram's, dark writing, both modes) in the
+  open list (ComboBoxItem.warned via ContainerPrepared), the chosen one in the ComboBox, its row's summary
+  in the list (Border.caution) and a text below; a choice with a warning reports it in the detail's message.
+  Choice lists are read again after every edit in their list (ParameterNodeViewModel.RefreshSummary):
+  they used to stay as built, so after a new move generator the old evaluators were still offered and
+  choosing one failed silently (ConstrainedValueParameter "Invalid value."). An empty list is not shown. Checked operator lists (analyzers) are numbered: a
   MultiAnalyzer runs its ticked operators in list order. Nested editors below a list get a
   "<name> selected. Details/Options:" heading. Result lists (algorithm Results tab, Results tab's
   Run view) show the result's kind first: chart (result_diagram_logo: first visualization is a

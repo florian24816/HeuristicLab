@@ -43,6 +43,32 @@
             <Setter Property="BorderThickness" Value="2" />
             <Setter Property="Padding" Value="8,0,8,0" />
         </Style>
+        <!-- choices that probably do not work (MoveChecks): the yellow of the unsaved pictogram, dark writing, in both modes -->
+        <Style Selector="ComboBoxItem.warned /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#F4E803" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="ComboBoxItem.warned:pointerover /template/ ContentPresenter#PART_ContentPresenter, ComboBoxItem.warned:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#D9CE00" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="ComboBox.warned /template/ Border#Background">
+            <Setter Property="Background" Value="#F4E803" />
+        </Style>
+        <Style Selector="ComboBox.warned">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Border.caution">
+            <Setter Property="Background" Value="#F4E803" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style Selector="Border.caution.summary">
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.caution TextBlock">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
         <!-- categorized lists (algorithms, problems): each row tinted with its category's color,
              the first row of a category headed by the category's name -->
         <Style Selector="ListBox.catalog > ListBoxItem" x:DataType="vm:CatalogItem">
