@@ -8,6 +8,12 @@ using HeuristicLab.Studio.Controls;
 
 namespace HeuristicLab.Studio.ViewModels;
 
+/// <summary>A legend entry: its name, color and whether it is hidden.</summary>
+public sealed record LegendItem(string Name, IBrush Color, bool IsHidden) {
+  public double Opacity => IsHidden ? 0.45 : 1;
+  public IBrush? Fill => IsHidden ? null : Color;
+}
+
 /// <summary>A chart ready for <see cref="LineChart"/>.</summary>
 public sealed record ChartPanel(string Title, IReadOnlyList<ChartSeries> Series, string XAxisTitle, string YAxisTitle,
                                 string SecondYAxisTitle, IReadOnlyList<ChartMarker> Markers) {
@@ -60,6 +66,30 @@ public partial class VisualsViewModel : ViewModelBase {
 
   /// <summary>Legend entries the user has hidden, shared by every view of these pictures.</summary>
   public HashSet<string> Hidden { get; } = [];
+
+  /// <summary>Counts changes of Hidden made here (Toggle), so the charts draw again.</summary>
+  [ObservableProperty]
+  public partial int HiddenVersion { get; set; }
+
+  /// <summary>False while the legend is shown in a panel of its own (fullscreen).</summary>
+  [ObservableProperty]
+  public partial bool ShowLegend { get; set; } = true;
+
+  /// <summary>The shown picture's legend: a chart's series, a picture's groups.</summary>
+  public IReadOnlyList<LegendItem> LegendItems => Current switch {
+    ChartPanel chart => chart.Series.Where(s => s.Points.Count > 0).Select(s => new LegendItem(s.Name, new SolidColorBrush(s.Color), Hidden.Contains(s.Name))).ToList(),
+    SceneVisual scene => SceneView.Entries(scene).Select(e => new LegendItem(e.Label, new SolidColorBrush(Color.FromArgb(e.Color.A, e.Color.R, e.Color.G, e.Color.B)), Hidden.Contains(e.Label))).ToList(),
+    _ => []
+  };
+
+  /// <summary>Hides or shows a legend entry in every view of these pictures.</summary>
+  public void Toggle(string name) {
+    if (!Hidden.Remove(name)) Hidden.Add(name);
+    HiddenVersion++;
+    OnPropertyChanged(nameof(LegendItems));
+  }
+
+  partial void OnCurrentChanged(object? value) => OnPropertyChanged(nameof(LegendItems));
 
   public void Show(IReadOnlyList<Visual> next) {
     string? selectedTitle = SelectedIndex >= 0 && SelectedIndex < visuals.Count ? visuals[SelectedIndex].Title : null;

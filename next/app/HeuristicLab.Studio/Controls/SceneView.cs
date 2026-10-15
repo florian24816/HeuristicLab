@@ -26,8 +26,16 @@ public class SceneView : Control {
   public static readonly StyledProperty<IBrush?> ForegroundProperty =
     AvaloniaProperty.Register<SceneView, IBrush?>(nameof(Foreground), Brushes.Gray);
 
+  /// <summary>False: no legend above the drawing (it is shown elsewhere, e.g. in a floating panel in fullscreen).</summary>
+  public static readonly StyledProperty<bool> ShowLegendProperty = AvaloniaProperty.Register<SceneView, bool>(nameof(ShowLegend), true);
+  /// <summary>Changes when the shared hidden set was changed from outside: draw again.</summary>
+  public static readonly StyledProperty<int> HiddenVersionProperty = AvaloniaProperty.Register<SceneView, int>(nameof(HiddenVersion));
+
+  public bool ShowLegend { get => GetValue(ShowLegendProperty); set => SetValue(ShowLegendProperty, value); }
+  public int HiddenVersion { get => GetValue(HiddenVersionProperty); set => SetValue(HiddenVersionProperty, value); }
+
   static SceneView() {
-    AffectsRender<SceneView>(SceneProperty, ForegroundProperty);
+    AffectsRender<SceneView>(SceneProperty, ForegroundProperty, ShowLegendProperty, HiddenVersionProperty);
     SceneProperty.Changed.AddClassHandler<SceneView>((view, e) => {
       if ((e.OldValue as SceneVisual)?.Title != (e.NewValue as SceneVisual)?.Title) view.ResetView();
     });
@@ -225,7 +233,7 @@ public class SceneView : Control {
     double yLabels = yScale ? LineChart.NiceTicks(world.MinY, world.MaxY, 5).Select(v => Text(LineChart.Label(v), foreground, UiSize).Width).Max() + 8 : 0;
     double yTitle = scene.Axes && !string.IsNullOrEmpty(scene.YAxisTitle) ? Title(scene.YAxisTitle, foreground).Height + 6 : 0;
     double left = 16 + Math.Max(rightAnchored, yLabels + yTitle);
-    var legend = LayoutLegend(scene, foreground);
+    var legend = ShowLegend ? LayoutLegend(scene, foreground) : [];
     double legendBottom = legend.Count > 0 ? legend.Max(l => l.Area.Bottom) + 4 : 0;
     double top = 16 + legendBottom + (scene.Shapes.OfType<TextShape>().Any(t => !hidden.Contains(t.GroupName)) ? 12 : 0);
     double right = 24;

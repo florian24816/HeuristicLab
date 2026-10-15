@@ -75,10 +75,19 @@ public class LineChart : Control {
   public static readonly StyledProperty<string?> TopAxisTitleProperty =
     AvaloniaProperty.Register<LineChart, string?>(nameof(TopAxisTitle));
 
+  /// <summary>False: no legend above the plot (it is shown elsewhere, e.g. in a floating panel in fullscreen).</summary>
+  public static readonly StyledProperty<bool> ShowLegendProperty = AvaloniaProperty.Register<LineChart, bool>(nameof(ShowLegend), true);
+  /// <summary>Changes when the shared hidden set was changed from outside: draw again.</summary>
+  public static readonly StyledProperty<int> HiddenVersionProperty = AvaloniaProperty.Register<LineChart, int>(nameof(HiddenVersion));
+
   static LineChart() {
     AffectsRender<LineChart>(SeriesProperty, XAxisTitleProperty, ForegroundProperty, MarkersProperty, YAxisTitleProperty,
-      SecondYAxisTitleProperty, EmptyTextProperty, SelectionStartProperty, SelectionEndProperty, TopAxisProperty, TopAxisTitleProperty);
+      SecondYAxisTitleProperty, EmptyTextProperty, SelectionStartProperty, SelectionEndProperty, TopAxisProperty, TopAxisTitleProperty,
+      ShowLegendProperty, HiddenVersionProperty);
   }
+
+  public bool ShowLegend { get => GetValue(ShowLegendProperty); set => SetValue(ShowLegendProperty, value); }
+  public int HiddenVersion { get => GetValue(HiddenVersionProperty); set => SetValue(HiddenVersionProperty, value); }
 
   public double? SelectionStart { get => GetValue(SelectionStartProperty); set => SetValue(SelectionStartProperty, value); }
   public double? SelectionEnd { get => GetValue(SelectionEndProperty); set => SetValue(SelectionEndProperty, value); }
@@ -193,7 +202,7 @@ public class LineChart : Control {
     double titleHeight = MakeTitle("Ag", foreground).Height;
     double left = 12 + TicksWidth(y1) + 8 + (string.IsNullOrEmpty(YAxisTitle) ? 0 : titleHeight + 6);
     double right = y2 != null ? 12 + TicksWidth(y2) + 8 + (string.IsNullOrEmpty(SecondYAxisTitle) ? 0 : titleHeight + 6) : RightMargin;
-    var legend = LayoutLegend(all, foreground, left, bounds.Width);
+    var legend = ShowLegend ? LayoutLegend(all, foreground, left, bounds.Width) : [];
     double legendExtra = legend.Count > 0 ? legend.Max(l => l.Area.Bottom) - 20 : 0;
     double plotTop = TopMargin + Math.Max(0, legendExtra) + (topAxis ? 22 : 0);
     double tickHeight = MakeText("0", foreground).Height;

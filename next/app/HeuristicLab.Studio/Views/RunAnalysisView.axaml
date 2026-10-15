@@ -103,8 +103,13 @@
                             <ComboBox ItemsSource="{Binding CurveRows}" SelectedItem="{Binding CurveRow}" Width="200" IsVisible="{Binding IsCurves}" />
                             <CheckBox Content="Every run" IsChecked="{Binding CurveRuns}" IsVisible="{Binding IsCurves}" />
                             <CheckBox Content="Mean per group" IsChecked="{Binding CurveMean}" IsVisible="{Binding IsCurves}" />
+                            <Button Content="⛶ Fullscreen" Click="OnFullscreen" IsEnabled="{Binding Chart.HasAny}"
+                                    ToolTip.Tip="The chart fills the screen; legend and box plot table in panels you can move and resize (F11; Esc leaves)" />
                         </WrapPanel>
                         <TextBlock DockPanel.Dock="Bottom" Text="One color per group; click a legend entry to hide or show a group." FontSize="11" Opacity="0.6" />
+                        <!-- the box plot's numbers, in the program's table design -->
+                        <ContentControl DockPanel.Dock="Bottom" Content="{Binding BoxTable}" IsVisible="{Binding IsBoxPlot}" MaxHeight="220"
+                                        HorizontalAlignment="Left" Margin="0,6,0,4" />
                         <ContentControl Content="{Binding Chart}" />
                     </DockPanel>
                 </TabItem>
@@ -118,53 +123,11 @@
                             </StackPanel>
                             <TextBlock Text="{Binding AllGroupsTest}" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBlock Text="Per group" FontWeight="SemiBold" Margin="0,6,0,0" />
-                            <Grid ColumnDefinitions="3*,60,*,*,*,*,*,*,*">
-                                <TextBlock Text="group" Opacity="0.6" /><TextBlock Grid.Column="1" Text="n" Opacity="0.6" />
-                                <TextBlock Grid.Column="2" Text="mean" Opacity="0.6" /><TextBlock Grid.Column="3" Text="sd" Opacity="0.6" />
-                                <TextBlock Grid.Column="4" Text="min" Opacity="0.6" /><TextBlock Grid.Column="5" Text="Q1" Opacity="0.6" />
-                                <TextBlock Grid.Column="6" Text="median" Opacity="0.6" /><TextBlock Grid.Column="7" Text="Q3" Opacity="0.6" />
-                                <TextBlock Grid.Column="8" Text="max" Opacity="0.6" />
-                            </Grid>
-                            <ItemsControl ItemsSource="{Binding Summaries}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:SummaryLine">
-                                        <Grid ColumnDefinitions="3*,60,*,*,*,*,*,*,*" Margin="0,1">
-                                            <TextBlock Text="{Binding Group}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Group}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Count}" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Mean}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="3" Text="{Binding StdDev}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="4" Text="{Binding Min}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="5" Text="{Binding Q1}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="6" Text="{Binding Median}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="7" Text="{Binding Q3}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="8" Text="{Binding Max}" FontFamily="monospace" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <ContentControl Content="{Binding SummaryGrid}" HorizontalAlignment="Left" MaxHeight="320" />
                             <TextBlock Text="Pairs of groups" FontWeight="SemiBold" Margin="0,10,0,0" />
-                            <TextBlock Text="Mann-Whitney U p-value, adjusted for many pairs (Bonferroni-Holm; bold: below 0.05), t-test p-value and effect sizes."
+                            <TextBlock Text="Mann-Whitney U p-value, adjusted for many pairs (Bonferroni-Holm; *: below 0.05), t-test p-value and effect sizes."
                                        FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
-                            <Grid ColumnDefinitions="3*,*,*,*,*,*">
-                                <TextBlock Text="pair" Opacity="0.6" /><TextBlock Grid.Column="1" Text="Mann-Whitney" Opacity="0.6" />
-                                <TextBlock Grid.Column="2" Text="adjusted" Opacity="0.6" /><TextBlock Grid.Column="3" Text="t-test" Opacity="0.6" />
-                                <TextBlock Grid.Column="4" Text="Cohen's d" Opacity="0.6" /><TextBlock Grid.Column="5" Text="Hedges' g" Opacity="0.6" />
-                            </Grid>
-                            <ItemsControl ItemsSource="{Binding Pairs}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:PairLine">
-                                        <Grid ColumnDefinitions="3*,*,*,*,*,*" Margin="0,1">
-                                            <TextBlock Text="{Binding Pair}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Pair}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding MannWhitney}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Adjusted}" FontFamily="monospace"
-                                                       FontWeight="{Binding Significant, Converter={x:Static vm:Converters.BoldIfTrue}}" />
-                                            <TextBlock Grid.Column="3" Text="{Binding TTest}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="4" Text="{Binding CohensD}" FontFamily="monospace" />
-                                            <TextBlock Grid.Column="5" Text="{Binding HedgesG}" FontFamily="monospace" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <ContentControl Content="{Binding PairsGrid}" HorizontalAlignment="Left" MaxHeight="400" />
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>

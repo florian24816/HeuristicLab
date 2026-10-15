@@ -469,6 +469,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   public VisualsViewModel Chart { get; } = new();
 
   partial void OnChartKindChanged(string value) {
+    OnPropertyChanged(nameof(IsBoxPlot));
     OnPropertyChanged(nameof(IsScatter));
     OnPropertyChanged(nameof(IsCurves));
     OnPropertyChanged(nameof(NeedsValue));
@@ -497,6 +498,25 @@ public partial class RunAnalysisViewModel : ViewModelBase {
       _ => RunCharts.BoxPlot(Table, Groups, ChartValue.Key)
     };
     Chart.Show(visual == null ? [] : [visual]);
+    BoxTable = IsBoxPlot && ChartValue != null ? BoxGrid(RunCharts.BoxStatistics(Groups, ChartValue.Key)) : null;
+  }
+
+  public bool IsBoxPlot => ChartKind == "Box plot";
+
+  /// <summary>The box plot's numbers per group, in the program's table design (also in fullscreen).</summary>
+  [ObservableProperty]
+  public partial TableGridViewModel? BoxTable { get; set; }
+
+  private static TableGridViewModel BoxGrid(IReadOnlyList<RunCharts.BoxStats> boxes) {
+    GridColumn Number(string key, string header) => new(key, header, 112);
+    var columns = new List<GridColumn> {
+      new("group", "Group", 280, TableGridViewModel.RunShade), Number("n", "n"), Number("min", "Min"), Number("whiskerLow", "Whisker low"),
+      Number("q1", "Q1"), Number("median", "Median"), Number("mean", "Mean"), Number("q3", "Q3"), Number("whiskerHigh", "Whisker high"),
+      Number("max", "Max"), new("outliers", "Outliers", 240)
+    };
+    return new TableGridViewModel(columns, boxes.Select(b => ((object)b, (IReadOnlyList<string>)[
+      b.Group, b.Count.ToString(Invariant), G(b.Min), G(b.WhiskerLow), G(b.Q1), G(b.Median), G(b.Mean), G(b.Q3), G(b.WhiskerHigh), G(b.Max),
+      b.Outliers.Count == 0 ? "none" : $"{b.Outliers.Count}: {string.Join(", ", b.Outliers.Select(G))}"])), _ => { });
   }
 
   // ---- statistics
@@ -513,16 +533,32 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   [ObservableProperty]
   public partial string AllGroupsTest { get; set; } = "";
 
+  /// <summary>Summaries and Pairs in the program's table design.</summary>
+  [ObservableProperty]
+  public partial TableGridViewModel? SummaryGrid { get; set; }
+
+  [ObservableProperty]
+  public partial TableGridViewModel? PairsGrid { get; set; }
+
   partial void OnStatisticsValueChanged(ColumnChoice? value) => RebuildStatistics();
 
   private static string G(double v) => double.IsFinite(v) ? v.ToString("G6", Invariant) : "–";
   private static string P(double p) => double.IsFinite(p) ? (p < 0.0001 ? "< 0.0001" : p.ToString("0.0000", Invariant)) : "–";
 
   private void RebuildStatistics() {
-    if (StatisticsValue == null || Groups.Count == 0) { Summaries = []; Pairs = []; AllGroupsTest = ""; return; }
+    if (StatisticsValue == null || Groups.Count == 0) { Summaries = []; Pairs = []; AllGroupsTest = ""; SummaryGrid = PairsGrid = null; return; }
     var comparison = RunStatistics.Compare(Groups, StatisticsValue.Key);
     Summaries = comparison.Groups.Select(g => new SummaryLine(g.Group, g.Count.ToString(Invariant), G(g.Mean), G(g.StdDev), G(g.Min), G(g.Q1), G(g.Median), G(g.Q3), G(g.Max))).ToList();
     Pairs = comparison.Pairs.Select(p => new PairLine($"{p.A}  vs  {p.B}", P(p.MannWhitneyP), P(p.AdjustedP), P(p.TTestP), G(p.CohensD), G(p.HedgesG), p.AdjustedP < 0.05)).ToList();
+    GridColumn Number(string key, string header) => new(key, header, 110);
+    SummaryGrid = new TableGridViewModel([
+        new("group", "Group", 280, TableGridViewModel.RunShade), Number("n", "n"), Number("mean", "Mean"), Number("sd", "Std. dev."),
+        Number("min", "Min"), Number("q1", "Q1"), Number("median", "Median"), Number("q3", "Q3"), Number("max", "Max")
+      ], Summaries.Select(l => ((object)l, (IReadOnlyList<string>)[l.Group, l.Count, l.Mean, l.StdDev, l.Min, l.Q1, l.Median, l.Q3, l.Max])), _ => { });
+    PairsGrid = new TableGridViewModel([
+        new("pair", "Pair", 380, TableGridViewModel.RunShade), new("mw", "Mann-Whitney", 130), Number("adjusted", "Adjusted"),
+        Number("t", "t-test"), Number("d", "Cohen's d"), Number("g", "Hedges' g")
+      ], Pairs.Select(l => ((object)l, (IReadOnlyList<string>)[l.Pair, l.MannWhitney, l.Significant ? l.Adjusted + "  *" : l.Adjusted, l.TTest, l.CohensD, l.HedgesG])), _ => { });
     AllGroupsTest = comparison.KruskalWallisP is double kw
       ? $"Kruskal-Wallis over all {comparison.Groups.Count} groups: p = {P(kw)}" + (kw < 0.05 ? " - the groups differ (α = 0.05)." : " - no significant difference (α = 0.05).")
       : "Tests need at least two groups with two or more runs each.";

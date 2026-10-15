@@ -239,7 +239,39 @@ public class StudioRunAnalysisTests {
       Assert.AreEqual("result:BestQuality", analysis.ChartValue!.Key);
       var box = (SceneVisual)analysis.Chart.Current!;
       Assert.AreEqual(3, box.Legend.Count);
+      // the box plot's numbers in the program's table design
+      var boxes = analysis.BoxTable!;
+      Assert.AreEqual(3, boxes.Rows.Count);
+      CollectionAssert.AreEqual(new[] { "group", "n", "min", "whiskerLow", "q1", "median", "mean", "q3", "whiskerHigh", "max", "outliers" },
+        boxes.Columns.Select(c => c.Key).ToList());
+      Assert.AreEqual("5", boxes.Rows[0].Cells[1].Text);
+      AssertReadable(boxes);
       Shot("boxplot");
+
+      // fullscreen: the chart fills the screen, legend and table float in panels that move and resize
+      var view = window.GetVisualDescendants().OfType<RunAnalysisView>().Single();
+      var full = view.OpenFullscreen()!;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsFalse(analysis.Chart.ShowLegend, "the legend is in its panel, not above the chart");
+      Assert.IsTrue(full.TablePanel.IsVisible, "a box plot's table");
+      Assert.AreEqual(3, analysis.Chart.LegendItems.Count);
+      var entry = full.LegendPanel.GetVisualDescendants().OfType<Avalonia.Controls.Border>().First(b => b.Classes.Contains("entry"));
+      var at = Avalonia.VisualExtensions.TranslatePoint(entry, new Avalonia.Point(entry.Bounds.Width / 2, entry.Bounds.Height / 2), full)!.Value;
+      full.MouseDown(at, Avalonia.Input.MouseButton.Left);
+      full.MouseUp(at, Avalonia.Input.MouseButton.Left);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsTrue(analysis.Chart.Hidden.Contains(analysis.Chart.LegendItems[0].Name) && analysis.Chart.LegendItems[0].IsHidden,
+        "a click on a legend entry hides that group");
+      full.TablePanel.MoveTo(40, 300);
+      full.TablePanel.ResizeTo(700, 180);
+      Assert.AreEqual(700, full.TablePanel.Width);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      full.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-fullscreen.png"));
+      analysis.Chart.Toggle(analysis.Chart.LegendItems[0].Name);
+      full.Close();
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsTrue(analysis.Chart.ShowLegend, "back above the chart");
+      Assert.IsNull(view.Fullscreen);
       analysis.ChartKind = "Curves";
       Assert.AreEqual("Qualities", analysis.CurveTable);
       Assert.AreEqual("BestQuality", analysis.CurveRow);
@@ -260,6 +292,9 @@ public class StudioRunAnalysisTests {
       Assert.AreEqual(2, analysis.Summaries.Count);
       Assert.IsTrue(analysis.Summaries.All(s => s.Count == "5"));
       Assert.AreEqual(1, analysis.Pairs.Count);
+      Assert.AreEqual(2, analysis.SummaryGrid!.Rows.Count);
+      Assert.AreEqual(1, analysis.PairsGrid!.Rows.Count);
+      Assert.AreEqual(TableGridViewModel.RunShade, analysis.SummaryGrid.Columns[0].Fixed);
       StringAssert.StartsWith(analysis.AllGroupsTest, "Kruskal-Wallis over all 2 groups");
       Shot("statistics");
 

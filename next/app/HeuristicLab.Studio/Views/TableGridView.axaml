@@ -21,7 +21,8 @@
         </Style>
     </UserControl.Styles>
     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-        <StackPanel HorizontalAlignment="Left">
+        <!-- room at the bottom for the horizontal scroll bar, so it does not cover the last row -->
+        <StackPanel HorizontalAlignment="Left" Margin="0,0,0,14">
             <c:Sticky StickY="True" ZIndex="2">
                 <ItemsControl Classes="cells" ItemsSource="{Binding Header}">
                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>

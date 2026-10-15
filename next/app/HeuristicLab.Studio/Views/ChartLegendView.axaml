@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             x:Class="HeuristicLab.Studio.Views.ChartLegendView"
+             x:DataType="vm:VisualsViewModel">
+    <!-- the chart's legend on its own (fullscreen): click an entry to hide or show it -->
+    <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding LegendItems}" Margin="10,6">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:LegendItem">
+                    <Border Classes="entry" Background="Transparent" Padding="2,3" Cursor="Hand" Tapped="EntryTapped"
+                            ToolTip.Tip="Click to hide or show">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Opacity="{Binding Opacity}">
+                            <Border Width="14" Height="14" Background="{Binding Fill}" BorderBrush="{Binding Color}" BorderThickness="1.5"
+                                    VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </ScrollViewer>
+</UserControl>

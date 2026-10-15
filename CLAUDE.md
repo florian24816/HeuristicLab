@@ -167,9 +167,14 @@
   <name>_analysis.py ("# %%" cells: the syntax on one run, pandas table, seaborn box plot of the quality
   per block that made runs, curve per step; only fields every exported run has, BestQuality / Qualities
   preferred, min/max by Maximization; written only if missing - it is the user's), Charts (box plot, scatter, histogram,
-  cumulative distribution, curves of a DataTable row per run + group mean; NaN = line gap),
+  cumulative distribution, curves of a DataTable row per run + group mean; NaN = line gap; the box plot's
+  numbers per group - RunCharts.BoxStatistics, shared with the chart - in a table below it (BoxTable);
+  "Fullscreen" / F11: ChartsFullscreenWindow, chart fills the screen, legend (ChartLegendView over
+  VisualsViewModel.LegendItems/Toggle; charts' own legend off via ShowLegend, redraw via HiddenVersion)
+  and the box table in FloatingPanels - Views/FloatingPanel moves by its title bar, resizes at its corner,
+  also used by the detailed analysis fullscreen),
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
-  Bonferroni-Holm, t-test, Cohen's d, Hedges' g), Run (one run's results with visualizations).
+  Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05), Run (one run's results with visualizations).
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
   process affinity (hard limit, Linux/Windows), threads per algorithm (1 = HeuristicLab's default
   SequentialEngine; more = ParallelEngine with that DegreeOfParallelism, set by Resources.Configure
