@@ -143,12 +143,22 @@ public sealed class RunValueCache {
   /// <summary>One cache for a whole front end: every table of the same runs reads each run once.</summary>
   public static RunValueCache Shared { get; } = new();
 
-  private readonly ConditionalWeakTable<IRun, IReadOnlyDictionary<string, object>> values = new();
+  // with the numbers of parameters and results read: a run can still get parameters after it was made
+  // (e.g. the "Resources: ..." ones Studio adds when a run ends), then it is read again
+  private sealed record Entry(int Parameters, int Results, IReadOnlyDictionary<string, object> Cells);
+  private readonly ConditionalWeakTable<IRun, Entry> values = new();
 
-  /// <summary>Whether the run was read already (building a table from it is then fast).</summary>
-  public bool Contains(IRun run) => values.TryGetValue(run, out _);
+  /// <summary>Whether the run was read already as it is now (building a table from it is then fast).</summary>
+  public bool Contains(IRun run) => values.TryGetValue(run, out var entry) && Current(run, entry);
 
-  public IReadOnlyDictionary<string, object> Get(IRun run) => values.GetValue(run, Read);
+  public IReadOnlyDictionary<string, object> Get(IRun run) {
+    if (values.TryGetValue(run, out var entry) && Current(run, entry)) return entry.Cells;
+    entry = new Entry(run.Parameters.Count, run.Results.Count, Read(run));
+    values.AddOrUpdate(run, entry);
+    return entry.Cells;
+  }
+
+  private static bool Current(IRun run, Entry entry) => entry.Parameters == run.Parameters.Count && entry.Results == run.Results.Count;
 
   public static IReadOnlyDictionary<string, object> Read(IRun run) {
     var cells = new Dictionary<string, object>();

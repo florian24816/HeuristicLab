@@ -54,15 +54,17 @@ public class StudioAnalysisTests {
       Assert.AreEqual(41, analysis.Series[^1].Points.Count, "best so far for the initialization and 40 generations");
       Assert.IsTrue(analysis.TimeAxis.Count > 2, "elapsed time along the top");
 
-      // click on iteration 20: its best solution in red, five earlier iterations in blue and (the run has
+      // click on iteration 20: its best solution in blue (as TSP tours are drawn), five earlier iterations in red and (the run has
       // finished) five later ones in green, what changed since iteration 19 in yellow
       analysis.SelectionStart = 20;
       Assert.AreEqual(20, analysis.CurrentIteration);
       var scene = (SceneVisual)analysis.Visuals.Current!;
       var tours = scene.Shapes.OfType<PathShape>().ToList();
-      Assert.AreEqual(Composition.Current, tours[^1].Color, "the current tour is red, on top");
+      Assert.AreEqual(Rgb.Blue, Composition.Current, "the blue of the TSP pictures");
+      Assert.AreEqual(Composition.Current, tours[^1].Color, "the current tour is blue, on top");
       Assert.AreEqual(1, tours.Count(t => t.Color == Composition.Current));
-      Assert.AreEqual(5, tours.Count(t => t.Color.B > t.Color.R && t.Color.B > t.Color.G), "earlier iterations: shades of blue");
+      Assert.AreEqual(5, tours.Count(t => t.Color.R > t.Color.G && t.Color.R > t.Color.B), "earlier iterations: shades of red");
+      Assert.IsTrue(Composition.RangeStart.R > Composition.RangeStart.B, "the start of a range: red");
       Assert.AreEqual(5, tours.Count(t => t.Color.G > t.Color.R && t.Color.G > t.Color.B), "later iterations: shades of green");
       Assert.IsTrue(tours.All(t => t.Color.A == 255), "no transparency");
       // yellow: the edges the crossover (and mutation) made that neither parent had

@@ -178,10 +178,10 @@
   may create nothing (local search at its local optimum keeps iterating) and still counts - the view
   then shows the solution kept from before. Raw
   solutions are drawn with their problem via Visualizations.ForSolution (decoders run in a scope
-  holding the problem's parameters) and combined by Visuals.Composition: current solution red, what
-  it has beyond its ancestors from before its iteration yellow, earlier iterations blue shades,
-  later ones (finished runs) green shades, a selected range's start/end as wide/medium strokes
-  under it; no transparency. Only shapes marked IsSolution are recolored (builders mark them;
+  holding the problem's parameters) and combined by Visuals.Composition: current solution blue (Rgb.Blue, the
+  TSP tours' blue; user's choice 2026-10-15), what it has beyond its ancestors from before its iteration
+  yellow, earlier iterations red shades, later ones (finished runs) green shades, a selected range's start
+  (dark red, wide) / end (dark green, medium) as strokes under it; no transparency. Only shapes marked IsSolution are recolored (builders mark them;
   trees and the lawn are not layered). A selected range plays as an animation (iterations/s);
   "Earlier/Later iterations" inputs always apply (within a range too). Every chart, picture and 3D
   view has a clickable legend: series / shape groups (Shape.Group, else by kind) / items can be
@@ -250,7 +250,19 @@
   over white, opaque); fixed columns stay in view when scrolling sideways (Controls.Sticky moves
   them by the ScrollViewer offset, ZIndex above; the header sticks the same way vertically):
   Results: Source #FDE5C8, Origin #FBCD96, Run #F9B462 (palest to closest to the logo orange);
-  RunsView: the table at the top (max 300 px), a selected run's details below it in their own scroll area.
+  RunsView: Runs tab (ShowsDetails false) the table at the top (max 300 px); Experiments tab (experiment,
+  batch/time-limit run, algorithm Runs tab) the table fills the height down to the window's edge, the selected
+  run's details below it (max 240 px; RunsView.axaml.cs sets the rows).
+  Single runs (user's decision 2026-10-15): Start on one algorithm (its detail) makes single runs - when it
+  ends (not paused) the runs it made leave the algorithm (HeuristicLab removes them from its batch run,
+  time-limit run and experiment too) and go to ExperimentBlockViewModel.SingleRuns (ViewModels/SingleRuns.cs),
+  named "Single run k" per algorithm (grouped by the runs' "Algorithm Name"). The algorithm's Runs tab lists
+  its runs and its single runs (RunsViewModel takes a run list). Runs and Results tabs: a "Single runs"
+  folder > experiment > algorithm after the experiments (RunsSourceViewModel/RunSourceViewModel Key/Group +
+  run list); in the Results tab not ticked at first. Saved with the experiment as a run collection
+  "<name>.single-runs.hl" next to its .hl (HeuristicLab opens it; written also when emptied), loaded when the
+  experiment is opened, renamed with "Rename file...". RunValueCache reads a run again when its numbers of
+  parameters/results changed (Studio tags runs with "Resources: ..." after they were first read).
   Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
   it (blue overlay); Results header click sorts.
   Long tables (user's request): the first 50 rows (TableGridViewModel.Limit, ShownRows), then a button as

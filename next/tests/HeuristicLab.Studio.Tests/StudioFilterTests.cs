@@ -46,7 +46,7 @@ public class StudioFilterTests {
       vm.SelectedTab = MainViewModel.ResultsTab;
       var analysis = vm.RunAnalysis;
       analysis.RefreshSources();
-      analysis.Sources.Single().IsChecked = true;
+      analysis.Sources.First().IsChecked = true;
       Pump();
       int all = analysis.Table.Rows.Count;
       Assert.AreEqual(5, all);

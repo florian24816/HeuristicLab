@@ -50,7 +50,7 @@ public class StudioLargeTableTests {
       vm.SelectedTab = MainViewModel.ResultsTab;
       var analysis = vm.RunAnalysis;
       analysis.RefreshSources();
-      analysis.Sources.Single().IsChecked = true;
+      analysis.Sources.First().IsChecked = true;
       Assert.IsTrue(analysis.IsBusy, "600 runs not read yet: built in the background");
       Pump();
       var overlay = window.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("busy"));

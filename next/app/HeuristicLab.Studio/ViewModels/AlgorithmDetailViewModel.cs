@@ -30,6 +30,8 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   private readonly DispatcherTimer timer;
   private Task? execution;
   private bool startedHere;
+  /// <summary>The runs the algorithm had before its Start here: the ones added since are single runs.</summary>
+  private HashSet<IRun>? runsBefore;
 
   public AlgorithmDetailViewModel(AlgorithmBlockViewModel block) {
     this.block = block;
@@ -41,7 +43,9 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     context.Edited += () => OnPropertyChanged(nameof(AlgorithmWarning));
     Engines = ItemInspector.Engines();
     Results = new ResultsViewModel(() => Algorithm.Results, context);
-    Runs = new RunsViewModel(Algorithm.Runs);
+    // its runs in the experiment, then the single runs its Start made (kept apart in the experiment's SingleRuns)
+    Runs = new RunsViewModel(() => [.. Algorithm.Runs.ToArray(),
+      .. block.Root?.SingleRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs ?? []]);
     Analysis = new AnalysisViewModel(() => Algorithm, running => block.Workspace.SetAlgorithmRunning(running),
       status => block.Workspace.NotifyFinished($"Detailed analysis of {block.Name} finished", status));
     timer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => Tick());
@@ -257,6 +261,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     }
     HeuristicLab.Next.Runtime.Resources.Configure(Algorithm);
     block.Workspace.SetAlgorithmRunning(true);
+    if (!startedHere) runsBefore = new HashSet<IRun>(Algorithm.Runs, ReferenceEqualityComparer.Instance);
     startedHere = true;
     execution = Task.Run(() => Algorithm.Start(CancellationToken.None));
     timer.Start();
@@ -321,10 +326,32 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
         startedHere = paused;
         block.Workspace.SetAlgorithmRunning(paused);
         if (paused) Message = "Paused (breakpoint or Pause). Start resumes.";
-        else block.Workspace.NotifyFinished($"{block.Name} finished",
-          $"{(execution is { IsFaulted: true } ? "Failed" : State)} after {ExecutionTime}, {Algorithm.Runs.Count} run{(Algorithm.Runs.Count == 1 ? "" : "s")}");
+        else {
+          int made = MoveSingleRuns();
+          block.Workspace.NotifyFinished($"{block.Name} finished",
+            $"{(execution is { IsFaulted: true } ? "Failed" : State)} after {ExecutionTime}, {made} single run{(made == 1 ? "" : "s")}");
+        }
       }
     }
+  }
+
+  /// <summary>
+  /// The runs this Start made leave the experiment tree (HeuristicLab passes the removal on to the batch run,
+  /// time-limit run and experiment) and become the experiment's single runs.
+  /// </summary>
+  private int MoveSingleRuns() {
+    var made = Algorithm.Runs.Where(r => runsBefore?.Contains(r) != true).ToList();
+    runsBefore = null;
+    if (made.Count == 0 || block.Root is not { } experiment) return made.Count;
+    Algorithm.Runs.RemoveRange(made);
+    experiment.SingleRuns.Add(made);
+    block.MarkModified();
+    Runs.Invalidate();
+    Runs.Refresh();
+    block.RefreshCounts();
+    Message = made.Count == 1 ? "The run is a single run: Runs and Results tabs, \"Single runs\"."
+      : $"The {made.Count} runs are single runs: Runs and Results tabs, \"Single runs\".";
+    return made.Count;
   }
 
   /// <summary>Called when the workspace's run state changes.</summary>
@@ -502,8 +529,11 @@ public sealed record MemberViewModel(string Name, ValueEditorViewModel Value);
 public sealed record RunTableRow(string Name, IReadOnlyList<string> Cells, IRun Run);
 
 /// <summary>Runs as a table: one row per run, one column per scalar result.</summary>
-public partial class RunsViewModel(RunCollection runs) : ViewModelBase {
-  private int shown = -1;
+/// <param name="runs">The runs to list, read again on every refresh (a collection, or several put together).</param>
+public partial class RunsViewModel(Func<IReadOnlyList<IRun>> runs) : ViewModelBase {
+  public RunsViewModel(RunCollection runs) : this(() => runs.ToArray()) { }
+
+  private IRun[]? shown;
 
   [ObservableProperty]
   public partial IReadOnlyList<string> Columns { get; set; } = [];
@@ -544,11 +574,14 @@ public partial class RunsViewModel(RunCollection runs) : ViewModelBase {
     var o => Convert.ToString(o, CultureInfo.InvariantCulture) ?? ""
   };
 
+  /// <summary>Shows the runs again at the next refresh, also when they are the same ones (e.g. renamed).</summary>
+  public void Invalidate() => shown = null;
+
   public void Refresh() {
     IRun[] all;
-    try { all = runs.ToArray(); } catch (InvalidOperationException) { return; }
-    if (all.Length == shown) return;
-    shown = all.Length;
+    try { all = runs().ToArray(); } catch (InvalidOperationException) { return; }
+    if (shown != null && all.SequenceEqual(shown)) return;
+    shown = all;
     // the runs' numbers and switches, read once per run (shared with the Results tab)
     var records = all.Select(r => (Run: r, Cells: HeuristicLab.Next.Runtime.Runs.RunValueCache.Shared.Get(r))).ToList();
     static bool Shown(object v) => v is double || v is "True" or "False";

@@ -332,6 +332,13 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   private ExperimentBlockViewModel AddExperiment(Experiment experiment, string? path) {
     var block = new ExperimentBlockViewModel(this, experiment, path);
+    if (path != null) {
+      try {
+        block.SingleRuns.Load(path);
+      } catch (Exception e) when (e is IOException or InvalidOperationException or UnauthorizedAccessException) {
+        Status = $"Its single runs ({Path.GetFileName(SingleRuns.FileFor(path))}) could not be read: {e.Message}";
+      }
+    }
     Experiments.Add(block);
     Selected = block;
     OnPropertyChanged(nameof(HasExperiments));
@@ -347,7 +354,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
     var path = await fileDialogs.SaveHlFileAsync(Path.GetFileName(block.FilePath) ?? block.Name + ".hl");
     if (path == null) return;
-    await Task.Run(() => Documents.Save(block.Experiment, path));
+    await Task.Run(() => { Documents.Save(block.Experiment, path); block.SingleRuns.Save(path); });
     block.FilePath = path;
     block.IsModified = false;
     Remember(path);
@@ -368,7 +375,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       return;
     }
     try {
-      await Task.Run(() => Documents.Save(block.Experiment, block.FilePath));
+      await Task.Run(() => { Documents.Save(block.Experiment, block.FilePath); block.SingleRuns.Save(block.FilePath); });
       block.IsModified = false;
       Remember(block.FilePath);
       Status = $"Saved {block.Name} to {Path.GetFileName(block.FilePath)}";
@@ -408,6 +415,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
     try {
       File.Move(path, target);
+      SingleRuns.Move(path, target);
     } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
       Status = $"Could not rename {Path.GetFileName(path)}: {e.Message}";
       return false;

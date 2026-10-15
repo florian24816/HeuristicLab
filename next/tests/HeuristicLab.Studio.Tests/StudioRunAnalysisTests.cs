@@ -68,7 +68,7 @@ public class StudioRunAnalysisTests {
 
       var analysis = vm.RunAnalysis;
       analysis.RefreshSources();
-      var root = analysis.Sources.Single();
+      var root = analysis.Sources.First();
       root.IsChecked = true;
       Assert.AreEqual(2, analysis.Table.Rows.Count, analysis.Status);
       var limitBox = root.Children.Single(c => c.Kind == "Time-limit run");
@@ -191,7 +191,7 @@ public class StudioRunAnalysisTests {
 
       vm.SelectedTab = MainViewModel.ResultsTab;
       var analysis = vm.RunAnalysis;
-      var root = analysis.Sources.Single();
+      var root = analysis.Sources.First();
       Assert.AreEqual(3, root.Children.Count, "two batch runs and the tabu search");
       root.IsChecked = true;
       Assert.AreEqual(11, analysis.Table.Rows.Count, analysis.Status);
@@ -233,7 +233,7 @@ public class StudioRunAnalysisTests {
 
       // Runs tab: a batch run's runs, the Run column in the Results tab's run orange, staying in view
       vm.SelectedTab = MainViewModel.RunsTab;
-      vm.Runs.SelectedSource = vm.Runs.Sources.Single().Children.First(c => c.Kind == "Batch run");
+      vm.Runs.SelectedSource = vm.Runs.Sources.First().Children.First(c => c.Kind == "Batch run");
       var runs = vm.Runs.Runs!.Grid!;
       Assert.AreEqual(5, runs.Rows.Count);
       Assert.AreEqual(TableGridViewModel.RunShade, runs.Columns.Single(c => c.Fixed != null).Fixed);

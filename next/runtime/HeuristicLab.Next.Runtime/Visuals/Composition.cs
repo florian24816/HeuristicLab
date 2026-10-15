@@ -7,21 +7,22 @@ public sealed record SolutionLayer(Visual Visual, LayerKind Kind, double Age = 0
 
 /// <summary>
 /// Several solutions of one problem in one picture (the detailed analysis): the current solution in
-/// red with what it has that its baselines (the solutions it was made from) do not, in yellow on top;
-/// earlier iterations in shades of blue and later ones in shades of green, darker the closer they
-/// are; the start and end of a selected range as wide dark blue and medium dark green strokes under
-/// the current one, so overlapping parts stay distinguishable. Only shapes marked IsSolution are
+/// blue (the blue of the problems' own pictures, e.g. a TSP tour) with what it has that its baselines
+/// (the solutions it was made from) do not, in yellow on top; earlier iterations in shades of red and
+/// later ones in shades of green, darker the closer they are; the start and end of a selected range as
+/// wide dark red and medium dark green strokes under the current one, so overlapping parts stay
+/// distinguishable (user's choice of colors, 2026-10-15). Only shapes marked IsSolution are
 /// recolored; the problem's data (locations, grids, landscapes) is drawn once, from the current picture.
 /// </summary>
 public static class Composition {
-  public static readonly Rgb Current = new(0xD6, 0x27, 0x28);
+  public static readonly Rgb Current = Rgb.Blue;
   public static readonly Rgb Changed = new(0xF5, 0xB8, 0x00);
-  private static readonly Rgb DarkBlue = new(0x1F, 0x4E, 0x9C), LightBlue = new(0xC2, 0xD6, 0xF2);
+  private static readonly Rgb DarkRed = new(0xA3, 0x1D, 0x1D), LightRed = new(0xF4, 0xC4, 0xC4);
   private static readonly Rgb DarkGreen = new(0x1E, 0x7B, 0x34), LightGreen = new(0xC4, 0xE8, 0xCA);
 
-  public static Rgb Earlier(double age) => Mix(DarkBlue, LightBlue, age);
+  public static Rgb Earlier(double age) => Mix(DarkRed, LightRed, age);
   public static Rgb Later(double age) => Mix(DarkGreen, LightGreen, age);
-  public static readonly Rgb RangeStart = new(0x14, 0x34, 0x6E), RangeEnd = new(0x14, 0x5C, 0x26);
+  public static readonly Rgb RangeStart = new(0x7A, 0x0E, 0x12), RangeEnd = new(0x14, 0x5C, 0x26);
 
   private static Rgb Mix(Rgb a, Rgb b, double t) {
     t = Math.Clamp(t, 0, 1);
@@ -57,7 +58,7 @@ public static class Composition {
     var changed = bases.Count > 0 ? Changes(solution, bases.SelectMany(b => b.Shapes.Where(s => s.IsSolution)).ToList()) : [];
     const string changedGroup = "Changed in this iteration";
     shapes.AddRange(changed.OfType<MarkerShape>().Select(s => s with { Group = changedGroup }));  // halos under the current markers
-    shapes.AddRange(solution.Select(Red).Select(s => s with { Group = "Current" }));
+    shapes.AddRange(solution.Select(AsCurrent).Select(s => s with { Group = "Current" }));
     shapes.AddRange(changed.Where(s => s is not MarkerShape).Select(s => s with { Group = changedGroup }));
     shapes.AddRange(foreground);
 
@@ -71,7 +72,7 @@ public static class Composition {
   }
 
   /// <summary>The current solution in red; filled rectangles (jobs, items) keep their colors.</summary>
-  private static Shape Red(Shape shape) => shape switch {
+  private static Shape AsCurrent(Shape shape) => shape switch {
     PathShape p => p with { Color = Current, Thickness = Math.Max(2, p.Thickness) },
     LineShape l => l with { Color = Current, Thickness = Math.Max(2, l.Thickness) },
     MarkerShape m => m with { Color = Current },

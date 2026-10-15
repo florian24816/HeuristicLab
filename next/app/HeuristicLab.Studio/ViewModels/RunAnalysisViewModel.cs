@@ -25,7 +25,14 @@ public partial class RunSourceViewModel(RunAnalysisViewModel owner, string name,
   public ObservableCollection<RunSourceViewModel> Children { get; } = [];
   public RunSourceViewModel? Parent { get; init; }
 
-  public int RunCount => Optimizer?.Runs.Count ?? owner.FolderRunCount(Folder);
+  /// <summary>A part of the "Single runs" folder: what it stands for (kept ticked over a refresh) and its runs.</summary>
+  public object? Group { get; init; }
+  public Func<IReadOnlyList<IRun>>? RunList { get; init; }
+
+  /// <summary>The runs it holds (also those of the blocks below it); null for a results folder.</summary>
+  public IReadOnlyList<IRun>? RunsHere => Optimizer != null ? Optimizer.Runs.ToArray() : RunList?.Invoke();
+
+  public int RunCount => RunsHere?.Count ?? owner.FolderRunCount(Folder);
   public string Label => $"{Name}  ({RunCount} run{(RunCount == 1 ? "" : "s")})";
 
   /// <summary>Whether the runs made here (not below) are shown.</summary>
@@ -184,6 +191,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     rebuilding = true;
     Sources.Clear();
     foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment, null, before));
+    if (workspace.Experiments.Count > 0) Sources.Add(SingleRunsNode(before));
     foreach (var folder in folders) {
       var node = new RunSourceViewModel(this, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), "Results folder", null, folder) {
         Own = before.GetValueOrDefault(folder)
@@ -194,7 +202,31 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     TicksChanged();
   }
 
-  private static object? Key(RunSourceViewModel s) => (object?)s.Optimizer ?? s.Folder;
+  private static object? Key(RunSourceViewModel s) => (object?)s.Optimizer ?? s.Group ?? s.Folder;
+
+  /// <summary>
+  /// "Single runs" (made by Start on one algorithm, kept apart from the experiments): per experiment and
+  /// algorithm, not ticked at first - ticked, they are compared like any other runs.
+  /// </summary>
+  private RunSourceViewModel SingleRunsNode(IReadOnlyDictionary<object, bool> before) {
+    var experiments = workspace.Experiments.ToList();
+    var folder = new RunSourceViewModel(this, "Single runs", "Started on one algorithm", null, null) {
+      Group = RunsBrowserViewModel.SingleRunsKey, RunList = () => experiments.SelectMany(e => e.SingleRuns.Runs).ToList(),
+      Own = before.GetValueOrDefault(RunsBrowserViewModel.SingleRunsKey)
+    };
+    foreach (var experiment in experiments.Where(e => e.SingleRuns.Count > 0)) {
+      var single = experiment.SingleRuns;
+      var node = new RunSourceViewModel(this, experiment.Name, "Experiment", null, null) {
+        Parent = folder, Group = single, RunList = () => single.Runs.ToArray(), Own = before.GetValueOrDefault(single)
+      };
+      foreach (var group in single.Groups)
+        node.Children.Add(new RunSourceViewModel(this, group.Algorithm, "Algorithm", null, null) {
+          Parent = node, Group = group, RunList = () => group.Runs, Own = before.GetValueOrDefault(group)
+        });
+      folder.Children.Add(node);
+    }
+    return folder;
+  }
 
   /// <summary>Ticks stay as they were; a block that is new here takes its parent's (added to a ticked batch run: ticked).</summary>
   private RunSourceViewModel Node(BlockViewModel block, RunSourceViewModel? parent, IReadOnlyDictionary<object, bool> before) {
@@ -304,8 +336,8 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     // where each run was made: the deepest optimizer of the tree that holds it (experiments and batch runs
     // hold their children's runs too; a time-limit run takes them over). It is shown if that box is ticked.
     var origin = new Dictionary<IRun, RunSourceViewModel>(ReferenceEqualityComparer.Instance);
-    foreach (var node in AllSources(Sources).Where(s => s.Optimizer != null))
-      foreach (var run in node.Optimizer!.Runs.ToArray()) origin[run] = node;
+    foreach (var node in AllSources(Sources))
+      foreach (var run in node.RunsHere ?? []) origin[run] = node;
     // runs a container holds alone (a time-limit run takes its algorithm's) belong to that algorithm
     foreach (var (run, node) in origin.ToList())
       if (node.Children.Count > 0) origin[run] = FirstLeaf(node);
