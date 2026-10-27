@@ -51,9 +51,10 @@
   The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
   logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
   TextBlock: a string's '_' would be an access key.
-  Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment (ChooseWindow: pick it
-  in a list, the delete button is disabled until then; ExperimentTree.DeleteRuns clears every
-  optimizer's runs without Prepare; never single runs, never while running; marks it unsaved).
+  Runs tab: "Delete runs..." next to Refresh (ChooseWindow: pick an entry, the delete button is disabled
+  until then): per experiment "the experiment's runs" (ExperimentTree.DeleteRuns clears every optimizer's
+  runs without Prepare; its single runs stay) or "only its single runs" (DeleteSingleRuns), and "All single
+  runs of all experiments" when several have some; never while running; marks it unsaved.
   Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
   warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
   HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once
@@ -183,7 +184,9 @@
   yellow, earlier iterations red shades, later ones (finished runs) green shades, a selected range's start
   (dark red, wide) / end (dark green, medium) as strokes under it; no transparency. Only shapes marked IsSolution are recolored (builders mark them;
   trees and the lawn are not layered). A selected range plays as an animation (iterations/s);
-  "Earlier/Later iterations" inputs always apply (within a range too). Every chart, picture and 3D
+  "Earlier/Later iterations" inputs always apply (within a range too). A detailed analysis run lives only
+  in memory: a note says it is not saved (AnalysisViewModel.TemporaryNote) and "Delete" (enabled once it
+  finished, not while recording) throws it away. Every chart, picture and 3D
   view has a clickable legend: series / shape groups (Shape.Group, else by kind) / items can be
   hidden; the hidden set can be shared via HiddenSet (VisualsViewModel.Hidden, analysis series).
   Fullscreen (button or F11; Esc or F11 leaves): AnalysisFullscreenWindow, picture fills the

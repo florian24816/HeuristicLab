@@ -104,7 +104,38 @@ public partial class AnalysisViewModel : ViewModelBase {
   /// <summary>Chart series the user has hidden (shared by the normal and the fullscreen view).</summary>
   public HashSet<string> HiddenSeries { get; } = [];
 
-  partial void OnTraceChanged(Trace? value) => OnPropertyChanged(nameof(HasTrace));
+  partial void OnTraceChanged(Trace? value) {
+    OnPropertyChanged(nameof(HasTrace));
+    DeleteCommand.NotifyCanExecuteChanged();
+  }
+
+  partial void OnIsRecordingChanged(bool value) => DeleteCommand.NotifyCanExecuteChanged();
+
+  /// <summary>The recording lives only here (memory): it is not saved with the experiment.</summary>
+  public const string TemporaryNote =
+    "A detailed analysis run is temporary: it is not saved with the experiment and is gone when Studio closes, " +
+    "when you delete it or when you start a new one.";
+
+  private bool CanDelete() => HasTrace && !IsRecording;
+
+  /// <summary>Throws the finished recording away (it is only in memory), back to the start.</summary>
+  [RelayCommand(CanExecute = nameof(CanDelete))]
+  private void Delete() {
+    StopAnimation();
+    Trace = null;
+    iterations = [];
+    syncing = true;
+    SelectionStart = SelectionEnd = null;
+    syncing = false;
+    Series = [];
+    TimeAxis = [];
+    Markers = [];
+    IterationText = StepText = RangeText = "";
+    Visuals.Show([]);
+    OnPropertyChanged(nameof(HasSteps));
+    PlayCommand.NotifyCanExecuteChanged();
+    Status = "Detailed analysis run deleted.";
+  }
   partial void OnEarlierShownChanged(decimal value) => ShowCursor();
   partial void OnLaterShownChanged(decimal value) => ShowCursor();
 

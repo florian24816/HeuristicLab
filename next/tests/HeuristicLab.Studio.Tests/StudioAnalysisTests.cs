@@ -175,7 +175,14 @@ public class StudioAnalysisTests {
     await session.Dispatch(async () => {
       var (window, detail) = await Open("TabuSearch", "TravelingSalesmanProblem", "TSPLIB (symmetric TSP)/ch130", "MaximumIterations=20");
       var analysis = detail.Analysis;
-      await analysis.StartAsync();
+      Assert.IsFalse(analysis.DeleteCommand.CanExecute(null), "nothing recorded yet: nothing to delete");
+      for (int i = 0; i < 4; i++) Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsTrue(window.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>()
+        .Any(t => t.Text == AnalysisViewModel.TemporaryNote && t.IsEffectivelyVisible), "the user learns it is not saved");
+      var start = analysis.StartAsync();
+      Assert.IsFalse(analysis.DeleteCommand.CanExecute(null), "not while it records");
+      await start;
+      Assert.IsTrue(analysis.DeleteCommand.CanExecute(null), "finished: it can be deleted");
       Assert.IsFalse(analysis.HasSteps, "one accepted move per iteration: step buttons are hidden");
       analysis.SelectionStart = 10;
       var scene = (SceneVisual)analysis.Visuals.Current!;
@@ -184,6 +191,11 @@ public class StudioAnalysisTests {
       StringAssert.Contains(analysis.StepText, "MoveMaker");
       Assert.AreEqual(expected, scene.Shapes.OfType<LineShape>().Count(l => l.Color == Composition.Changed), analysis.StepText);
       Shot(window, "tabu");
+      analysis.DeleteCommand.Execute(null);
+      Assert.IsFalse(analysis.HasTrace);
+      Assert.AreEqual(0, analysis.Series.Count);
+      Assert.IsFalse(analysis.DeleteCommand.CanExecute(null));
+      Assert.IsTrue(analysis.StartCommand.CanExecute(null), "a new one can be started");
       window.Close();
       return 0;
     }, CancellationToken.None);

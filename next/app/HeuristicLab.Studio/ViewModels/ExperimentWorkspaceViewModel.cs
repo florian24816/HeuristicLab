@@ -438,11 +438,35 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       return;
     }
     if (dialogs == null || Experiments.Count == 0) return;
-    var experiments = Experiments.ToList();
+    // per experiment: its runs, or only its single runs (Start on one algorithm); all single runs at once
+    var choices = new List<(string Text, Action Delete)>();
+    static string Runs(int n) => $"{n} run{(n == 1 ? "" : "s")}";
+    foreach (var e in Experiments.ToList()) {
+      choices.Add(($"{e.Name}: the experiment's runs  ({Runs(e.Experiment.Runs.Count)})", () => DeleteRuns(e)));
+      if (e.SingleRuns.Count > 0) choices.Add(($"{e.Name}: only its single runs  ({Runs(e.SingleRuns.Count)})", () => DeleteSingleRuns(e)));
+    }
+    var withSingle = Experiments.Where(e => e.SingleRuns.Count > 0).ToList();
+    if (withSingle.Count > 1)
+      choices.Add(($"All single runs of all experiments  ({Runs(withSingle.Sum(e => e.SingleRuns.Count))})", () => {
+        int n = withSingle.Sum(DeleteSingleRuns);
+        Status = $"Deleted all {Runs(n)} single runs";
+      }));
     var index = await dialogs.ChooseAsync("Delete runs",
-      "Choose the experiment whose runs are all deleted (the runs of everything inside it), then press \"Delete runs\". The experiment itself stays.",
-      experiments.Select(e => $"{e.Name}  ({e.Experiment.Runs.Count} run{(e.Experiment.Runs.Count == 1 ? "" : "s")})").ToList(), "Delete runs");
-    if (index is int i && i >= 0 && i < experiments.Count) DeleteRuns(experiments[i]);
+      "Choose what to delete, then press \"Delete runs\": an experiment's runs (of everything inside it; its single runs stay), " +
+      "or only single runs (made by Start on one algorithm). The experiments themselves stay.",
+      choices.Select(c => c.Text).ToList(), "Delete runs");
+    if (index is int i && i >= 0 && i < choices.Count) choices[i].Delete();
+  }
+
+  /// <summary>Deletes the single runs of this experiment (Start on one algorithm); returns how many there were.</summary>
+  public int DeleteSingleRuns(ExperimentBlockViewModel experiment) {
+    if (!IsEditable) return 0;
+    int count = experiment.SingleRuns.Count;
+    experiment.SingleRuns.Runs.Clear();
+    if (count > 0) experiment.MarkModified();
+    RefreshLive();
+    Status = $"Deleted {count} single run{(count == 1 ? "" : "s")} of {experiment.Name}";
+    return count;
   }
 
   /// <summary>Deletes all runs of this experiment; returns how many there were.</summary>

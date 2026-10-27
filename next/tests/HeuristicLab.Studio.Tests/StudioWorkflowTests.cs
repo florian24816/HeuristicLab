@@ -290,8 +290,8 @@ public class StudioWorkflowTests {
   }
 
   /// <summary>
-  /// Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment, chosen in a list
-  /// and confirmed; never single runs. The start/stop buttons carry pictograms like the blocks.
+  /// Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment, or only its single runs,
+  /// chosen in a list and confirmed. The start/stop buttons carry pictograms like the blocks.
   /// </summary>
   [TestMethod]
   public async Task DeleteRunsDeletesAllRunsOfTheChosenExperiment() {
@@ -328,11 +328,24 @@ public class StudioWorkflowTests {
       Assert.IsTrue(window.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Delete runs..."));
       Assert.IsFalse(window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Runs of"));
 
+      // a single run in the second experiment (as Start on one algorithm makes them)
+      var trial = (HeuristicLab.Optimization.IRun)second.Experiment.Runs.Single().Clone();
+      second.SingleRuns.Add([trial]);
+
       // cancelled: nothing happens
       dialogs.Answer = null;
       await vm.Runs.DeleteRunsCommand.ExecuteAsync(null);
-      CollectionAssert.AreEqual(new[] { "New experiment 1  (3 runs)", "New experiment 2  (1 run)" }, dialogs.Offered.ToList());
+      CollectionAssert.AreEqual(new[] {
+        "New experiment 1: the experiment's runs  (3 runs)", "New experiment 2: the experiment's runs  (1 run)",
+        "New experiment 2: only its single runs  (1 run)" }, dialogs.Offered.ToList());
       Assert.AreEqual(3, first.Experiment.Runs.Count);
+
+      // only the single runs: the experiment's own run stays
+      dialogs.Answer = 2;
+      await vm.Runs.DeleteRunsCommand.ExecuteAsync(null);
+      Assert.AreEqual(0, second.SingleRuns.Count);
+      Assert.AreEqual(1, second.Experiment.Runs.Count, "only single runs were deleted");
+      StringAssert.StartsWith(ws.Status, "Deleted 1 single run");
 
       // the first experiment chosen and confirmed: all its runs go, the other experiment keeps its
       first.IsModified = false;
