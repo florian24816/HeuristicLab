@@ -1,0 +1,120 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.VisualTree;
+using HeuristicLab.Next.Runtime;
+using HeuristicLab.Optimization;
+using HeuristicLab.Studio.ViewModels;
+using HeuristicLab.Studio.Views;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace HeuristicLab.Studio.Tests;
+
+/// <summary>
+/// "Add results window" (next to the Results tab's header): another Results tab in its own window, named in its title
+/// bar ("HL-Results: n", changed live), ticked as the main tab; "Select all", "Select all (without single runs)",
+/// "Unselect all" (full orange when that is the state), and in a window "Copy selection from main results tab".
+/// </summary>
+[TestClass]
+public class StudioResultsWindowTests {
+  private static HeadlessUnitTestSession session = null!;
+
+  [ClassInitialize]
+  public static void Start(TestContext _) => session = HeadlessUnitTestSession.StartNew(typeof(TestAppBuilder));
+
+  private static void Pump() {
+    for (int i = 0; i < 4; i++) Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+  }
+
+  private static readonly Color Orange = Color.Parse("#F7931D"), Pale = Color.Parse("#FDE5C8");
+
+  private static Button Shortcut(Visual root, string text) =>
+    root.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == text && b.IsEffectivelyVisible);
+
+  private static Color Fill(Button button) => ((ISolidColorBrush)button.Background!).Color;
+
+  [TestMethod]
+  [Timeout(300_000)]
+  public async Task ResultsWindowsCompareSelections() {
+    await session.Dispatch(async () => {
+      var vm = new MainViewModel(null, null);
+      var ws = vm.Workspace;
+      var main = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+      main.Show();
+      var experiment = ws.NewExperiment();
+      var ga = ws.AddAlgorithm(experiment, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
+      ws.SetProblem(ga, (IProblem)Setups.Create(new SetupRequest("GeneticAlgorithm") { Problem = "TravelingSalesmanProblem", Instance = "ch130" }).Algorithm.Problem!.Clone());
+      ParameterEditor.Apply(ga.Algorithm, ["PopulationSize=10", "MaximumGenerations=2"]);
+      await ws.StartAllCommand.ExecuteAsync(null);
+      experiment.SingleRuns.Add([(IRun)experiment.Experiment.Runs.Single().Clone()]);
+
+      // "Add results window" only while the Results tab is shown, in its header
+      Pump();
+      var add = main.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Add results window");
+      Assert.IsFalse(add.IsEffectivelyVisible);
+      vm.SelectedTab = MainViewModel.ResultsTab;
+      Pump();
+      Assert.IsTrue(add.IsEffectivelyVisible);
+      Assert.AreEqual(Pale, Fill(add));
+      var results = main.GetVisualDescendants().OfType<TabItem>().Single(t => t.GetVisualDescendants().OfType<TextBlock>().Any(x => x.Text == "Results"));
+      var scripts = main.GetVisualDescendants().OfType<TabItem>().Single(t => t.Header as string == "Scripts");
+      double addX = add.TranslatePoint(default, main)!.Value.X;
+      Assert.IsTrue(addX > results.TranslatePoint(default, main)!.Value.X && addX < scripts.TranslatePoint(default, main)!.Value.X, "between Results and Scripts");
+
+      // the main tab: the experiment ticked, not the single runs - "Select all (without single runs)" is full orange
+      var analysis = vm.RunAnalysis;
+      analysis.Sources.First().IsChecked = true;
+      Pump();
+      Assert.IsTrue(analysis.AllButSingleTicked);
+      Assert.IsFalse(analysis.AllTicked);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Select all (without single runs)")));
+      Assert.AreEqual(Pale, Fill(Shortcut(main, "Select all")));
+      Assert.AreEqual(Pale, Fill(Shortcut(main, "Unselect all")));
+      Assert.IsFalse(main.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Copy selection from main results tab" && b.IsEffectivelyVisible),
+        "only results windows copy from the main tab");
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-shortcuts.png"));
+
+      // a results window: named "HL-Results: 1", ticked as the main tab
+      add.Command!.Execute(null);
+      Pump();
+      var window = main.OpenResultsWindows.Single();
+      Assert.AreEqual("HL-Results: 1", window.Title);
+      var other = vm.ResultsWindows.Single().Analysis;
+      Assert.AreEqual(analysis.Table.Rows.Count, other.Table.Rows.Count);
+      Assert.IsFalse(window.GetVisualDescendants().OfType<TabItem>().Any(t => t.Header as string == "Experiments"), "no main tabs");
+      // its name, live in the title bar
+      var name = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname"));
+      name.Text = "GA only";
+      Pump();
+      Assert.AreEqual("GA only", window.Title);
+      // select all / unselect all / copy from the main tab
+      Shortcut(window, "Select all").Command!.Execute(null);
+      Pump();
+      Assert.IsTrue(other.AllTicked);
+      Assert.AreEqual(analysis.Table.Rows.Count + 1, other.Table.Rows.Count, "with the single run");
+      Assert.AreEqual(Orange, Fill(Shortcut(window, "Select all")));
+      Assert.AreEqual(1, analysis.Table.Rows.Count, "the main tab keeps its own selection");
+      Shortcut(window, "Unselect all").Command!.Execute(null);
+      Assert.IsTrue(other.NoneTicked);
+      Assert.AreEqual(0, other.Table.Rows.Count);
+      Shortcut(window, "Copy selection from main results tab").Command!.Execute(null);
+      Pump();
+      Assert.IsTrue(other.AllButSingleTicked);
+      Assert.AreEqual(analysis.Table.Rows.Count, other.Table.Rows.Count);
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-window.png"));
+
+      // a second window counts on; closing one forgets it
+      vm.AddResultsWindowCommand.Execute(null);
+      Pump();
+      Assert.AreEqual("HL-Results: 2", main.OpenResultsWindows[1].Title);
+      window.Close();
+      Pump();
+      Assert.AreEqual(1, vm.ResultsWindows.Count);
+      main.OpenResultsWindows.Single().Close();
+      main.Close();
+      return true;
+    }, CancellationToken.None);
+  }
+}

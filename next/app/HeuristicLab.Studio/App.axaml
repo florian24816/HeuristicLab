@@ -95,6 +95,21 @@
         <Style Selector="Border.selectrow.selected TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource InvertInkBrush}" />
         </Style>
+        <!-- tick shortcuts (Results tab, "Add results window"): the logo orange, pale; full when its state is the one now -->
+        <Style Selector="Button.ticks">
+            <Setter Property="Background" Value="#FDE5C8" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Button.ticks:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#FBCD96" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Button.ticks.on">
+            <Setter Property="Background" Value="#F7931D" />
+        </Style>
+        <Style Selector="Button.ticks.on:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#E8850F" />
+        </Style>
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="#F4E803" />
             <Setter Property="Padding" Value="8,5" />

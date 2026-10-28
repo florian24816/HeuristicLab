@@ -7,9 +7,18 @@
     <Grid ColumnDefinitions="280,4,*">
         <!-- where the runs come from -->
         <DockPanel Margin="10">
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+            <WrapPanel DockPanel.Dock="Top" ItemSpacing="6" LineSpacing="4" Margin="0,0,0,6">
                 <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
-            </StackPanel>
+                <Button Classes="ticks" Content="Copy selection from main results tab" Command="{Binding CopySelectionFromMainCommand}"
+                        IsVisible="{Binding IsWindow}" ToolTip.Tip="Tick what the main window's Results tab has ticked" />
+            </WrapPanel>
+            <!-- tick all / all but the single runs / nothing; the button of the state there is now is full orange -->
+            <WrapPanel DockPanel.Dock="Top" ItemSpacing="4" LineSpacing="4" Margin="0,0,0,6">
+                <Button Classes="ticks" Classes.on="{Binding AllTicked}" Content="Select all" Command="{Binding SelectAllCommand}" />
+                <Button Classes="ticks" Classes.on="{Binding AllButSingleTicked}" Content="Select all (without single runs)"
+                        Command="{Binding SelectAllWithoutSingleCommand}" />
+                <Button Classes="ticks" Classes.on="{Binding NoneTicked}" Content="Unselect all" Command="{Binding UnselectAllCommand}" />
+            </WrapPanel>
             <!-- several sources at once: select them (shown inverted), then tick / untick them, or tick only them -->
             <WrapPanel DockPanel.Dock="Top" ItemSpacing="4" LineSpacing="4" Margin="0,0,0,6">
                 <Button Content="Tick selected" Command="{Binding TickSelectedCommand}" ToolTip.Tip="Tick the selected sources (and everything below them)" />

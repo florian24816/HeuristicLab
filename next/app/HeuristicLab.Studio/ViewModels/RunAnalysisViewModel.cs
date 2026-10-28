@@ -284,7 +284,68 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   public void TicksChanged() {
     if (rebuilding) return;
     foreach (var node in AllSources(Sources)) node.NotifyChecked();
+    NotifyTickStates();
     Rebuild();
+  }
+
+  // ---- ticking all, all but the single runs, none; a results window copies the main tab's ticks
+
+  /// <summary>The main Results tab, for a results window (its "Copy selection from main results tab"); null for the main tab.</summary>
+  public RunAnalysisViewModel? Main { get; init; }
+  public bool IsWindow => Main != null;
+
+  /// <summary>Whether the box is the "Single runs" folder or below it.</summary>
+  private static bool IsSingle(RunSourceViewModel node) {
+    for (var n = node; n != null; n = n.Parent) if (ReferenceEquals(n.Group, RunsBrowserViewModel.SingleRunsKey)) return true;
+    return false;
+  }
+
+  /// <summary>The boxes whose own tick counts (no children).</summary>
+  private List<RunSourceViewModel> Leaves() => AllSources(Sources).Where(s => s.Counts).ToList();
+
+  /// <summary>Everything ticked (the button "Select all" shows it in full orange).</summary>
+  public bool AllTicked => Leaves() is { Count: > 0 } leaves && leaves.All(s => s.Own);
+
+  /// <summary>Everything but the single runs ticked.</summary>
+  public bool AllButSingleTicked {
+    get {
+      var leaves = Leaves();
+      var experiments = leaves.Where(s => !IsSingle(s)).ToList();
+      return experiments.Count > 0 && experiments.All(s => s.Own) && leaves.Where(IsSingle).All(s => !s.Own);
+    }
+  }
+
+  /// <summary>Nothing ticked.</summary>
+  public bool NoneTicked => Leaves().All(s => !s.Own);
+
+  private void NotifyTickStates() {
+    OnPropertyChanged(nameof(AllTicked));
+    OnPropertyChanged(nameof(AllButSingleTicked));
+    OnPropertyChanged(nameof(NoneTicked));
+  }
+
+  private void TickWhere(Func<RunSourceViewModel, bool> on) {
+    foreach (var node in AllSources(Sources)) node.Own = on(node);
+    TicksChanged();
+  }
+
+  [RelayCommand]
+  private void SelectAll() => TickWhere(_ => true);
+
+  [RelayCommand]
+  private void SelectAllWithoutSingle() => TickWhere(n => !IsSingle(n));
+
+  [RelayCommand]
+  private void UnselectAll() => TickWhere(_ => false);
+
+  /// <summary>A results window takes over the main Results tab's ticks (sources it does not know stay unticked).</summary>
+  [RelayCommand]
+  public void CopySelectionFromMain() {
+    if (Main == null) return;
+    RefreshSources();
+    var ticks = AllSources(Main.Sources).Where(s => Key(s) != null).ToDictionary(s => Key(s)!, s => s.Own, ReferenceEqualityComparer.Instance);
+    foreach (var node in AllSources(Sources)) node.Own = Key(node) is { } key && ticks.TryGetValue(key, out var own) && own;
+    TicksChanged();
   }
 
   private static IEnumerable<RunSourceViewModel> AllSources(IEnumerable<RunSourceViewModel> nodes) =>

@@ -29,6 +29,7 @@ public partial class MainViewModel : ViewModelBase {
       IDesktopNotifications? notifications = null) {
     this.settingsStore = settingsStore;
     this.notifications = notifications;
+    this.fileDialogs = fileDialogs;
     var loaded = settingsStore?.Load();
     Workspace = new ExperimentWorkspaceViewModel(dialogs, fileDialogs, optimizer => {
       SelectedTab = RunsTab;
@@ -43,6 +44,7 @@ public partial class MainViewModel : ViewModelBase {
       // finished experiments bring new runs
       if (e.PropertyName == nameof(ExperimentWorkspaceViewModel.IsRunning) && !Workspace.IsRunning) {
         RunAnalysis.RefreshSources();
+        foreach (var window in ResultsWindows) window.Analysis.RefreshSources();
         Runs.Refresh();
       }
     };
@@ -113,6 +115,33 @@ public partial class MainViewModel : ViewModelBase {
   /// <summary>Results tab: the runs of the workspace and of results folders, compared in tables, charts and tests.</summary>
   public RunAnalysisViewModel RunAnalysis { get; }
 
+  // ---- results windows: more Results tabs, each in its own window
+
+  /// <summary>The results windows open now.</summary>
+  public System.Collections.ObjectModel.ObservableCollection<ResultsWindowViewModel> ResultsWindows { get; } = [];
+
+  private int resultsWindowsMade;
+  private readonly IFileDialogService? fileDialogs;
+
+  /// <summary>Asks the main window to show a new results window.</summary>
+  public event Action<ResultsWindowViewModel>? ResultsWindowRequested;
+
+  /// <summary>A new results window ("HL-Results: n"), ticked as the main Results tab is now.</summary>
+  [RelayCommand]
+  private void AddResultsWindow() => OpenResultsWindow();
+
+  public ResultsWindowViewModel OpenResultsWindow() {
+    var analysis = new RunAnalysisViewModel(Workspace, fileDialogs) { Main = RunAnalysis };
+    analysis.CopySelectionFromMain();
+    var window = new ResultsWindowViewModel(++resultsWindowsMade, analysis);
+    ResultsWindows.Add(window);
+    ResultsWindowRequested?.Invoke(window);
+    return window;
+  }
+
+  /// <summary>A results window was closed.</summary>
+  public void ResultsWindowClosed(ResultsWindowViewModel window) => ResultsWindows.Remove(window);
+
   /// <summary>C# scripts (HeuristicLab's script samples, or new ones).</summary>
   public ScriptsViewModel Scripts { get; } = new();
 
@@ -120,7 +149,11 @@ public partial class MainViewModel : ViewModelBase {
   public ResourcesViewModel Resources { get; }
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsResultsTab))]
   public partial int SelectedTab { get; set; }
+
+  /// <summary>The Results tab is shown: "Add results window" appears next to its header.</summary>
+  public bool IsResultsTab => SelectedTab == ResultsTab;
 
   partial void OnSelectedTabChanged(int value) {
     if (value == RunsTab) Runs.Refresh();
