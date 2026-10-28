@@ -9,7 +9,7 @@
         <DockPanel Margin="10">
             <WrapPanel DockPanel.Dock="Top" ItemSpacing="6" LineSpacing="4" Margin="0,0,0,6">
                 <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
-                <Button Classes="ticks" Content="Copy selection from main results tab" Command="{Binding CopySelectionFromMainCommand}"
+                <Button Classes="ticks" Classes.on="{Binding MatchesMain}" Content="Copy selection from main results tab" Command="{Binding CopySelectionFromMainCommand}"
                         IsVisible="{Binding IsWindow}" ToolTip.Tip="Tick what the main window's Results tab has ticked" />
             </WrapPanel>
             <!-- tick all / all but the single runs / nothing; the button of the state there is now is full orange -->

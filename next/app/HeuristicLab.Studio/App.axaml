@@ -110,6 +110,19 @@
         <Style Selector="Button.ticks.on:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#E8850F" />
         </Style>
+        <!-- "Add window" in the Results tab's header: a plain rectangle, in the tabs' font, a little smaller than their titles -->
+        <Style Selector="Button.addwindow">
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="{DynamicResource AddWindowBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="Padding" Value="12,4" />
+        </Style>
+        <Style Selector="Button.addwindow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AddWindowHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="#F4E803" />
             <Setter Property="Padding" Value="8,5" />
@@ -147,6 +160,9 @@
                 <SolidColorBrush x:Key="SwitchOffHoverBrush" Color="#CDCDCD" />
                 <!-- selected rows (several at once): the colors inverted -->
                 <SolidColorBrush x:Key="InvertBrush" Color="#1E1E1E" />
+                <!-- "Add window" next to the Results tab: a grey a little darker (light) / lighter (dark) than the window -->
+                <SolidColorBrush x:Key="AddWindowBrush" Color="#D4D4D4" />
+                <SolidColorBrush x:Key="AddWindowHoverBrush" Color="#C2C2C2" />
                 <SolidColorBrush x:Key="InvertInkBrush" Color="#FFFFFF" />
             </ResourceDictionary>
             <ResourceDictionary x:Key="Dark">
@@ -159,6 +175,8 @@
                 <SolidColorBrush x:Key="SwitchOffBrush" Color="#6B6B6B" />
                 <SolidColorBrush x:Key="SwitchOffHoverBrush" Color="#7A7A7A" />
                 <SolidColorBrush x:Key="InvertBrush" Color="#F2F2F2" />
+                <SolidColorBrush x:Key="AddWindowBrush" Color="#3A3A3A" />
+                <SolidColorBrush x:Key="AddWindowHoverBrush" Color="#4A4A4A" />
                 <SolidColorBrush x:Key="InvertInkBrush" Color="#1E1E1E" />
             </ResourceDictionary>
         </ResourceDictionary.ThemeDictionaries>

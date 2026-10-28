@@ -291,8 +291,30 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   // ---- ticking all, all but the single runs, none; a results window copies the main tab's ticks
 
   /// <summary>The main Results tab, for a results window (its "Copy selection from main results tab"); null for the main tab.</summary>
-  public RunAnalysisViewModel? Main { get; init; }
+  public RunAnalysisViewModel? Main {
+    get => main;
+    init {
+      main = value;
+      // the copy button shows (full orange) whether this window's ticks are the main tab's: both can change
+      if (value != null) value.TicksAltered += () => OnPropertyChanged(nameof(MatchesMain));
+    }
+  }
+  private readonly RunAnalysisViewModel? main;
   public bool IsWindow => Main != null;
+
+  /// <summary>Raised when the ticks change (a results window compares its own with them).</summary>
+  public event Action? TicksAltered;
+
+  /// <summary>A results window ticks exactly what the main Results tab ticks.</summary>
+  public bool MatchesMain {
+    get {
+      if (Main == null) return false;
+      var ticks = AllSources(Main.Sources).Where(s => s.Counts && Key(s) != null).ToDictionary(s => Key(s)!, s => s.Own, ReferenceEqualityComparer.Instance);
+      var leaves = Leaves();
+      return leaves.Count > 0 && leaves.All(s => Key(s) is { } key && ticks.TryGetValue(key, out var own) ? own == s.Own : !s.Own)
+             && ticks.All(t => !t.Value || leaves.Any(s => ReferenceEquals(Key(s), t.Key) && s.Own));
+    }
+  }
 
   /// <summary>Whether the box is the "Single runs" folder or below it.</summary>
   private static bool IsSingle(RunSourceViewModel node) {
@@ -322,6 +344,8 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     OnPropertyChanged(nameof(AllTicked));
     OnPropertyChanged(nameof(AllButSingleTicked));
     OnPropertyChanged(nameof(NoneTicked));
+    OnPropertyChanged(nameof(MatchesMain));
+    TicksAltered?.Invoke();
   }
 
   private void TickWhere(Func<RunSourceViewModel, bool> on) {

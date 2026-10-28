@@ -239,12 +239,14 @@
   stack overflow that closed Studio without a message (test StudioFilterTests types filters key by key).
   Tick shortcuts (Button.ticks: pale logo orange #FDE5C8, full #F7931D when it is the state now - AllTicked /
   AllButSingleTicked / NoneTicked): "Select all", "Select all (without single runs)", "Unselect all" between
-  Refresh and the multi-select buttons. Results windows (user's request): "Add results window" in the Results
-  tab's header while it is shown (MainViewModel.IsResultsTab) opens another Results tab in its own window
+  Refresh and the multi-select buttons. Results windows (user's request): "Add window" (Button.addwindow: square
+  rectangle, tab font at 17 px, AddWindowBrush grey - darker than the window in light mode #D4D4D4, lighter in
+  dark mode #3A3A3A) in the Results tab's header while it is shown (MainViewModel.IsResultsTab) opens another Results tab in its own window
   (Views/ResultsWindow, not owned; ResultsWindowViewModel, MainViewModel.ResultsWindows, refreshed with the main
   tab when runs finish): instead of the main tabs a "Window name" field bound live to the title ("HL-Results: n",
   n counting up), ticked as the main tab at first (RunAnalysisViewModel.Main / CopySelectionFromMain, by source
-  key), then on its own; "Copy selection from main results tab" next to its Refresh (IsWindow).
+  key), then on its own; "Copy selection from main results tab" next to its Refresh (IsWindow;
+  full orange while MatchesMain - the main tab raises TicksAltered when its ticks change).
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
   Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05), Run (one run's results with visualizations).
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =

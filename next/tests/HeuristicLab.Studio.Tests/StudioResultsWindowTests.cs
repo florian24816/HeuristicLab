@@ -52,12 +52,21 @@ public class StudioResultsWindowTests {
 
       // "Add results window" only while the Results tab is shown, in its header
       Pump();
-      var add = main.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Add results window");
+      var add = main.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Add window");
       Assert.IsFalse(add.IsEffectivelyVisible);
       vm.SelectedTab = MainViewModel.ResultsTab;
       Pump();
       Assert.IsTrue(add.IsEffectivelyVisible);
-      Assert.AreEqual(Pale, Fill(add));
+      // a plain rectangle in grey: darker than the window in light mode, lighter in dark mode
+      Assert.AreEqual(new CornerRadius(0), add.CornerRadius);
+      Assert.AreEqual(Color.Parse("#D4D4D4"), Fill(add));
+      Assert.IsTrue(add.FontSize > 13, "a little larger than before");
+      vm.IsDarkMode = true;
+      Pump();
+      Assert.AreEqual(Color.Parse("#3A3A3A"), Fill(add));
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-addwindow-dark.png"));
+      vm.IsDarkMode = false;
+      Pump();
       var results = main.GetVisualDescendants().OfType<TabItem>().Single(t => t.GetVisualDescendants().OfType<TextBlock>().Any(x => x.Text == "Results"));
       var scripts = main.GetVisualDescendants().OfType<TabItem>().Single(t => t.Header as string == "Scripts");
       double addX = add.TranslatePoint(default, main)!.Value.X;
@@ -83,6 +92,8 @@ public class StudioResultsWindowTests {
       Assert.AreEqual("HL-Results: 1", window.Title);
       var other = vm.ResultsWindows.Single().Analysis;
       Assert.AreEqual(analysis.Table.Rows.Count, other.Table.Rows.Count);
+      Assert.IsTrue(other.MatchesMain);
+      Assert.AreEqual(Orange, Fill(Shortcut(window, "Copy selection from main results tab")), "ticked as the main tab: full orange");
       Assert.IsFalse(window.GetVisualDescendants().OfType<TabItem>().Any(t => t.Header as string == "Experiments"), "no main tabs");
       // its name, live in the title bar
       var name = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname"));
@@ -98,11 +109,22 @@ public class StudioResultsWindowTests {
       Assert.AreEqual(1, analysis.Table.Rows.Count, "the main tab keeps its own selection");
       Shortcut(window, "Unselect all").Command!.Execute(null);
       Assert.IsTrue(other.NoneTicked);
+      Pump();
+      Assert.AreEqual(Pale, Fill(Shortcut(window, "Copy selection from main results tab")), "not the main tab's ticks any more");
       Assert.AreEqual(0, other.Table.Rows.Count);
       Shortcut(window, "Copy selection from main results tab").Command!.Execute(null);
       Pump();
       Assert.IsTrue(other.AllButSingleTicked);
       Assert.AreEqual(analysis.Table.Rows.Count, other.Table.Rows.Count);
+      Assert.AreEqual(Orange, Fill(Shortcut(window, "Copy selection from main results tab")));
+      // the main tab changes: the window's copy button notices
+      analysis.SelectAllCommand.Execute(null);
+      Pump();
+      Assert.IsFalse(other.MatchesMain);
+      Assert.AreEqual(Pale, Fill(Shortcut(window, "Copy selection from main results tab")));
+      analysis.SelectAllWithoutSingleCommand.Execute(null);
+      Pump();
+      Assert.IsTrue(other.MatchesMain);
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-window.png"));
 
       // a second window counts on; closing one forgets it
