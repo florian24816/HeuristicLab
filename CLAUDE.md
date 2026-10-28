@@ -248,11 +248,17 @@
   (rectangle), then one tab per further results tab (italic name, a small ✕; a parallelogram - skewed shape -
   while docked, a rectangle while it is a window; the shown one in the logo orange). A click shows a docked tab in
   the main window (MainViewModel.SelectedResults / ShownAnalysis; its "Window name" field under the bar) or brings
-  its window to the front; "Main results" shows the main tab and brings the main window to the front. Pressing a
-  tab and dragging it out of the bar undocks it (MainViewModel.Undock: a window of its own at the pointer -
+  its window to the front; "Main results" shows the main tab and brings the main window to the front. A dragged
+  tab: a see-through copy follows the pointer (ResultsTabBar.Floating, in the adorner layer), the tab stays; along
+  the bar a faded tab (TabGhost in MainViewModel.BarItems, changed step by step - a reset during the tab's own
+  pointer event breaks Avalonia) shows where it lands and releasing moves it there (MoveResults; "Main results"
+  stays first); released well outside the bar it undocks (MainViewModel.Undock: a window of its own at the pointer -
   Views/ResultsWindow with the same bar at its top, its own tab highlighted there, the name field below, title
-  bound live); moving such a window onto the main window's bar docks it back (PositionChanged ->
-  ResultsTabBar.Covers -> MainViewModel.Dock). Closing a window (title bar X) or a tab's ✕ removes the tab.
+  bound live); released anywhere else nothing happens. A window moved over the main window's bar shows a faded
+  tab where it would land and docks back there when let go - the window manager moves windows without telling
+  when the button is released, so the window resting over the bar for MainWindow.DockAfter (0.5 s) counts as let
+  go (PositionChanged -> ResultsTabBar.Covers/IndexAt -> MainWindow.WindowOver -> MainViewModel.Dock). Closing the
+  main window while results windows are open asks the same as "Close windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
   "Copy selection from main results tab" next to Refresh in further tabs (IsWindow; full orange while MatchesMain
   - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" there
   instead (Button.closewindows, pale red #F6CACA; enabled while further tabs exist): IDialogService.

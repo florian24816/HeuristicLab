@@ -58,13 +58,13 @@
                 <Border Classes="shape" />
                 <TextBlock Text="Main results" Margin="14,5" FontSize="15" />
             </Panel>
-            <ItemsControl ItemsSource="{Binding ResultsWindows}">
+            <ItemsControl ItemsSource="{Binding BarItems}">
                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:ResultsWindowViewModel">
+                <ItemsControl.DataTemplates>
+                    <DataTemplate DataType="vm:ResultsWindowViewModel">
                         <Panel Classes="resultstab" Classes.docked="{Binding IsDocked}" Classes.selected="{Binding IsSelected}"
-                               PointerPressed="TabPressed" PointerMoved="TabMoved" PointerReleased="TabReleased"
-                               ToolTip.Tip="Click: show it; drag it out of the bar: a window of its own (move the window onto the bar to bring it back)">
+                               PointerPressed="TabPressed" PointerMoved="TabMoved" PointerReleased="TabReleased" PointerCaptureLost="TabCaptureLost"
+                               ToolTip.Tip="Click: show it; drag it along the bar: another place; drag it out of the bar: a window of its own (move the window onto the bar to bring it back)">
                             <Border Classes="shape" />
                             <StackPanel Orientation="Horizontal" Spacing="8" Margin="16,5,10,5">
                                 <TextBlock Text="{Binding Name}" FontStyle="Italic" FontSize="15" VerticalAlignment="Center" />
@@ -72,7 +72,17 @@
                             </StackPanel>
                         </Panel>
                     </DataTemplate>
-                </ItemsControl.ItemTemplate>
+                    <!-- where a dragged tab (or a window moved onto the bar) would land -->
+                    <DataTemplate DataType="vm:TabGhost">
+                        <Panel Classes="resultstab ghost docked" Opacity="0.4" IsHitTestVisible="False">
+                            <Border Classes="shape" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="16,5,10,5">
+                                <TextBlock Text="{Binding Name}" FontStyle="Italic" FontSize="15" VerticalAlignment="Center" />
+                                <Border Width="20" />
+                            </StackPanel>
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.DataTemplates>
             </ItemsControl>
         </StackPanel>
     </Border>

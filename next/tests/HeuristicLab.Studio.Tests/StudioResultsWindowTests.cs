@@ -155,16 +155,67 @@ public class StudioResultsWindowTests {
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-window.png"));
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-tabs-undocked.png"));
 
-      // moved onto the main window's second bar it docks back (selected, a parallelogram again)
+      // moved onto the main window's second bar: a faded tab where it would land; resting there (let go) it docks back
       var onBar = bar.PointToScreen(new Point(bar.Bounds.Width / 2, bar.Bounds.Height / 2));
       Assert.IsTrue(main.WouldDock(onBar));
       Assert.IsFalse(main.WouldDock(new PixelPoint(onBar.X, onBar.Y + 300)));
-      vm.Dock(second);
+      main.WindowOver(second, 0);
       Pump();
+      Assert.IsTrue(vm.BarItems.OfType<TabGhost>().Any(), "a faded tab in the bar");
+      var ghost = bar.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("ghost"));
+      Assert.IsTrue(ghost.Opacity < 1);
+      Assert.IsTrue(ghost.TranslatePoint(default, bar)!.Value.X < Tab(main, first).TranslatePoint(default, bar)!.Value.X, "before the first tab");
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-dock-ghost.png"));
+      Assert.IsFalse(second.IsDocked, "not yet: still being moved");
+      var until = DateTime.Now + MainWindow.DockAfter + TimeSpan.FromMilliseconds(300);
+      while (!second.IsDocked && DateTime.Now < until) { Pump(); await Task.Delay(30); }
       Assert.IsTrue(second.IsDocked && second.IsSelected);
       Assert.AreEqual(0, main.OpenResultsWindows.Count);
-      Assert.AreEqual(2, vm.ResultsWindows.Count, "docking back keeps the tab");
+      CollectionAssert.AreEqual(new[] { second, first }, vm.ResultsWindows.ToList(), "where the faded tab was");
+      Assert.IsFalse(vm.BarItems.OfType<TabGhost>().Any());
+      // moved away again before resting: no docking, no faded tab
+      vm.Undock(second);
+      Pump();
+      main.WindowOver(second, 1);
+      main.WindowOver(second, null);
+      await Task.Delay(MainWindow.DockAfter + TimeSpan.FromMilliseconds(200));
+      Pump();
+      Assert.IsFalse(second.IsDocked);
+      Assert.IsFalse(vm.BarItems.OfType<TabGhost>().Any());
+      vm.Dock(second, 2);  // after both tabs (places count the tabs before it is taken out)
+      Pump();
+      CollectionAssert.AreEqual(new[] { first, second }, vm.ResultsWindows.ToList());
+
+      // dragging a tab along the bar: a see-through copy follows the pointer, the tab stays, a faded tab shows where it lands
+      var drag = Tab(main, second);
+      var from = drag.TranslatePoint(new Point(drag.Bounds.Width / 2, drag.Bounds.Height / 2), main)!.Value;
+      var leftOfFirst = Tab(main, first).TranslatePoint(new Point(4, drag.Bounds.Height / 2), main)!.Value;
+      main.MouseDown(from, MouseButton.Left);
+      main.MouseMove(from + new Point(-10, 0), RawInputModifiers.LeftMouseButton);
+      main.MouseMove(leftOfFirst, RawInputModifiers.LeftMouseButton);
+      Pump();
+      Assert.IsNotNull(bar.Floating, "the copy following the pointer");
+      Assert.IsTrue(bar.Floating!.Opacity < 1);
+      Assert.IsTrue(drag.IsEffectivelyVisible, "the tab stays where it is meanwhile");
+      Assert.IsTrue(vm.BarItems.OfType<TabGhost>().Any());
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-tab-drag.png"));
+      main.MouseUp(leftOfFirst, MouseButton.Left);
+      Pump();
+      Assert.IsNull(bar.Floating);
+      CollectionAssert.AreEqual(new[] { second, first }, vm.ResultsWindows.ToList(), "moved before the first");
+      // let go where nothing happens (just below the window's bar, but not far enough out): back where it was
+      drag = Tab(main, second);
+      from = drag.TranslatePoint(new Point(drag.Bounds.Width / 2, drag.Bounds.Height / 2), main)!.Value;
+      main.MouseDown(from, MouseButton.Left);
+      main.MouseMove(from + new Point(3, 12), RawInputModifiers.LeftMouseButton);
+      main.MouseUp(from + new Point(3, 12), MouseButton.Left);
+      Pump();
+      Assert.IsNull(bar.Floating);
+      CollectionAssert.AreEqual(new[] { second, first }, vm.ResultsWindows.ToList());
+      Assert.IsTrue(second.IsDocked);
+      Assert.IsFalse(vm.BarItems.OfType<TabGhost>().Any());
       Assert.IsTrue(Skewed(Shape(Tab(main, second))));
+      Assert.IsTrue(Skewed(Shape(Tab(main, first))));
 
       // the small cross closes a tab
       var cross = Tab(main, first).GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "✕");
@@ -232,6 +283,19 @@ public class StudioResultsWindowTests {
       Assert.AreEqual(0, vm.ResultsWindows.Count);
       Assert.IsFalse(close.Command.CanExecute(null));
 
+      // closing the main window while a results window is open: the same question first
+      vm.AddResultsWindowCommand.Execute(null);
+      vm.Undock(vm.ResultsWindows.Single());
+      Pump();
+      dialogs.Asked.Clear();
+      dialogs.Answer = false;
+      main.Close();
+      Pump();
+      await Task.Delay(50);
+      Pump();
+      CollectionAssert.AreEqual(new[] { "1 result window is about to be closed" }, dialogs.Asked);
+      Assert.IsTrue(main.IsVisible, "the dialog closed: the main window stays");
+      Assert.AreEqual(1, main.OpenResultsWindows.Count);
       // the dialog itself: only "OK" (closing it is the way back)
       var ask = new ConfirmWindow("Close windows", "2 result windows are about to be closed", yes: "OK", cancel: false);
       ask.Show(main);
@@ -240,7 +304,13 @@ public class StudioResultsWindowTests {
       CollectionAssert.AreEqual(new[] { "OK" }, buttons);
       ask.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-closewindows-dialog.png"));
       ask.Close();
+      dialogs.Answer = true;
       main.Close();
+      Pump();
+      await Task.Delay(50);
+      Pump();
+      Assert.AreEqual(0, main.OpenResultsWindows.Count, "OK: the results windows close with it");
+      Assert.IsFalse(main.IsVisible);
       return true;
     }, CancellationToken.None);
   }

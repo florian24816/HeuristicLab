@@ -64,6 +64,7 @@ public partial class MainViewModel : ViewModelBase {
     // the main Results tab closes the results windows ("Close windows", enabled while there are some)
     RunAnalysis.CloseWindowsCommand = CloseResultsWindowsCommand;
     ResultsWindows.CollectionChanged += (_, _) => {
+      RefreshBar();
       OnPropertyChanged(nameof(HasResultsWindows));
       CloseResultsWindowsCommand.NotifyCanExecuteChanged();
     };
@@ -200,9 +201,11 @@ public partial class MainViewModel : ViewModelBase {
     ResultsWindowRequested?.Invoke(results);
   }
 
-  /// <summary>A window moved onto the second bar: back in the main window, selected.</summary>
-  public void Dock(ResultsWindowViewModel results) {
+  /// <summary>A window moved onto the second bar: back in the main window (at this place of the bar, if given), selected.</summary>
+  public void Dock(ResultsWindowViewModel results, int? index = null) {
+    PreviewTab(null, 0);
     if (results.IsDocked || !ResultsWindows.Contains(results)) return;
+    if (index is int at) MoveResults(results, at);
     results.IsDocked = true;
     ResultsWindowCloseRequested?.Invoke(results);
     SelectResults(results);
@@ -233,6 +236,51 @@ public partial class MainViewModel : ViewModelBase {
     var message = count == 1 ? "1 result window is about to be closed" : $"{count} result windows are about to be closed";
     if (dialogs != null && !await dialogs.AcknowledgeAsync("Close windows", message)) return;
     foreach (var results in ResultsWindows.ToList()) CloseResults(results);
+    PreviewTab(null, 0);
+  }
+
+  // ---- the second tab bar's items: the tabs, and a faded one where a dragged tab would land
+
+  /// <summary>The further tabs in their order, with the ghost (TabGhost) at the place a dragged tab would land.</summary>
+  public System.Collections.ObjectModel.ObservableCollection<object> BarItems { get; } = [];
+
+  private (TabGhost Ghost, int Index)? tabPreview;
+
+  /// <summary>Shows where a tab would land (index among the further tabs); null: nowhere.</summary>
+  public void PreviewTab(ResultsWindowViewModel? results, int index) {
+    var preview = results == null ? ((TabGhost, int)?)null : (new TabGhost(results.Name, Docked: true), Math.Clamp(index, 0, ResultsWindows.Count));
+    if (Equals(preview, tabPreview)) return;
+    tabPreview = preview;
+    RefreshBar();
+  }
+
+  private void RefreshBar() {
+    var items = new System.Collections.Generic.List<object>(ResultsWindows);
+    if (tabPreview is var (ghost, index)) items.Insert(Math.Min(index, items.Count), ghost);
+    if (items.SequenceEqual(BarItems)) return;
+    // step by step, never a reset: the bar may be in the middle of a tab's pointer event
+    for (int i = BarItems.Count - 1; i >= 0; i--)
+      if (!items.Contains(BarItems[i])) BarItems.RemoveAt(i);
+    for (int i = 0; i < items.Count; i++) {
+      if (i < BarItems.Count && Equals(BarItems[i], items[i])) continue;
+      int j = BarItems.IndexOf(items[i]);
+      if (j >= 0) BarItems.Move(j, i);
+      else BarItems.Insert(i, items[i]);
+    }
+  }
+
+  /// <summary>A tab dropped at another place of the bar (index among the further tabs, before taking it out).</summary>
+  public void MoveResults(ResultsWindowViewModel results, int index) {
+    int from = ResultsWindows.IndexOf(results);
+    if (from < 0) return;
+    int to = Math.Clamp(index > from ? index - 1 : index, 0, ResultsWindows.Count - 1);
+    if (to != from) ResultsWindows.Move(from, to);
+  }
+
+  /// <summary>Asked before the main window closes while results windows are open (closing the dialog keeps it open).</summary>
+  public async System.Threading.Tasks.Task<bool> ConfirmCloseResultsWindowsAsync(int count) {
+    var message = count == 1 ? "1 result window is about to be closed" : $"{count} result windows are about to be closed";
+    return dialogs == null || await dialogs.AcknowledgeAsync("Close windows", message);
   }
 
   /// <summary>A results window was closed by the user (its title bar's X): the tab goes too.</summary>
