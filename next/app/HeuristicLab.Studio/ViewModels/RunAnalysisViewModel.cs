@@ -17,7 +17,13 @@ using HeuristicLab.Studio.Services;
 namespace HeuristicLab.Studio.ViewModels;
 
 /// <summary>Where runs come from: an experiment, batch run, time-limit run or algorithm of the workspace, or a results folder.</summary>
-public partial class RunSourceViewModel(RunAnalysisViewModel owner, string name, string kind, IOptimizer? optimizer, string? folder) : ViewModelBase {
+public partial class RunSourceViewModel(RunAnalysisViewModel owner, string name, string kind, IOptimizer? optimizer, string? folder) : ViewModelBase, IPickable {
+  /// <summary>Selected (one of several, shown inverted) for "Tick selected" / "Untick selected" / "Only selected".</summary>
+  [ObservableProperty]
+  public partial bool IsSelected { get; set; }
+
+  partial void OnIsSelectedChanged(bool value) => owner.SelectionChanged();
+
   public string Name { get; } = name;
   public string Kind { get; } = kind;
   public IOptimizer? Optimizer { get; } = optimizer;
@@ -240,6 +246,39 @@ public partial class RunAnalysisViewModel : ViewModelBase {
       foreach (var child in container.Children) node.Children.Add(Node(child, node, before));
     return node;
   }
+
+  // ---- several sources at once: select them (Ctrl+click, Shift+click, press and sweep), then tick or untick
+
+  public IEnumerable<RunSourceViewModel> AllSourceNodes => AllSources(Sources);
+
+  public bool HasSelection => AllSources(Sources).Any(s => s.IsSelected);
+
+  internal void SelectionChanged() {
+    OnPropertyChanged(nameof(HasSelection));
+    TickSelectedCommand.NotifyCanExecuteChanged();
+    UntickSelectedCommand.NotifyCanExecuteChanged();
+    OnlySelectedCommand.NotifyCanExecuteChanged();
+  }
+
+  /// <summary>Sets the selected sources (with everything below them) to ticked or unticked; with <paramref name="others"/> the rest too.</summary>
+  private void TickSelection(bool on, bool? others = null) {
+    var selected = AllSources(Sources).Where(s => s.IsSelected).SelectMany(s => s.Subtree()).ToHashSet();
+    foreach (var node in AllSources(Sources)) {
+      if (selected.Contains(node)) node.Own = on;
+      else if (others is bool rest) node.Own = rest;
+    }
+    TicksChanged();
+  }
+
+  [RelayCommand(CanExecute = nameof(HasSelection))]
+  private void TickSelected() => TickSelection(true);
+
+  [RelayCommand(CanExecute = nameof(HasSelection))]
+  private void UntickSelected() => TickSelection(false);
+
+  /// <summary>Ticks the selected sources and unticks everything else.</summary>
+  [RelayCommand(CanExecute = nameof(HasSelection))]
+  private void OnlySelected() => TickSelection(true, others: false);
 
   /// <summary>A box was ticked or unticked: every box shows its state again, and the runs follow.</summary>
   public void TicksChanged() {

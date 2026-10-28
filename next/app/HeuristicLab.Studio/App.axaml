@@ -80,6 +80,21 @@
             <Setter Property="MinHeight" Value="12" />
             <Setter Property="CornerRadius" Value="0" />
         </Style>
+        <!-- rows selected among several (SweepSelection): inverted colors, by theme -->
+        <Style Selector="Border.selectrow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="6,3" />
+        </Style>
+        <!-- the source tree selects its own way (several, inverted rows): no Fluent selection highlight -->
+        <Style Selector="TreeView.sources TreeViewItem:selected /template/ Border#PART_LayoutRoot, TreeView.sources TreeViewItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.selectrow.selected">
+            <Setter Property="Background" Value="{DynamicResource InvertBrush}" />
+        </Style>
+        <Style Selector="Border.selectrow.selected TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource InvertInkBrush}" />
+        </Style>
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="#F4E803" />
             <Setter Property="Padding" Value="8,5" />
@@ -115,6 +130,9 @@
                 <!-- the notifications button when off -->
                 <SolidColorBrush x:Key="SwitchOffBrush" Color="#E0E0E0" />
                 <SolidColorBrush x:Key="SwitchOffHoverBrush" Color="#CDCDCD" />
+                <!-- selected rows (several at once): the colors inverted -->
+                <SolidColorBrush x:Key="InvertBrush" Color="#1E1E1E" />
+                <SolidColorBrush x:Key="InvertInkBrush" Color="#FFFFFF" />
             </ResourceDictionary>
             <ResourceDictionary x:Key="Dark">
                 <SolidColorBrush x:Key="WindowBrush" Color="#1E1E1E" />
@@ -125,6 +143,8 @@
                 <SolidColorBrush x:Key="ExperimentHoverBrush" Color="#4A453F" />
                 <SolidColorBrush x:Key="SwitchOffBrush" Color="#6B6B6B" />
                 <SolidColorBrush x:Key="SwitchOffHoverBrush" Color="#7A7A7A" />
+                <SolidColorBrush x:Key="InvertBrush" Color="#F2F2F2" />
+                <SolidColorBrush x:Key="InvertInkBrush" Color="#1E1E1E" />
             </ResourceDictionary>
         </ResourceDictionary.ThemeDictionaries>
         <DataTemplate x:Key="CatalogItemTemplate" x:DataType="vm:CatalogItem">

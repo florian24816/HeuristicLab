@@ -21,8 +21,9 @@ public interface IDialogService {
   Task<int?> AskNumberAsync(string title, string message, int initial, int min, int max) => Task.FromResult<int?>(null);
   /// <summary>Asks for a line of text; null if cancelled.</summary>
   Task<string?> AskTextAsync(string title, string message, string initial) => Task.FromResult<string?>(null);
-  /// <summary>Picks one of the items and confirms it with the action button; the item's index, null if cancelled.</summary>
-  Task<int?> ChooseAsync(string title, string message, System.Collections.Generic.IReadOnlyList<string> items, string action) => Task.FromResult<int?>(null);
+  /// <summary>Picks one or several of the items and confirms them with the action button; their indices, null if cancelled.</summary>
+  Task<System.Collections.Generic.IReadOnlyList<int>?> ChooseAsync(string title, string message, System.Collections.Generic.IReadOnlyList<string> items, string action) =>
+    Task.FromResult<System.Collections.Generic.IReadOnlyList<int>?>(null);
   /// <summary>Which experiments to eject (indices) and whether to autosave; null when cancelled.</summary>
   Task<EjectChoice?> ChooseEjectAsync(System.Collections.Generic.IReadOnlyList<string> names, System.Collections.Generic.IReadOnlyList<bool> unsaved) =>
     Task.FromResult<EjectChoice?>(null);
@@ -68,8 +69,8 @@ public sealed class DialogService(Window owner, IFileDialogService fileDialogs) 
   public async Task<string?> AskTextAsync(string title, string message, string initial) =>
     await new TextWindow(title, message, initial).ShowDialog<string?>(owner);
 
-  public async Task<int?> ChooseAsync(string title, string message, System.Collections.Generic.IReadOnlyList<string> items, string action) =>
-    await new ChooseWindow(title, message, items, action).ShowDialog<int?>(owner);
+  public async Task<System.Collections.Generic.IReadOnlyList<int>?> ChooseAsync(string title, string message, System.Collections.Generic.IReadOnlyList<string> items, string action) =>
+    await new ChooseWindow(title, message, items, action).ShowDialog<System.Collections.Generic.IReadOnlyList<int>?>(owner);
 
   public async Task<EjectChoice?> ChooseEjectAsync(System.Collections.Generic.IReadOnlyList<string> names, System.Collections.Generic.IReadOnlyList<bool> unsaved) =>
     await new EjectWindow(names, unsaved).ShowDialog<EjectChoice?>(owner);

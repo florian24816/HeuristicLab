@@ -286,7 +286,11 @@ public class StudioWorkflowTests {
     public Task<CatalogEntry?> PickAlgorithmAsync() => Task.FromResult<CatalogEntry?>(null);
     public Task<HeuristicLab.Optimization.IProblem?> PickProblemAsync(HeuristicLab.Optimization.IAlgorithm algorithm) => Task.FromResult<HeuristicLab.Optimization.IProblem?>(null);
     public Task<bool> ConfirmAsync(string title, string message) => Task.FromResult(true);
-    public Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string> items, string action) { Offered = items; return Task.FromResult(Answer); }
+    public IReadOnlyList<int>? Answers { get; set; }
+    public Task<IReadOnlyList<int>?> ChooseAsync(string title, string message, IReadOnlyList<string> items, string action) {
+      Offered = items;
+      return Task.FromResult(Answers ?? (Answer is int a ? [a] : null));
+    }
   }
 
   /// <summary>
@@ -368,7 +372,7 @@ public class StudioWorkflowTests {
       chooser.Show();
       var delete = chooser.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Delete runs");
       Assert.IsFalse(delete.IsEnabled, "nothing selected yet");
-      chooser.GetVisualDescendants().OfType<ListBox>().Single().SelectedIndex = 1;
+      chooser.Rows[1].IsSelected = true;
       Assert.IsTrue(delete.IsEnabled);
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       chooser.CaptureRenderedFrame()!.Save(Shot("studio-delete-runs-dialog.png"));

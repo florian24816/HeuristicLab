@@ -54,7 +54,20 @@
   Runs tab: "Delete runs..." next to Refresh (ChooseWindow: pick an entry, the delete button is disabled
   until then): per experiment "the experiment's runs" (ExperimentTree.DeleteRuns clears every optimizer's
   runs without Prepare; its single runs stay) or "only its single runs" (DeleteSingleRuns), and "All single
-  runs of all experiments" when several have some; never while running; marks it unsaved.
+  runs of all experiments" when several have some; never while running; marks it unsaved. Several entries
+  at once (IDialogService.ChooseAsync returns the picked indices).
+  Selecting several (user's request): Controls/SweepSelection - click = one, Ctrl+click toggles, Shift+click
+  a range from the last clicked, press and sweep = the rows passed over; rows are visible "selectrow" Borders
+  whose DataContext is ViewModels.IPickable (tick boxes / expanders keep their own clicks). Selected rows
+  inverted by theme (App.axaml InvertBrush/InvertInkBrush: light mode #1E1E1E/white, dark #F2F2F2/#1E1E1E).
+  Used by ChooseWindow (ChoiceRow) and the Results tab's source tree (RunSourceViewModel.IsSelected; the
+  TreeView's own selection highlight is turned off; buttons "Tick selected" / "Untick selected" / "Only
+  selected" - tick them and untick all others). Experiments tab: Ctrl+click picks blocks (BlockViewModel.
+  IsPicked, name field inverted to #1E1E1E/white in both modes - blocks keep fixed light fields), pressing on
+  empty space draws a rectangle (BandLayer) that picks the blocks it covers (Ctrl: adds); a plain click on a
+  block or on empty space clears them; dragging a picked block moves all picked ones (PickedGroup: tree
+  order, a block inside a picked container goes with it) one after the other to the target (MoveGroup;
+  not into a time-limit run).
   Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
   warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
   HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once
@@ -313,7 +326,8 @@
   (Task.Run), else it deadlocks on the UI thread.
   Tests (next/tests/HeuristicLab.Studio.Tests) run headless (Avalonia.Headless + Skia) and
   save screenshots (studio-*.png in the test bin folder) for visual review.
-  Note: HeadlessUnitTestSession.Dispose() hangs (12.1.3) - never dispose it in tests.
+  Note: HeadlessUnitTestSession.Dispose() hangs (12.1.3) - never dispose it in tests. In one test class
+  either every test has [Timeout] or none: a test without one before a test with one hangs the session.
 - next/runtime/HeuristicLab.Next.Runtime (net10.0): the only way new front ends use the core.
   HlRuntime.Initialize, Catalog, Documents (.hl), Setups (shared "new" logic), ParameterEditor
   (set/describe), ProblemInstances, DataFiles/TabularData (CSV via HeuristicLab's parser with

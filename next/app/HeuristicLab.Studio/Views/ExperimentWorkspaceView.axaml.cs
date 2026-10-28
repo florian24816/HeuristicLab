@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -15,6 +16,9 @@ public partial class ExperimentWorkspaceView : UserControl {
   private BlockViewModel? pressed;
   private Point pressedAt;
   private bool dragging;
+  // picking blocks with a rectangle: where it started (in the band layer), whether Ctrl adds to the picked ones
+  private Point? bandStart;
+  private bool bandAdds;
 
   public ExperimentWorkspaceView() {
     InitializeComponent();
@@ -89,7 +93,53 @@ public partial class ExperimentWorkspaceView : UserControl {
     }
   }
 
+  // ---- picking several blocks: Ctrl+click, or press on empty space and sweep a rectangle
+
+  private void TreePressed(object? sender, PointerPressedEventArgs e) {
+    if (pressed != null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;  // a block: dragging
+    for (var v = e.Source as Visual; v != null && v != sender; v = v.GetVisualParent())
+      if (v is Button or ToggleButton or TextBox) return;
+    var layer = this.FindControl<Canvas>("BandLayer")!;
+    bandStart = e.GetPosition(layer);
+    bandAdds = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
+    e.Pointer.Capture(this);
+  }
+
+  private void UpdateBand(Point at) {
+    var layer = this.FindControl<Canvas>("BandLayer")!;
+    var band = this.FindControl<Border>("Band")!;
+    if (bandStart is not { } start) return;
+    var rect = new Rect(start, at).Normalize();
+    Canvas.SetLeft(band, rect.X);
+    Canvas.SetTop(band, rect.Y);
+    band.Width = rect.Width;
+    band.Height = rect.Height;
+    band.IsVisible = rect.Width > 3 || rect.Height > 3;
+  }
+
+  private void EndBand(Point at) {
+    var layer = this.FindControl<Canvas>("BandLayer")!;
+    var band = this.FindControl<Border>("Band")!;
+    if (bandStart is not { } start || Workspace is not { } workspace) return;
+    var rect = new Rect(start, at).Normalize();
+    bandStart = null;
+    band.IsVisible = false;
+    if (rect.Width <= 3 && rect.Height <= 3) {
+      if (!bandAdds) workspace.ClearPicks();  // a click on empty space
+      return;
+    }
+    var covered = this.GetVisualDescendants().OfType<Border>()
+      .Where(b => b.Classes.Contains("block") && b.IsEffectivelyVisible && b.DataContext is BlockViewModel)
+      .Where(b => b.TranslatePoint(default, layer) is { } p && new Rect(p, b.Bounds.Size).Intersects(rect))
+      .Select(b => (BlockViewModel)b.DataContext!);
+    workspace.Pick(covered, bandAdds);
+  }
+
   private void OnPointerMoved(object? sender, PointerEventArgs e) {
+    if (bandStart != null) {
+      UpdateBand(e.GetPosition(this.FindControl<Canvas>("BandLayer")!));
+      return;
+    }
     if (pressed == null || Workspace is not { } workspace) return;
     var point = e.GetPosition(this);
     if (!dragging) {
@@ -105,6 +155,11 @@ public partial class ExperimentWorkspaceView : UserControl {
   }
 
   private void OnPointerReleased(object? sender, PointerReleasedEventArgs e) {
+    if (bandStart != null) {
+      EndBand(e.GetPosition(this.FindControl<Canvas>("BandLayer")!));
+      e.Pointer.Capture(null);
+      return;
+    }
     if (dragging) {
       dragging = false;
       ListenForEscape(false);
@@ -153,7 +208,15 @@ public partial class ExperimentWorkspaceView : UserControl {
   }
 
   private void BlockTapped(object? sender, TappedEventArgs e) {
-    if ((sender as Control)?.DataContext is BlockViewModel block) block.SelectCommand.Execute(null);
+    if ((sender as Control)?.DataContext is not BlockViewModel block) return;
+    // Ctrl+click: picked among several (to move together); a plain click picks nothing more
+    if (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)) {
+      Workspace?.TogglePick(block);
+      e.Handled = true;
+      return;
+    }
+    if (ExperimentWorkspaceViewModel.Movable(block) is not { IsPicked: true }) Workspace?.ClearPicks();
+    block.SelectCommand.Execute(null);
   }
 
   // an unsaved experiment's disk: save (or "Save as..." if it has no file yet)
