@@ -51,9 +51,23 @@
   The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
   logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
   TextBlock: a string's '_' would be an access key.
-  Runs tab: "Delete runs..." next to Refresh deletes all runs of one experiment (ChooseWindow: pick it
-  in a list, the delete button is disabled until then; ExperimentTree.DeleteRuns clears every
-  optimizer's runs without Prepare; never single runs, never while running; marks it unsaved).
+  Runs tab: "Delete runs..." next to Refresh (ChooseWindow: pick an entry, the delete button is disabled
+  until then): per experiment "the experiment's runs" (ExperimentTree.DeleteRuns clears every optimizer's
+  runs without Prepare; its single runs stay) or "only its single runs" (DeleteSingleRuns), and "All single
+  runs of all experiments" when several have some; never while running; marks it unsaved. Several entries
+  at once (IDialogService.ChooseAsync returns the picked indices).
+  Selecting several (user's request): Controls/SweepSelection - click = one, Ctrl+click toggles, Shift+click
+  a range from the last clicked, press and sweep = the rows passed over; rows are visible "selectrow" Borders
+  whose DataContext is ViewModels.IPickable (tick boxes / expanders keep their own clicks). Selected rows
+  inverted by theme (App.axaml InvertBrush/InvertInkBrush: light mode #1E1E1E/white, dark #F2F2F2/#1E1E1E).
+  Used by ChooseWindow (ChoiceRow) and the Results tab's source tree (RunSourceViewModel.IsSelected; the
+  TreeView's own selection highlight is turned off; buttons "Tick selected" / "Untick selected" / "Only
+  selected" - tick them and untick all others). Experiments tab: Ctrl+click picks blocks (BlockViewModel.
+  IsPicked, name field inverted to #1E1E1E/white in both modes - blocks keep fixed light fields), pressing on
+  empty space draws a rectangle (BandLayer) that picks the blocks it covers (Ctrl: adds); a plain click on a
+  block or on empty space clears them; dragging a picked block moves all picked ones (PickedGroup: tree
+  order, a block inside a picked container goes with it) one after the other to the target (MoveGroup;
+  not into a time-limit run).
   Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
   warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
   HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once
@@ -183,7 +197,9 @@
   yellow, earlier iterations red shades, later ones (finished runs) green shades, a selected range's start
   (dark red, wide) / end (dark green, medium) as strokes under it; no transparency. Only shapes marked IsSolution are recolored (builders mark them;
   trees and the lawn are not layered). A selected range plays as an animation (iterations/s);
-  "Earlier/Later iterations" inputs always apply (within a range too). Every chart, picture and 3D
+  "Earlier/Later iterations" inputs always apply (within a range too). A detailed analysis run lives only
+  in memory: a note says it is not saved (AnalysisViewModel.TemporaryNote) and "Delete" (enabled once it
+  finished, not while recording) throws it away. Every chart, picture and 3D
   view has a clickable legend: series / shape groups (Shape.Group, else by kind) / items can be
   hidden; the hidden set can be shared via HiddenSet (VisualsViewModel.Hidden, analysis series).
   Fullscreen (button or F11; Esc or F11 leaves): AnalysisFullscreenWindow, picture fills the
@@ -221,6 +237,37 @@
   and replaces AllColumns/NumericColumns/XChoices/CurveTables only when they change - a new list under a
   filter's ComboBox reset its selection, which rebuilt and replaced the list again: endless recursion, a
   stack overflow that closed Studio without a message (test StudioFilterTests types filters key by key).
+  Tick shortcuts (Button.ticks: pale logo orange #FDE5C8, full #F7931D when it is the state now - AllTicked /
+  AllButSingleTicked / NoneTicked): "Select all", "Select all (without single runs)", "Unselect all" between
+  Refresh and the multi-select buttons. Results tabs and windows (user's request 2026-10-28): "Add window" (Button.addwindow:
+  square rectangle, tab font at 17 px, AddWindowBrush grey - darker than the window in light mode #D4D4D4, lighter
+  in dark mode #3A3A3A) in the Results tab's header while it is shown (MainViewModel.IsResultsTab) adds a further
+  results tab (ResultsWindowViewModel "HL-Results: n", ticked as the main tab at first - RunAnalysisViewModel.Main /
+  CopySelectionFromMain by source key, then on its own) docked in a second tab bar (Views/ResultsTabBar, only
+  in the Results tab, while there are further tabs, across the whole window) and selected: "Main results" first
+  (rectangle), then one tab per further results tab (italic name, a small ✕; a parallelogram - skewed shape -
+  while docked, a rectangle while it is a window; the shown one in the logo orange). A click shows a docked tab in
+  the main window (MainViewModel.SelectedResults / ShownAnalysis; its "Window name" field under the bar) or brings
+  its window to the front; "Main results" shows the main tab and brings the main window to the front. A dragged
+  tab disappears and one see-through copy (the ghost, ResultsTabBar.Ghost in the adorner layer, placed by its margin
+  - the adorner layer sets RenderTransform itself; clipping off) shows instead: along the bar in the gap where it
+  lands (the other tabs drawn shifted by RenderTransform; ResultsTabBar.Landing; released there: MoveResults -
+  "Main results" stays first), off the bar following the pointer (released well above/below: MainViewModel.Undock,
+  a window of its own at the pointer - Views/ResultsWindow with the same bar at its top, its own tab highlighted
+  there, the name field below, title bound live; anywhere else: back where it was). The tab list is never changed
+  while dragging and every change is posted after the pointer event (changing it inside the tab's pointer event
+  mixed up names, showed several ghosts and crashed); a stress test shuffles three tabs. A window moved over the
+  main window's bar shows its tab's gap and ghost (ShowArriving) and docks back there only when the mouse button is
+  let go (Services/GlobalMouse: X11 XQueryPointer on Linux, GetAsyncKeyState on Windows, polled every 40 ms while
+  it is over the bar; unknown elsewhere: resting MainWindow.DockAfter counts as let go) - the window manager moves
+  windows without telling when the button is released (PositionChanged -> MainWindow.WindowOver / CheckLetGo ->
+  MainViewModel.Dock). Closing the
+  main window while results windows are open asks the same as "Close windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
+  "Copy selection from main results tab" next to Refresh in further tabs (IsWindow; full orange while MatchesMain
+  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" there
+  instead (Button.closewindows, pale red #F6CACA; enabled while further tabs exist): IDialogService.
+  AcknowledgeAsync - "n result windows are about to be closed" with only "OK" (closing the dialog aborts) - then
+  all of them (docked and windows) go.
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
   Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05), Run (one run's results with visualizations).
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
@@ -310,7 +357,8 @@
   (Task.Run), else it deadlocks on the UI thread.
   Tests (next/tests/HeuristicLab.Studio.Tests) run headless (Avalonia.Headless + Skia) and
   save screenshots (studio-*.png in the test bin folder) for visual review.
-  Note: HeadlessUnitTestSession.Dispose() hangs (12.1.3) - never dispose it in tests.
+  Note: HeadlessUnitTestSession.Dispose() hangs (12.1.3) - never dispose it in tests. In one test class
+  either every test has [Timeout] or none: a test without one before a test with one hangs the session.
 - next/runtime/HeuristicLab.Next.Runtime (net10.0): the only way new front ends use the core.
   HlRuntime.Initialize, Catalog, Documents (.hl), Setups (shared "new" logic), ParameterEditor
   (set/describe), ProblemInstances, DataFiles/TabularData (CSV via HeuristicLab's parser with

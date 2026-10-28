@@ -80,6 +80,58 @@
             <Setter Property="MinHeight" Value="12" />
             <Setter Property="CornerRadius" Value="0" />
         </Style>
+        <!-- rows selected among several (SweepSelection): inverted colors, by theme -->
+        <Style Selector="Border.selectrow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="6,3" />
+        </Style>
+        <!-- the source tree selects its own way (several, inverted rows): no Fluent selection highlight -->
+        <Style Selector="TreeView.sources TreeViewItem:selected /template/ Border#PART_LayoutRoot, TreeView.sources TreeViewItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.selectrow.selected">
+            <Setter Property="Background" Value="{DynamicResource InvertBrush}" />
+        </Style>
+        <Style Selector="Border.selectrow.selected TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource InvertInkBrush}" />
+        </Style>
+        <!-- tick shortcuts (Results tab, "Add results window"): the logo orange, pale; full when its state is the one now -->
+        <Style Selector="Button.ticks">
+            <Setter Property="Background" Value="#FDE5C8" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Button.ticks:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#FBCD96" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Button.ticks.on">
+            <Setter Property="Background" Value="#F7931D" />
+        </Style>
+        <Style Selector="Button.ticks.on:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#E8850F" />
+        </Style>
+        <!-- "Add window" in the Results tab's header: a plain rectangle, in the tabs' font, a little smaller than their titles -->
+        <Style Selector="Button.addwindow">
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="{DynamicResource AddWindowBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="Padding" Value="12,4" />
+        </Style>
+        <Style Selector="Button.addwindow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AddWindowHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+        <!-- "Close windows" (main Results tab): pale red -->
+        <Style Selector="Button.closewindows">
+            <Setter Property="Background" Value="#F6CACA" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Button.closewindows:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#EFB0B0" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="#F4E803" />
             <Setter Property="Padding" Value="8,5" />
@@ -115,6 +167,12 @@
                 <!-- the notifications button when off -->
                 <SolidColorBrush x:Key="SwitchOffBrush" Color="#E0E0E0" />
                 <SolidColorBrush x:Key="SwitchOffHoverBrush" Color="#CDCDCD" />
+                <!-- selected rows (several at once): the colors inverted -->
+                <SolidColorBrush x:Key="InvertBrush" Color="#1E1E1E" />
+                <!-- "Add window" next to the Results tab: a grey a little darker (light) / lighter (dark) than the window -->
+                <SolidColorBrush x:Key="AddWindowBrush" Color="#D4D4D4" />
+                <SolidColorBrush x:Key="AddWindowHoverBrush" Color="#C2C2C2" />
+                <SolidColorBrush x:Key="InvertInkBrush" Color="#FFFFFF" />
             </ResourceDictionary>
             <ResourceDictionary x:Key="Dark">
                 <SolidColorBrush x:Key="WindowBrush" Color="#1E1E1E" />
@@ -125,6 +183,10 @@
                 <SolidColorBrush x:Key="ExperimentHoverBrush" Color="#4A453F" />
                 <SolidColorBrush x:Key="SwitchOffBrush" Color="#6B6B6B" />
                 <SolidColorBrush x:Key="SwitchOffHoverBrush" Color="#7A7A7A" />
+                <SolidColorBrush x:Key="InvertBrush" Color="#F2F2F2" />
+                <SolidColorBrush x:Key="AddWindowBrush" Color="#3A3A3A" />
+                <SolidColorBrush x:Key="AddWindowHoverBrush" Color="#4A4A4A" />
+                <SolidColorBrush x:Key="InvertInkBrush" Color="#1E1E1E" />
             </ResourceDictionary>
         </ResourceDictionary.ThemeDictionaries>
         <DataTemplate x:Key="CatalogItemTemplate" x:DataType="vm:CatalogItem">

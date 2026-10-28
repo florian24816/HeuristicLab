@@ -21,7 +21,7 @@
 
         <!-- one building block: squares, name (inline rename), last field; context menu (rename/delete/...) -->
         <DataTemplate x:Key="Block" x:DataType="vm:BlockViewModel">
-            <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.fixed="{Binding FixedWidth}"
+            <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.picked="{Binding IsPicked}" Classes.fixed="{Binding FixedWidth}"
                     Tapped="BlockTapped" DoubleTapped="BlockDoubleTapped" PointerPressed="BlockPressed">
                 <Border.ContextMenu>
                     <ContextMenu ItemsSource="{Binding Menu}">
@@ -206,6 +206,14 @@
         <Style Selector="Border.block.fixed Border.name">
             <Setter Property="Width" Value="200" />
         </Style>
+        <!-- picked among several (to move together): the name field inverted - blocks keep fixed light fields in both modes, so dark -->
+        <Style Selector="Border.block.picked Border.name">
+            <Setter Property="Background" Value="#1E1E1E" />
+            <Setter Property="BorderBrush" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Border.block.picked Border.name TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+        </Style>
         <Style Selector="Border.block.selected Border.name">
             <Setter Property="BorderBrush" Value="{StaticResource SelectedBrush}" />
         </Style>
@@ -306,7 +314,9 @@
                 </Button>
             </Grid>
 
-            <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto">
+            <!-- the tree, and over it the rectangle that picks blocks (press on empty space and sweep) -->
+            <Panel>
+            <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto" PointerPressed="TreePressed">
                 <!-- blocks stay clickable while experiments run; what would change them is disabled -->
                 <StackPanel Spacing="14">
                     <ItemsControl ItemsSource="{Binding Experiments}">
@@ -359,6 +369,10 @@
                     </Button>
                 </StackPanel>
             </ScrollViewer>
+            <Canvas x:Name="BandLayer" IsHitTestVisible="False">
+                <Border x:Name="Band" IsVisible="False" Background="#332E6FD8" BorderBrush="#2E6FD8" BorderThickness="1" />
+            </Canvas>
+            </Panel>
         </DockPanel>
 
         <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />

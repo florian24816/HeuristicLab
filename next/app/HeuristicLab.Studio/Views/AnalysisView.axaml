@@ -9,12 +9,16 @@
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <Button Content="▶ Start detailed analysis run" Command="{Binding StartCommand}" Background="#F2C94C" Foreground="#1E2A1F" />
                 <Button Content="■ Stop" Command="{Binding StopCommand}" />
+                <Button Content="✕ Delete" Command="{Binding DeleteCommand}"
+                        ToolTip.Tip="Throw this detailed analysis run away (once it has finished)" />
                 <TextBlock Text="Keep up to" VerticalAlignment="Center" />
                 <TextBox Text="{Binding StorageLimitText}" Width="90" ToolTip.Tip="Solutions kept as copies for drawing (memory); later steps are still recorded and charted." />
                 <TextBlock Text="solutions" VerticalAlignment="Center" />
                 <Button Content="⛶ Fullscreen" Click="OnFullscreen" IsEnabled="{Binding HasTrace}" ToolTip.Tip="Picture fullscreen, controls in a movable window (F11; Esc or F11 to leave)" />
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="10,0,0,0" />
             </StackPanel>
+            <TextBlock Text="{x:Static vm:AnalysisViewModel.TemporaryNote}" TextWrapping="Wrap" FontSize="12" FontStyle="Italic"
+                       Opacity="0.8" IsVisible="{Binding IsSupported}" />
             <TextBlock Text="{Binding Unsupported}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" IsVisible="{Binding !IsSupported}" />
             <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.7" IsVisible="{Binding !HasTrace}"
                        Text="Runs a copy of this algorithm and records every solution it creates: by which operator, from which parents, with which quality, in which iteration and when. Afterwards (and while it runs) select iterations in the chart and step through them." />

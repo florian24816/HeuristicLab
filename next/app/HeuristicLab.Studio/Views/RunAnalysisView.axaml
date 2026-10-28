@@ -7,20 +7,40 @@
     <Grid ColumnDefinitions="280,4,*">
         <!-- where the runs come from -->
         <DockPanel Margin="10">
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+            <WrapPanel DockPanel.Dock="Top" ItemSpacing="6" LineSpacing="4" Margin="0,0,0,6">
                 <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
-            </StackPanel>
+                <Button Classes="ticks" Classes.on="{Binding MatchesMain}" Content="Copy selection from main results tab" Command="{Binding CopySelectionFromMainCommand}"
+                        IsVisible="{Binding IsWindow}" ToolTip.Tip="Tick what the main window's Results tab has ticked" />
+                <Button Classes="closewindows" Content="Close windows" Command="{Binding CloseWindowsCommand}"
+                        IsVisible="{Binding ClosesWindows}" ToolTip.Tip="Close all results windows (asks first)" />
+            </WrapPanel>
+            <!-- tick all / all but the single runs / nothing; the button of the state there is now is full orange -->
+            <WrapPanel DockPanel.Dock="Top" ItemSpacing="4" LineSpacing="4" Margin="0,0,0,6">
+                <Button Classes="ticks" Classes.on="{Binding AllTicked}" Content="Select all" Command="{Binding SelectAllCommand}" />
+                <Button Classes="ticks" Classes.on="{Binding AllButSingleTicked}" Content="Select all (without single runs)"
+                        Command="{Binding SelectAllWithoutSingleCommand}" />
+                <Button Classes="ticks" Classes.on="{Binding NoneTicked}" Content="Unselect all" Command="{Binding UnselectAllCommand}" />
+            </WrapPanel>
+            <!-- several sources at once: select them (shown inverted), then tick / untick them, or tick only them -->
+            <WrapPanel DockPanel.Dock="Top" ItemSpacing="4" LineSpacing="4" Margin="0,0,0,6">
+                <Button Content="Tick selected" Command="{Binding TickSelectedCommand}" ToolTip.Tip="Tick the selected sources (and everything below them)" />
+                <Button Content="Untick selected" Command="{Binding UntickSelectedCommand}" ToolTip.Tip="Untick the selected sources" />
+                <Button Content="Only selected" Command="{Binding OnlySelectedCommand}" ToolTip.Tip="Tick the selected sources, untick all others" />
+            </WrapPanel>
             <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
-                       Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked)." />
-            <TreeView ItemsSource="{Binding Sources}">
+                       Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked). Select several sources (click a name, Ctrl+click, Shift+click, or press and sweep) to tick or untick them together." />
+            <TreeView x:Name="SourceTree" Classes="sources" ItemsSource="{Binding Sources}">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate DataType="vm:RunSourceViewModel" ItemsSource="{Binding Children}">
-                        <CheckBox IsChecked="{Binding IsChecked}">
-                            <StackPanel>
-                                <TextBlock Text="{Binding Label}" />
-                                <TextBlock Text="{Binding Kind}" FontSize="11" Opacity="0.6" />
-                            </StackPanel>
-                        </CheckBox>
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" MinWidth="0" />
+                            <Border Classes="selectrow" Classes.selected="{Binding IsSelected}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Label}" />
+                                    <TextBlock Text="{Binding Kind}" FontSize="11" Opacity="0.6" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>

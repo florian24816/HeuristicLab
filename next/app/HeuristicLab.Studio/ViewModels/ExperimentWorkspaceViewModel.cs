@@ -438,11 +438,41 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       return;
     }
     if (dialogs == null || Experiments.Count == 0) return;
-    var experiments = Experiments.ToList();
-    var index = await dialogs.ChooseAsync("Delete runs",
-      "Choose the experiment whose runs are all deleted (the runs of everything inside it), then press \"Delete runs\". The experiment itself stays.",
-      experiments.Select(e => $"{e.Name}  ({e.Experiment.Runs.Count} run{(e.Experiment.Runs.Count == 1 ? "" : "s")})").ToList(), "Delete runs");
-    if (index is int i && i >= 0 && i < experiments.Count) DeleteRuns(experiments[i]);
+    // per experiment: its runs, or only its single runs (Start on one algorithm); all single runs at once
+    var choices = new List<(string Text, Action Delete)>();
+    static string Runs(int n) => $"{n} run{(n == 1 ? "" : "s")}";
+    foreach (var e in Experiments.ToList()) {
+      choices.Add(($"{e.Name}: the experiment's runs  ({Runs(e.Experiment.Runs.Count)})", () => DeleteRuns(e)));
+      if (e.SingleRuns.Count > 0) choices.Add(($"{e.Name}: only its single runs  ({Runs(e.SingleRuns.Count)})", () => DeleteSingleRuns(e)));
+    }
+    var withSingle = Experiments.Where(e => e.SingleRuns.Count > 0).ToList();
+    if (withSingle.Count > 1)
+      choices.Add(($"All single runs of all experiments  ({Runs(withSingle.Sum(e => e.SingleRuns.Count))})", () => {
+        int n = withSingle.Sum(DeleteSingleRuns);
+        Status = $"Deleted all {Runs(n)} single runs";
+      }));
+    var picked = await dialogs.ChooseAsync("Delete runs",
+      "Choose what to delete, then press \"Delete runs\": an experiment's runs (of everything inside it; its single runs stay), " +
+      "or only single runs (made by Start on one algorithm). The experiments themselves stay.",
+      choices.Select(c => c.Text).ToList(), "Delete runs");
+    if (picked == null) return;
+    var statuses = new List<string>();
+    foreach (int i in picked.Where(i => i >= 0 && i < choices.Count).Distinct()) {
+      choices[i].Delete();
+      statuses.Add(Status);
+    }
+    if (statuses.Count > 1) Status = string.Join("; ", statuses);
+  }
+
+  /// <summary>Deletes the single runs of this experiment (Start on one algorithm); returns how many there were.</summary>
+  public int DeleteSingleRuns(ExperimentBlockViewModel experiment) {
+    if (!IsEditable) return 0;
+    int count = experiment.SingleRuns.Count;
+    experiment.SingleRuns.Runs.Clear();
+    if (count > 0) experiment.MarkModified();
+    RefreshLive();
+    Status = $"Deleted {count} single run{(count == 1 ? "" : "s")} of {experiment.Name}";
+    return count;
   }
 
   /// <summary>Deletes all runs of this experiment; returns how many there were.</summary>
@@ -622,8 +652,17 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>Moves a block (with its content) to a position in a container, in the tree and in HeuristicLab's experiment.</summary>
   public bool Move(BlockViewModel block, ContainerBlockViewModel container, int index) {
-    if (Movable(block) is not { Parent: { } from } moving || !CanDrop(moving, container)) return false;
+    if (Movable(block) is not { Parent: not null } moving || !CanDrop(moving, container)) return false;
     if (Landing(moving, new DropTarget(container, index)) is not int at) return false;
+    MoveNow(moving, container, at);
+    Selected = moving;
+    RefreshState();
+    return true;
+  }
+
+  /// <summary>Takes a block out of its container and puts it at this position (the position after taking it out).</summary>
+  private void MoveNow(BlockViewModel moving, ContainerBlockViewModel container, int at) {
+    var from = moving.Parent!;
     var optimizer = (IOptimizer)moving.Item;
     from.MarkModified();
     ExperimentTree.Remove(from.Optimizer, optimizer);
@@ -635,7 +674,61 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     if (moving is AlgorithmBlockViewModel { Problem: { } problem }) problem.Parent = container;
     container.ChildrenChanged();
     container.MarkModified();
-    Selected = moving;
+  }
+
+  // ---- several blocks picked (Ctrl+click, a rectangle) and moved together
+
+  /// <summary>Every block of the workspace, in the tree's order (an algorithm before its problem).</summary>
+  public IEnumerable<BlockViewModel> AllBlocks() {
+    IEnumerable<BlockViewModel> Walk(BlockViewModel block) {
+      yield return block;
+      if (block is AlgorithmBlockViewModel { Problem: { } problem }) yield return problem;
+      if (block is ContainerBlockViewModel container)
+        foreach (var child in container.Children.ToList()) foreach (var b in Walk(child)) yield return b;
+    }
+    return Experiments.ToList().SelectMany(Walk);
+  }
+
+  /// <summary>The picked blocks that move, in tree order; a block inside a picked batch / time-limit run goes with it.</summary>
+  public IReadOnlyList<BlockViewModel> PickedGroup() {
+    var picked = AllBlocks().Where(b => b.IsPicked && Movable(b) == b).ToList();
+    return picked.Where(b => !picked.Any(other => other != b && other is ContainerBlockViewModel c && IsWithin(b, c))).ToList();
+  }
+
+  /// <summary>Adds a block to the picked ones or takes it out (Ctrl+click); a problem stands for its algorithm, experiments are not picked.</summary>
+  public void TogglePick(BlockViewModel block) {
+    if (Movable(block) is not { } movable) return;
+    movable.IsPicked = !movable.IsPicked;
+  }
+
+  /// <summary>Picks these blocks (a rectangle); <paramref name="add"/> keeps the ones picked before.</summary>
+  public void Pick(IEnumerable<BlockViewModel> blocks, bool add) {
+    var chosen = blocks.Select(Movable).OfType<BlockViewModel>().ToHashSet();
+    foreach (var block in AllBlocks()) {
+      bool on = chosen.Contains(block) || add && block.IsPicked;
+      if (block.IsPicked != on) block.IsPicked = on;
+    }
+  }
+
+  public void ClearPicks() {
+    foreach (var block in AllBlocks()) if (block.IsPicked) block.IsPicked = false;
+  }
+
+  /// <summary>What a drag moves: all picked blocks when the dragged one is picked, else just it.</summary>
+  private IReadOnlyList<BlockViewModel> DraggedGroup =>
+    Dragged is { IsPicked: true } && PickedGroup() is { Count: > 1 } group ? group : Dragged != null ? [Dragged] : [];
+
+  /// <summary>Moves several blocks to a position, one after the other, in their tree order.</summary>
+  public bool MoveGroup(IReadOnlyList<BlockViewModel> group, ContainerBlockViewModel container, int index) {
+    if (group.Count == 1) return Move(group[0], container, index);
+    if (!IsEditable || group.Any(b => !CanDrop(b, container)) || container.Optimizer is TimeLimitRun) return false;
+    int at = Math.Clamp(index, 0, container.Children.Count);
+    foreach (var block in group) {
+      if (block.Parent == container && container.Children.IndexOf(block) < at) at--;
+      MoveNow(block, container, at);
+      at = container.Children.IndexOf(block) + 1;
+    }
+    Selected = group[^1];
     RefreshState();
     return true;
   }
@@ -666,23 +759,29 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>Shows the dragged block faded at the target (or nowhere if it cannot or would not move there).</summary>
   public void PreviewDrop(DropTarget? target) {
-    if (Dragged == null || target != null && (!CanDrop(Dragged, target.Container) || Landing(Dragged, target) == null)) target = null;
+    var group = DraggedGroup;
+    if (Dragged == null || target != null && !Fits(group, target)) target = null;
     if (target == DropPreview) return;
     DropPreview?.Container.SetPreview(null, null);
     DropPreview = target;
     target?.Container.SetPreview(target.Index, Dragged);
-    // only one of the two at a time: the faded preview at the new place, or the block at its old place
-    if (Dragged != null) Dragged.IsMoving = target != null;
+    // only one of the two at a time: the faded preview at the new place, or the blocks at their old places
+    foreach (var block in group) block.IsMoving = target != null;
   }
+
+  private bool Fits(IReadOnlyList<BlockViewModel> group, DropTarget target) =>
+    group.Count == 1 ? CanDrop(group[0], target.Container) && Landing(group[0], target) != null
+    : target.Container.Optimizer is not TimeLimitRun && group.All(b => CanDrop(b, target.Container));
 
   /// <summary>Ends dragging: drops the block where the preview shows it, or (cancelled) leaves it.</summary>
   public bool EndDrag(bool drop) {
     var target = DropPreview;
     var block = Dragged;
+    var group = DraggedGroup;
     PreviewDrop(null);
-    if (block != null) block.IsMoving = false;
+    foreach (var b in group) b.IsMoving = false;
     Dragged = null;
-    return drop && block != null && target != null && Move(block, target.Container, target.Index);
+    return drop && block != null && target != null && MoveGroup(group, target.Container, target.Index);
   }
 
   /// <summary>A copy goes next to the original: not for experiments, nor inside a time-limit run (it holds one algorithm).</summary>

@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             x:Class="HeuristicLab.Studio.Views.ResultsTabBar"
+             x:DataType="vm:MainViewModel">
+    <UserControl.Styles>
+        <!-- a tab: a shape (rectangle, or a parallelogram while docked) under its text -->
+        <Style Selector="Panel.resultstab">
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Panel.resultstab > Border.shape">
+            <Setter Property="Background" Value="{DynamicResource AddWindowBrush}" />
+        </Style>
+        <Style Selector="Panel.resultstab:pointerover > Border.shape">
+            <Setter Property="Background" Value="{DynamicResource AddWindowHoverBrush}" />
+        </Style>
+        <Style Selector="Panel.resultstab.selected > Border.shape">
+            <Setter Property="Background" Value="#F7931D" />
+        </Style>
+        <!-- in a results window: its own tab is the one highlighted (not what the main window shows) -->
+        <Style Selector="Border.inwindow Panel.resultstab.selected > Border.shape">
+            <Setter Property="Background" Value="{DynamicResource AddWindowBrush}" />
+        </Style>
+        <Style Selector="Border.inwindow Panel.resultstab.own > Border.shape">
+            <Setter Property="Background" Value="#F7931D" />
+        </Style>
+        <Style Selector="Border.inwindow Panel.resultstab.selected TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+        </Style>
+        <Style Selector="Border.inwindow Panel.resultstab.own TextBlock">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Panel.resultstab.docked > Border.shape">
+            <Setter Property="RenderTransform" Value="skew(-18deg, 0deg)" />
+        </Style>
+        <Style Selector="Panel.resultstab.selected TextBlock">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Button.tabclose">
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Styles>
+    <!-- the second tab bar of the Results tab: "Main results", then one tab per further results tab or window -->
+    <Border x:Name="Bar" Classes="resultsbar" Padding="10,4" BorderThickness="0,0,0,1"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+        <StackPanel Orientation="Horizontal">
+            <Panel Classes="resultstab main" Classes.selected="{Binding IsMainResultsShown}" Tapped="MainTapped"
+                   ToolTip.Tip="The main window's Results tab">
+                <Border Classes="shape" />
+                <TextBlock Text="Main results" Margin="14,5" FontSize="15" />
+            </Panel>
+            <ItemsControl x:Name="TabList" ItemsSource="{Binding ResultsWindows}" ClipToBounds="False">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ResultsWindowViewModel">
+                        <Panel Classes="resultstab" Classes.docked="{Binding IsDocked}" Classes.selected="{Binding IsSelected}"
+                               PointerPressed="TabPressed" PointerMoved="TabMoved" PointerReleased="TabReleased" PointerCaptureLost="TabCaptureLost"
+                               ToolTip.Tip="Click: show it; drag it along the bar: another place; drag it out of the bar: a window of its own (move the window onto the bar to bring it back)">
+                            <Border Classes="shape" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="16,5,10,5">
+                                <TextBlock Text="{Binding Name}" FontStyle="Italic" FontSize="15" VerticalAlignment="Center" />
+                                <Button Classes="tabclose" Content="✕" Click="CloseTab" ToolTip.Tip="Close this results tab" />
+                            </StackPanel>
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

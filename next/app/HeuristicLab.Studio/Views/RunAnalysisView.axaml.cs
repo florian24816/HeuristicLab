@@ -8,6 +8,9 @@ namespace HeuristicLab.Studio.Views;
 public partial class RunAnalysisView : UserControl {
   public RunAnalysisView() {
     InitializeComponent();
+    // several sources selected at once (Ctrl+click, Shift+click, press and sweep)
+    HeuristicLab.Studio.Controls.SweepSelection.Attach(SourceTree,
+      () => DataContext is RunAnalysisViewModel analysis ? analysis.AllSourceNodes : []);
     // F11 on the Charts tab enters fullscreen (and leaves it again, there)
     AddHandler(KeyDownEvent, (_, e) => {
       if (e.Key == Key.F11 && DataContext is RunAnalysisViewModel { SelectedView: RunAnalysisViewModel.ChartsView }) { e.Handled = true; OpenFullscreen(); }
