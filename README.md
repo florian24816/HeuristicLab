@@ -212,6 +212,17 @@ runs give identical results.
   optimization (OR-Tools), Hive/OKB services, and the original Windows Forms views
   (replaced by Studio).
 
+## Screenshots
+
+<img width="3706" height="2336" alt="Screenshot From 2026-10-28 13-40-21" src="https://github.com/user-attachments/assets/d22a43bc-ad04-4b8a-bf6c-c963cfe20877" />
+<img width="3706" height="2336" alt="Screenshot From 2026-10-28 13-45-06" src="https://github.com/user-attachments/assets/c07e9dba-9456-452b-b738-d6171cb6671c" />
+<img width="3706" height="2336" alt="Screenshot From 2026-10-28 13-46-33" src="https://github.com/user-attachments/assets/b275c3c5-a220-4759-9e5c-41ad66d5cc50" />
+<img width="3706" height="2336" alt="Screenshot From 2026-10-28 13-46-48" src="https://github.com/user-attachments/assets/4eefea75-dc8c-46e0-b2fb-d6ac1d054693" />
+<img width="3706" height="2336" alt="Screenshot From 2026-10-28 13-47-23" src="https://github.com/user-attachments/assets/c98adfc9-e312-49ea-9e2c-942acb445800" />
+<img width="2778" height="1698" alt="Screenshot From 2026-10-28 13-49-21" src="https://github.com/user-attachments/assets/b4a56165-6ed3-4e5d-a6c2-dc3550a1c99a" />
+<img width="2778" height="1698" alt="Screenshot From 2026-10-28 13-51-31" src="https://github.com/user-attachments/assets/8a33e9cb-2caf-4b87-a9e3-be19a42b6f1a" />
+
+
 ---
 
 # HeuristicLab
