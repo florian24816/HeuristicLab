@@ -38,6 +38,9 @@ public class StudioResultsWindowTests {
   private static Panel Tab(Visual root, ResultsWindowViewModel results) =>
     root.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("resultstab") && p.DataContext == results && p.IsEffectivelyVisible);
 
+  private static int Ghosts(Window window) =>
+    window.GetVisualDescendants().OfType<Border>().Count(b => b.Classes.Contains("ghost") && b.IsEffectivelyVisible);
+
   private static bool Skewed(Border shape) => shape.RenderTransform is { } t && t.Value.M21 != 0;
 
   private static Border Shape(Panel tab) => tab.Children.OfType<Border>().Single(b => b.Classes.Contains("shape"));
@@ -155,38 +158,50 @@ public class StudioResultsWindowTests {
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-window.png"));
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-tabs-undocked.png"));
 
-      // moved onto the main window's second bar: a faded tab where it would land; resting there (let go) it docks back
+      // moved over the main window's bar: its tab's gap with the one ghost where it would land; it docks back only
+      // once the mouse button is let go there (held: it stays a window, however long)
       var onBar = bar.PointToScreen(new Point(bar.Bounds.Width / 2, bar.Bounds.Height / 2));
       Assert.IsTrue(main.WouldDock(onBar));
       Assert.IsFalse(main.WouldDock(new PixelPoint(onBar.X, onBar.Y + 300)));
-      main.WindowOver(second, 0);
+      bool held = true;
+      main.IsMouseDown = () => held;
+      var firstTab = Tab(main, first);
+      var beforeFirst = bar.PointToScreen(firstTab.TranslatePoint(new Point(4, firstTab.Bounds.Height / 2), bar)!.Value);
+      main.WindowOver(second, beforeFirst);
       Pump();
-      Assert.IsTrue(vm.BarItems.OfType<TabGhost>().Any(), "a faded tab in the bar");
-      var ghost = bar.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("ghost"));
-      Assert.IsTrue(ghost.Opacity < 1);
-      Assert.IsTrue(ghost.TranslatePoint(default, bar)!.Value.X < Tab(main, first).TranslatePoint(default, bar)!.Value.X, "before the first tab");
+      Assert.AreEqual(1, Ghosts(main), "one ghost");
+      Assert.AreEqual(0, Tab(main, second).Opacity, "the window's own tab gives way to the ghost");
+      Assert.IsTrue(bar.Ghost!.Opacity < 1);
+      Assert.AreEqual(0, bar.Landing, "before the first tab");
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-dock-ghost.png"));
-      Assert.IsFalse(second.IsDocked, "not yet: still being moved");
-      var until = DateTime.Now + MainWindow.DockAfter + TimeSpan.FromMilliseconds(300);
-      while (!second.IsDocked && DateTime.Now < until) { Pump(); await Task.Delay(30); }
-      Assert.IsTrue(second.IsDocked && second.IsSelected);
-      Assert.AreEqual(0, main.OpenResultsWindows.Count);
-      CollectionAssert.AreEqual(new[] { second, first }, vm.ResultsWindows.ToList(), "where the faded tab was");
-      Assert.IsFalse(vm.BarItems.OfType<TabGhost>().Any());
-      // moved away again before resting: no docking, no faded tab
-      vm.Undock(second);
-      Pump();
-      main.WindowOver(second, 1);
-      main.WindowOver(second, null);
       await Task.Delay(MainWindow.DockAfter + TimeSpan.FromMilliseconds(200));
       Pump();
+      Assert.IsFalse(second.IsDocked, "the button is still held: no docking yet");
+      Assert.AreEqual(1, main.OpenResultsWindows.Count, "the window stays while it is held");
+      held = false;
+      main.CheckLetGo(null, EventArgs.Empty);
+      Pump();
+      Assert.IsTrue(second.IsDocked && second.IsSelected, "let go over the bar: docked");
+      Assert.AreEqual(0, main.OpenResultsWindows.Count);
+      CollectionAssert.AreEqual(new[] { second, first }, vm.ResultsWindows.ToList(), "where the ghost was");
+      Assert.AreEqual(0, Ghosts(main));
+      Assert.AreEqual(1, Tab(main, second).Opacity);
+      // moved away again before it was let go: no docking, no ghost
+      vm.Undock(second);
+      Pump();
+      held = true;
+      main.WindowOver(second, beforeFirst);
+      main.WindowOver(second, null);
+      held = false;
+      main.CheckLetGo(null, EventArgs.Empty);
+      Pump();
       Assert.IsFalse(second.IsDocked);
-      Assert.IsFalse(vm.BarItems.OfType<TabGhost>().Any());
+      Assert.AreEqual(0, Ghosts(main));
       vm.Dock(second, 2);  // after both tabs (places count the tabs before it is taken out)
       Pump();
       CollectionAssert.AreEqual(new[] { first, second }, vm.ResultsWindows.ToList());
 
-      // dragging a tab along the bar: a see-through copy follows the pointer, the tab stays, a faded tab shows where it lands
+      // dragging a tab along the bar: the tab disappears, one ghost in the gap where it lands
       var drag = Tab(main, second);
       var from = drag.TranslatePoint(new Point(drag.Bounds.Width / 2, drag.Bounds.Height / 2), main)!.Value;
       var leftOfFirst = Tab(main, first).TranslatePoint(new Point(4, drag.Bounds.Height / 2), main)!.Value;
@@ -194,26 +209,66 @@ public class StudioResultsWindowTests {
       main.MouseMove(from + new Point(-10, 0), RawInputModifiers.LeftMouseButton);
       main.MouseMove(leftOfFirst, RawInputModifiers.LeftMouseButton);
       Pump();
-      Assert.IsNotNull(bar.Floating, "the copy following the pointer");
-      Assert.IsTrue(bar.Floating!.Opacity < 1);
-      Assert.IsTrue(drag.IsEffectivelyVisible, "the tab stays where it is meanwhile");
-      Assert.IsTrue(vm.BarItems.OfType<TabGhost>().Any());
+      Assert.AreEqual(1, Ghosts(main), "only the ghost");
+      Assert.AreEqual(0, drag.Opacity, "the original disappears meanwhile");
+      // the other tab slid aside to make room: right after the ghost, still in view
+      var shifted = Tab(main, first);
+      double ghostRight = bar.Ghost!.Margin.Left + bar.Ghost.Bounds.Width;
+      double shiftedLeft = shifted.TranslatePoint(default, bar)!.Value.X;
+      Assert.IsTrue(Math.Abs(shiftedLeft - ghostRight) < 12, $"next to the ghost: {shiftedLeft} vs {ghostRight}");
+      Assert.IsTrue(shiftedLeft + shifted.Bounds.Width < bar.Bounds.Width);
+      Assert.AreEqual(0, bar.Landing);
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-tab-drag.png"));
+      // off the bar the ghost follows the pointer
+      main.MouseMove(leftOfFirst + new Point(30, 200), RawInputModifiers.LeftMouseButton);
+      Pump();
+      Assert.AreEqual(1, Ghosts(main));
+      Assert.IsNull(bar.Landing);
+      main.MouseMove(leftOfFirst, RawInputModifiers.LeftMouseButton);
       main.MouseUp(leftOfFirst, MouseButton.Left);
       Pump();
-      Assert.IsNull(bar.Floating);
+      Assert.AreEqual(0, Ghosts(main));
       CollectionAssert.AreEqual(new[] { second, first }, vm.ResultsWindows.ToList(), "moved before the first");
-      // let go where nothing happens (just below the window's bar, but not far enough out): back where it was
+      Assert.AreEqual(1, Tab(main, second).Opacity);
+      // let go where nothing happens: back where it was
       drag = Tab(main, second);
       from = drag.TranslatePoint(new Point(drag.Bounds.Width / 2, drag.Bounds.Height / 2), main)!.Value;
       main.MouseDown(from, MouseButton.Left);
       main.MouseMove(from + new Point(3, 12), RawInputModifiers.LeftMouseButton);
       main.MouseUp(from + new Point(3, 12), MouseButton.Left);
       Pump();
-      Assert.IsNull(bar.Floating);
+      Assert.AreEqual(0, Ghosts(main));
       CollectionAssert.AreEqual(new[] { second, first }, vm.ResultsWindows.ToList());
       Assert.IsTrue(second.IsDocked);
-      Assert.IsFalse(vm.BarItems.OfType<TabGhost>().Any());
+
+      // shuffling: three tabs dragged around many times - names always in the right order, never more than one ghost
+      vm.AddResultsWindowCommand.Execute(null);
+      Pump();
+      var random = new System.Random(4);
+      for (int round = 0; round < 12; round++) {
+        var order = vm.ResultsWindows.ToList();
+        var moving = order[random.Next(order.Count)];
+        var target = order[random.Next(order.Count)];
+        var source = Tab(main, moving);
+        var start = source.TranslatePoint(new Point(source.Bounds.Width / 2, source.Bounds.Height / 2), main)!.Value;
+        var aim = Tab(main, target);
+        var end = aim.TranslatePoint(new Point(random.Next(2) == 0 ? 3 : aim.Bounds.Width - 3, aim.Bounds.Height / 2), main)!.Value;
+        main.MouseDown(start, MouseButton.Left);
+        main.MouseMove(start + new Point(8, 0), RawInputModifiers.LeftMouseButton);
+        main.MouseMove(end, RawInputModifiers.LeftMouseButton);
+        Pump();
+        Assert.IsTrue(Ghosts(main) <= 1, $"round {round}: at most one ghost");
+        main.MouseUp(end, MouseButton.Left);
+        Pump();
+        Assert.AreEqual(0, Ghosts(main), $"round {round}: no ghost left");
+        var shown = main.GetVisualDescendants().OfType<Panel>()
+          .Where(p => p.Classes.Contains("resultstab") && !p.Classes.Contains("main") && p.IsEffectivelyVisible)
+          .OrderBy(p => p.TranslatePoint(default, main)!.Value.X)
+          .Select(p => p.GetVisualDescendants().OfType<TextBlock>().First().Text).ToList();
+        CollectionAssert.AreEqual(vm.ResultsWindows.Select(r => r.Name).ToList(), shown, $"round {round}: names in the tabs' order");
+      }
+      vm.CloseResults(vm.ResultsWindows.Single(r => r != first && r != second));
+      Pump();
       Assert.IsTrue(Skewed(Shape(Tab(main, second))));
       Assert.IsTrue(Skewed(Shape(Tab(main, first))));
 

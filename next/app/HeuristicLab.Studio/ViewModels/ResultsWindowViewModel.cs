@@ -2,8 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace HeuristicLab.Studio.ViewModels;
 
-/// <summary>A faded tab in the second tab bar: where a dragged tab (or a window moved onto the bar) would land.</summary>
-public sealed record TabGhost(string Name, bool Docked);
 
 /// <summary>
 /// One more Results tab (to compare several selections side by side): docked in the second tab bar of the main

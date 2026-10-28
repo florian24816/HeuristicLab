@@ -54,49 +54,62 @@ public partial class MainWindow : Window
         window.Show();
     }
 
-    // ---- a results window moved onto the second tab bar: a faded tab shows where it would land; it docks back
-    // once it was let go there. The window manager moves windows and does not tell when the button is released:
-    // the window resting over the bar for a moment counts as let go.
+    // ---- a results window moved over the second tab bar: its tab's gap and ghost show where it would land; it docks
+    // back once the mouse button is let go there. The window manager moves windows without telling when the button
+    // is released: the button is asked for (GlobalMouse) while the window is over the bar; where that is unknown,
+    // the window resting there for DockAfter counts as let go.
 
-    /// <summary>How long a window must rest over the bar to dock back.</summary>
+    /// <summary>Where the button state is unknown: how long a window must rest over the bar to dock back.</summary>
     public static readonly TimeSpan DockAfter = TimeSpan.FromMilliseconds(500);
-    private Avalonia.Threading.DispatcherTimer? dockTimer;
+
+    /// <summary>Whether the left mouse button is held (tests replace it).</summary>
+    public Func<bool?> IsMouseDown { get; set; } = Services.GlobalMouse.IsLeftButtonDown;
+
+    private readonly Avalonia.Threading.DispatcherTimer dockTimer = new() { Interval = TimeSpan.FromMilliseconds(40) };
     private ResultsWindowViewModel? hovering;
     private int hoverIndex;
+    private DateTime restingSince;
 
     private void WindowMoved(ResultsWindowViewModel results, ResultsWindow window)
     {
-        if (subscribed is not { } main || results.IsDocked) return;
+        if (results.IsDocked) return;
         var top = new PixelPoint(window.Position.X + (int)(window.Bounds.Width / 2), window.Position.Y + 12);
-        WindowOver(results, ResultsBar.Covers(top) ? ResultsBar.IndexAt(top) : null);
+        WindowOver(results, ResultsBar.Covers(top) ? top : null);
     }
 
-    /// <summary>A results window is over the bar at this place (null: not over it): the faded tab, and docking once it rests.</summary>
-    public void WindowOver(ResultsWindowViewModel results, int? index)
+    /// <summary>A results window is over the bar at this screen point (null: not over it).</summary>
+    public void WindowOver(ResultsWindowViewModel results, PixelPoint? at)
     {
-        if (subscribed is not { } main) return;
-        dockTimer?.Stop();
-        if (index is not int at) {
-            if (ReferenceEquals(hovering, results)) main.PreviewTab(null, 0);
-            hovering = null;
+        if (at is not { } point) {
+            if (ReferenceEquals(hovering, results)) StopHovering();
             return;
         }
         hovering = results;
-        hoverIndex = at;
-        main.PreviewTab(results, at);
-        dockTimer ??= new Avalonia.Threading.DispatcherTimer { Interval = DockAfter };
-        dockTimer.Tick -= DockResting;
-        dockTimer.Tick += DockResting;
-        dockTimer.Start();
+        hoverIndex = ResultsBar.ShowArriving(results, point) ?? subscribed?.ResultsWindows.Count ?? 0;
+        restingSince = DateTime.Now;
+        if (!dockTimer.IsEnabled) {
+            dockTimer.Tick -= CheckLetGo;
+            dockTimer.Tick += CheckLetGo;
+            dockTimer.Start();
+        }
     }
 
-    private void DockResting(object? sender, EventArgs e)
+    private void StopHovering()
     {
-        dockTimer?.Stop();
-        if (hovering is { } results && subscribed is { } main) {
-            hovering = null;
-            main.Dock(results, hoverIndex);
-        }
+        hovering = null;
+        dockTimer.Stop();
+        ResultsBar.HideArriving();
+    }
+
+    /// <summary>While a window is over the bar: docks it back once the button is let go (or it rested, where unknown).</summary>
+    public void CheckLetGo(object? sender, EventArgs e)
+    {
+        if (hovering is not { } results || subscribed is not { } main) { dockTimer.Stop(); return; }
+        bool letGo = IsMouseDown() is bool down ? !down : DateTime.Now - restingSince >= DockAfter;
+        if (!letGo) return;
+        int index = hoverIndex;
+        StopHovering();
+        main.Dock(results, index);
     }
 
     // ---- closing the main window while results windows are open: asked first, as "Close windows" does

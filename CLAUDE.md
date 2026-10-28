@@ -249,15 +249,19 @@
   while docked, a rectangle while it is a window; the shown one in the logo orange). A click shows a docked tab in
   the main window (MainViewModel.SelectedResults / ShownAnalysis; its "Window name" field under the bar) or brings
   its window to the front; "Main results" shows the main tab and brings the main window to the front. A dragged
-  tab: a see-through copy follows the pointer (ResultsTabBar.Floating, in the adorner layer), the tab stays; along
-  the bar a faded tab (TabGhost in MainViewModel.BarItems, changed step by step - a reset during the tab's own
-  pointer event breaks Avalonia) shows where it lands and releasing moves it there (MoveResults; "Main results"
-  stays first); released well outside the bar it undocks (MainViewModel.Undock: a window of its own at the pointer -
-  Views/ResultsWindow with the same bar at its top, its own tab highlighted there, the name field below, title
-  bound live); released anywhere else nothing happens. A window moved over the main window's bar shows a faded
-  tab where it would land and docks back there when let go - the window manager moves windows without telling
-  when the button is released, so the window resting over the bar for MainWindow.DockAfter (0.5 s) counts as let
-  go (PositionChanged -> ResultsTabBar.Covers/IndexAt -> MainWindow.WindowOver -> MainViewModel.Dock). Closing the
+  tab disappears and one see-through copy (the ghost, ResultsTabBar.Ghost in the adorner layer, placed by its margin
+  - the adorner layer sets RenderTransform itself; clipping off) shows instead: along the bar in the gap where it
+  lands (the other tabs drawn shifted by RenderTransform; ResultsTabBar.Landing; released there: MoveResults -
+  "Main results" stays first), off the bar following the pointer (released well above/below: MainViewModel.Undock,
+  a window of its own at the pointer - Views/ResultsWindow with the same bar at its top, its own tab highlighted
+  there, the name field below, title bound live; anywhere else: back where it was). The tab list is never changed
+  while dragging and every change is posted after the pointer event (changing it inside the tab's pointer event
+  mixed up names, showed several ghosts and crashed); a stress test shuffles three tabs. A window moved over the
+  main window's bar shows its tab's gap and ghost (ShowArriving) and docks back there only when the mouse button is
+  let go (Services/GlobalMouse: X11 XQueryPointer on Linux, GetAsyncKeyState on Windows, polled every 40 ms while
+  it is over the bar; unknown elsewhere: resting MainWindow.DockAfter counts as let go) - the window manager moves
+  windows without telling when the button is released (PositionChanged -> MainWindow.WindowOver / CheckLetGo ->
+  MainViewModel.Dock). Closing the
   main window while results windows are open asks the same as "Close windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
   "Copy selection from main results tab" next to Refresh in further tabs (IsWindow; full orange while MatchesMain
   - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" there
