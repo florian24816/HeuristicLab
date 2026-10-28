@@ -123,6 +123,15 @@
             <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
             <Setter Property="CornerRadius" Value="0" />
         </Style>
+        <!-- "Close windows" (main Results tab): pale red -->
+        <Style Selector="Button.closewindows">
+            <Setter Property="Background" Value="#F6CACA" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
+        <Style Selector="Button.closewindows:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#EFB0B0" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
+        </Style>
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="#F4E803" />
             <Setter Property="Padding" Value="8,5" />

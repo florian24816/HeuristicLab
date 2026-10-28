@@ -302,6 +302,13 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   private readonly RunAnalysisViewModel? main;
   public bool IsWindow => Main != null;
 
+  /// <summary>The main Results tab's "Close windows" (closes all results windows, after asking).</summary>
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(ClosesWindows))]
+  public partial System.Windows.Input.ICommand? CloseWindowsCommand { get; set; }
+
+  public bool ClosesWindows => !IsWindow && CloseWindowsCommand != null;
+
   /// <summary>Raised when the ticks change (a results window compares its own with them).</summary>
   public event Action? TicksAltered;
 

@@ -17,6 +17,8 @@ public interface IDialogService {
   /// <summary>Chooses and loads a problem (benchmark instance or data) for this algorithm; null if cancelled.</summary>
   Task<IProblem?> PickProblemAsync(IAlgorithm algorithm);
   Task<bool> ConfirmAsync(string title, string message);
+  /// <summary>A message with only "OK": true when it is pressed, false when the dialog is closed instead.</summary>
+  Task<bool> AcknowledgeAsync(string title, string message) => ConfirmAsync(title, message);
   /// <summary>Asks for a whole number between min and max; null if cancelled.</summary>
   Task<int?> AskNumberAsync(string title, string message, int initial, int min, int max) => Task.FromResult<int?>(null);
   /// <summary>Asks for a line of text; null if cancelled.</summary>
@@ -62,6 +64,9 @@ public sealed class DialogService(Window owner, IFileDialogService fileDialogs) 
 
   public async Task<bool> ConfirmAsync(string title, string message) =>
     await new ConfirmWindow(title, message).ShowDialog<bool>(owner);
+
+  public async Task<bool> AcknowledgeAsync(string title, string message) =>
+    await new ConfirmWindow(title, message, yes: "OK", cancel: false).ShowDialog<bool>(owner);
 
   public async Task<int?> AskNumberAsync(string title, string message, int initial, int min, int max) =>
     await new NumberWindow(title, message, initial, min, max).ShowDialog<int?>(owner);

@@ -20,9 +20,20 @@ public partial class MainWindow : Window
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (subscribed != null) subscribed.ResultsWindowRequested -= ShowResultsWindow;
+        if (subscribed != null) {
+            subscribed.ResultsWindowRequested -= ShowResultsWindow;
+            subscribed.CloseResultsWindowsRequested -= CloseResultsWindows;
+        }
         subscribed = DataContext as MainViewModel;
-        if (subscribed != null) subscribed.ResultsWindowRequested += ShowResultsWindow;
+        if (subscribed != null) {
+            subscribed.ResultsWindowRequested += ShowResultsWindow;
+            subscribed.CloseResultsWindowsRequested += CloseResultsWindows;
+        }
+    }
+
+    private void CloseResultsWindows()
+    {
+        foreach (var window in OpenResultsWindows.ToArray()) window.Close();
     }
 
     private void ShowResultsWindow(ResultsWindowViewModel results)

@@ -30,6 +30,7 @@ public partial class MainViewModel : ViewModelBase {
     this.settingsStore = settingsStore;
     this.notifications = notifications;
     this.fileDialogs = fileDialogs;
+    this.dialogs = dialogs;
     var loaded = settingsStore?.Load();
     Workspace = new ExperimentWorkspaceViewModel(dialogs, fileDialogs, optimizer => {
       SelectedTab = RunsTab;
@@ -60,6 +61,12 @@ public partial class MainViewModel : ViewModelBase {
       Priority = Enum.TryParse<ResourcePriority>(loaded.ResourcePriority, out var priority) ? priority : ResourcePriority.Normal
     };
     Resources = new ResourcesViewModel(limits, _ => { if (Resources != null) SaveSettings(); }, StopEverything);
+    // the main Results tab closes the results windows ("Close windows", enabled while there are some)
+    RunAnalysis.CloseWindowsCommand = CloseResultsWindowsCommand;
+    ResultsWindows.CollectionChanged += (_, _) => {
+      OnPropertyChanged(nameof(HasResultsWindows));
+      CloseResultsWindowsCommand.NotifyCanExecuteChanged();
+    };
   }
 
   /// <summary>Dark or light mode (the square button at the top left), remembered in the settings.</summary>
@@ -122,6 +129,23 @@ public partial class MainViewModel : ViewModelBase {
 
   private int resultsWindowsMade;
   private readonly IFileDialogService? fileDialogs;
+  private readonly IDialogService? dialogs;
+
+  /// <summary>Asks the main window to close every results window.</summary>
+  public event Action? CloseResultsWindowsRequested;
+
+  /// <summary>"Close windows" (main Results tab): after "OK" in "n result windows are about to be closed", all of them.</summary>
+  [RelayCommand(CanExecute = nameof(HasResultsWindows))]
+  private async System.Threading.Tasks.Task CloseResultsWindowsAsync() {
+    int count = ResultsWindows.Count;
+    if (count == 0) return;
+    var message = count == 1 ? "1 result window is about to be closed" : $"{count} result windows are about to be closed";
+    if (dialogs != null && !await dialogs.AcknowledgeAsync("Close windows", message)) return;
+    CloseResultsWindowsRequested?.Invoke();
+    ResultsWindows.Clear();
+  }
+
+  public bool HasResultsWindows => ResultsWindows.Count > 0;
 
   /// <summary>Asks the main window to show a new results window.</summary>
   public event Action<ResultsWindowViewModel>? ResultsWindowRequested;

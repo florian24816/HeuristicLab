@@ -139,4 +139,64 @@ public class StudioResultsWindowTests {
       return true;
     }, CancellationToken.None);
   }
+
+  private sealed class Dialogs : HeuristicLab.Studio.Services.IDialogService {
+    public bool Answer { get; set; }
+    public List<string> Asked { get; } = [];
+    public Task<SetupResult?> NewSetupAsync() => Task.FromResult<SetupResult?>(null);
+    public Task<CatalogEntry?> PickAlgorithmAsync() => Task.FromResult<CatalogEntry?>(null);
+    public Task<IProblem?> PickProblemAsync(IAlgorithm algorithm) => Task.FromResult<IProblem?>(null);
+    public Task<bool> ConfirmAsync(string title, string message) => Task.FromResult(true);
+    public Task<bool> AcknowledgeAsync(string title, string message) { Asked.Add(message); return Task.FromResult(Answer); }
+  }
+
+  [TestMethod]
+  [Timeout(300_000)]
+  public async Task CloseWindowsAsksThenClosesThemAll() {
+    await session.Dispatch(async () => {
+      var dialogs = new Dialogs();
+      var vm = new MainViewModel(null, dialogs);
+      var main = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+      main.Show();
+      vm.Workspace.NewExperiment();
+      vm.SelectedTab = MainViewModel.ResultsTab;
+      Pump();
+      // in the main Results tab only, pale red, usable while results windows are open
+      var close = Shortcut(main, "Close windows");
+      Assert.AreEqual(Color.Parse("#F6CACA"), Fill(close));
+      Assert.IsFalse(close.Command!.CanExecute(null), "no windows yet");
+      vm.AddResultsWindowCommand.Execute(null);
+      vm.AddResultsWindowCommand.Execute(null);
+      Pump();
+      Assert.IsTrue(close.Command.CanExecute(null));
+      Assert.AreEqual(2, main.OpenResultsWindows.Count);
+      Assert.IsFalse(main.OpenResultsWindows[0].GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Close windows" && b.IsEffectivelyVisible),
+        "results windows copy from the main tab instead");
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-closewindows.png"));
+
+      // the dialog closed without "OK": nothing happens
+      dialogs.Answer = false;
+      await vm.CloseResultsWindowsCommand.ExecuteAsync(null);
+      CollectionAssert.AreEqual(new[] { "2 result windows are about to be closed" }, dialogs.Asked);
+      Assert.AreEqual(2, main.OpenResultsWindows.Count);
+      // "OK": all closed
+      dialogs.Answer = true;
+      await vm.CloseResultsWindowsCommand.ExecuteAsync(null);
+      Pump();
+      Assert.AreEqual(0, main.OpenResultsWindows.Count);
+      Assert.AreEqual(0, vm.ResultsWindows.Count);
+      Assert.IsFalse(close.Command.CanExecute(null));
+
+      // the dialog itself: only "OK" (closing it is the way back)
+      var ask = new ConfirmWindow("Close windows", "2 result windows are about to be closed", yes: "OK", cancel: false);
+      ask.Show(main);
+      Pump();
+      var buttons = ask.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible).Select(b => b.Content as string).ToList();
+      CollectionAssert.AreEqual(new[] { "OK" }, buttons);
+      ask.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-closewindows-dialog.png"));
+      ask.Close();
+      main.Close();
+      return true;
+    }, CancellationToken.None);
+  }
 }

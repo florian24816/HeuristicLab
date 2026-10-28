@@ -246,7 +246,10 @@
   tab when runs finish): instead of the main tabs a "Window name" field bound live to the title ("HL-Results: n",
   n counting up), ticked as the main tab at first (RunAnalysisViewModel.Main / CopySelectionFromMain, by source
   key), then on its own; "Copy selection from main results tab" next to its Refresh (IsWindow;
-  full orange while MatchesMain - the main tab raises TicksAltered when its ticks change).
+  full orange while MatchesMain - the main tab raises TicksAltered when its ticks change). The main Results tab
+  has "Close windows" there instead (Button.closewindows, pale red #F6CACA; enabled while windows are open):
+  IDialogService.AcknowledgeAsync - "n result windows are about to be closed" with only "OK" (ConfirmWindow
+  yes/cancel options; closing the dialog aborts) - then MainViewModel.CloseResultsWindowsRequested closes them.
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
   Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05), Run (one run's results with visualizations).
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
