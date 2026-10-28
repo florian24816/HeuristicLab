@@ -85,7 +85,17 @@
                                 ToolTip.Tip="Another Results tab in its own window (named in its title bar), to compare selections side by side" />
                     </StackPanel>
                 </TabItem.Header>
-                <ContentControl Content="{Binding RunAnalysis}" />
+                <!-- more Results tabs: a second tab bar ("Main results", then one tab per further results tab or window),
+                     the name of a selected docked one, and what is selected -->
+                <DockPanel>
+                    <views:ResultsTabBar x:Name="ResultsBar" DockPanel.Dock="Top" IsVisible="{Binding HasResultsWindows}" />
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="14,8,14,0"
+                                IsVisible="{Binding SelectedDocked, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <TextBlock Text="Window name" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        <TextBox Classes="windowname" Width="320" Text="{Binding SelectedDocked.Name, FallbackValue=''}" />
+                    </StackPanel>
+                    <ContentControl Content="{Binding ShownAnalysis}" />
+                </DockPanel>
             </TabItem>
             <TabItem Header="Scripts">
                 <ContentControl Content="{Binding Scripts}" />

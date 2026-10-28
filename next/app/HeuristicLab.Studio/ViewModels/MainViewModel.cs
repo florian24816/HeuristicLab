@@ -122,17 +122,108 @@ public partial class MainViewModel : ViewModelBase {
   /// <summary>Results tab: the runs of the workspace and of results folders, compared in tables, charts and tests.</summary>
   public RunAnalysisViewModel RunAnalysis { get; }
 
-  // ---- results windows: more Results tabs, each in its own window
+  // ---- more Results tabs: in a second tab bar of the Results tab, or each in a window of its own
 
-  /// <summary>The results windows open now.</summary>
+  /// <summary>
+  /// The results tabs besides "Main results" (user's request 2026-10-28): "Add window" adds one docked in the second
+  /// tab bar and selects it; dragged out of the bar it becomes a window (and back when the window is moved onto the bar).
+  /// </summary>
   public System.Collections.ObjectModel.ObservableCollection<ResultsWindowViewModel> ResultsWindows { get; } = [];
 
   private int resultsWindowsMade;
   private readonly IFileDialogService? fileDialogs;
   private readonly IDialogService? dialogs;
 
-  /// <summary>Asks the main window to close every results window.</summary>
-  public event Action? CloseResultsWindowsRequested;
+  /// <summary>The results tab shown in the main window's Results tab; null: "Main results".</summary>
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(ShownAnalysis), nameof(IsMainResultsShown), nameof(SelectedDocked))]
+  public partial ResultsWindowViewModel? SelectedResults { get; set; }
+
+  partial void OnSelectedResultsChanged(ResultsWindowViewModel? value) {
+    foreach (var results in ResultsWindows) results.IsSelected = ReferenceEquals(results, value);
+  }
+
+  /// <summary>What the main window's Results tab shows: the selected docked tab, else the main results.</summary>
+  public RunAnalysisViewModel ShownAnalysis => SelectedResults is { IsDocked: true } selected ? selected.Analysis : RunAnalysis;
+
+  public bool IsMainResultsShown => SelectedResults == null;
+
+  /// <summary>The selected docked tab (its name field shows under the bar), null for "Main results".</summary>
+  public ResultsWindowViewModel? SelectedDocked => SelectedResults is { IsDocked: true } selected ? selected : null;
+
+  public bool HasResultsWindows => ResultsWindows.Count > 0;
+
+  /// <summary>Asks the main window to show this results tab as a window (it was dragged out of the bar).</summary>
+  public event Action<ResultsWindowViewModel>? ResultsWindowRequested;
+
+  /// <summary>Asks the main window to close this results tab's window (docked again, or closed).</summary>
+  public event Action<ResultsWindowViewModel>? ResultsWindowCloseRequested;
+
+  /// <summary>Asks to bring a window to the front: a results tab's window, or (null) the main window.</summary>
+  public event Action<ResultsWindowViewModel?>? ActivateRequested;
+
+  [RelayCommand]
+  private void AddResultsWindow() => OpenResultsWindow();
+
+  /// <summary>A new results tab ("HL-Results: n"), docked in the second bar and selected, ticked as the main Results tab is now.</summary>
+  public ResultsWindowViewModel OpenResultsWindow() {
+    var analysis = new RunAnalysisViewModel(Workspace, fileDialogs) { Main = RunAnalysis };
+    analysis.CopySelectionFromMain();
+    var results = new ResultsWindowViewModel(++resultsWindowsMade, analysis);
+    ResultsWindows.Add(results);
+    SelectResults(results);
+    return results;
+  }
+
+  /// <summary>
+  /// A click on a tab of the second bar: a docked one is shown in the main window's Results tab, a window comes to
+  /// the front; "Main results" (null) shows the main results and brings the main window to the front.
+  /// </summary>
+  public void SelectResults(ResultsWindowViewModel? results) {
+    if (results is { IsDocked: false }) {
+      ActivateRequested?.Invoke(results);
+      return;
+    }
+    SelectedResults = results;
+    SelectedTab = ResultsTab;
+    OnPropertyChanged(nameof(ShownAnalysis));
+    if (results == null) ActivateRequested?.Invoke(null);
+  }
+
+  /// <summary>A tab dragged out of the bar: a window of its own (shown at this screen position, if given).</summary>
+  public void Undock(ResultsWindowViewModel results, Avalonia.PixelPoint? at = null) {
+    if (!results.IsDocked || !ResultsWindows.Contains(results)) return;
+    results.WindowAt = at;
+    results.IsDocked = false;
+    if (ReferenceEquals(SelectedResults, results)) SelectedResults = null;
+    RefreshShown();
+    ResultsWindowRequested?.Invoke(results);
+  }
+
+  /// <summary>A window moved onto the second bar: back in the main window, selected.</summary>
+  public void Dock(ResultsWindowViewModel results) {
+    if (results.IsDocked || !ResultsWindows.Contains(results)) return;
+    results.IsDocked = true;
+    ResultsWindowCloseRequested?.Invoke(results);
+    SelectResults(results);
+    ActivateRequested?.Invoke(null);
+  }
+
+  /// <summary>The small cross of a tab: the results tab goes (its window too).</summary>
+  public void CloseResults(ResultsWindowViewModel results) {
+    if (!ResultsWindows.Remove(results)) return;
+    if (ReferenceEquals(SelectedResults, results)) SelectedResults = null;
+    RefreshShown();
+    if (!results.IsDocked) {
+      results.IsDocked = true;  // closing its window is no longer a "closed by the user"
+      ResultsWindowCloseRequested?.Invoke(results);
+    }
+  }
+
+  private void RefreshShown() {
+    OnPropertyChanged(nameof(ShownAnalysis));
+    OnPropertyChanged(nameof(SelectedDocked));
+  }
 
   /// <summary>"Close windows" (main Results tab): after "OK" in "n result windows are about to be closed", all of them.</summary>
   [RelayCommand(CanExecute = nameof(HasResultsWindows))]
@@ -141,30 +232,13 @@ public partial class MainViewModel : ViewModelBase {
     if (count == 0) return;
     var message = count == 1 ? "1 result window is about to be closed" : $"{count} result windows are about to be closed";
     if (dialogs != null && !await dialogs.AcknowledgeAsync("Close windows", message)) return;
-    CloseResultsWindowsRequested?.Invoke();
-    ResultsWindows.Clear();
+    foreach (var results in ResultsWindows.ToList()) CloseResults(results);
   }
 
-  public bool HasResultsWindows => ResultsWindows.Count > 0;
-
-  /// <summary>Asks the main window to show a new results window.</summary>
-  public event Action<ResultsWindowViewModel>? ResultsWindowRequested;
-
-  /// <summary>A new results window ("HL-Results: n"), ticked as the main Results tab is now.</summary>
-  [RelayCommand]
-  private void AddResultsWindow() => OpenResultsWindow();
-
-  public ResultsWindowViewModel OpenResultsWindow() {
-    var analysis = new RunAnalysisViewModel(Workspace, fileDialogs) { Main = RunAnalysis };
-    analysis.CopySelectionFromMain();
-    var window = new ResultsWindowViewModel(++resultsWindowsMade, analysis);
-    ResultsWindows.Add(window);
-    ResultsWindowRequested?.Invoke(window);
-    return window;
+  /// <summary>A results window was closed by the user (its title bar's X): the tab goes too.</summary>
+  public void ResultsWindowClosed(ResultsWindowViewModel window) {
+    if (!window.IsDocked) CloseResults(window);
   }
-
-  /// <summary>A results window was closed.</summary>
-  public void ResultsWindowClosed(ResultsWindowViewModel window) => ResultsWindows.Remove(window);
 
   /// <summary>C# scripts (HeuristicLab's script samples, or new ones).</summary>
   public ScriptsViewModel Scripts { get; } = new();

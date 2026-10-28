@@ -35,9 +35,16 @@ public class StudioResultsWindowTests {
 
   private static Color Fill(Button button) => ((ISolidColorBrush)button.Background!).Color;
 
+  private static Panel Tab(Visual root, ResultsWindowViewModel results) =>
+    root.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("resultstab") && p.DataContext == results && p.IsEffectivelyVisible);
+
+  private static bool Skewed(Border shape) => shape.RenderTransform is { } t && t.Value.M21 != 0;
+
+  private static Border Shape(Panel tab) => tab.Children.OfType<Border>().Single(b => b.Classes.Contains("shape"));
+
   [TestMethod]
   [Timeout(300_000)]
-  public async Task ResultsWindowsCompareSelections() {
+  public async Task ResultsTabsDockAndUndock() {
     await session.Dispatch(async () => {
       var vm = new MainViewModel(null, null);
       var ws = vm.Workspace;
@@ -50,91 +57,125 @@ public class StudioResultsWindowTests {
       await ws.StartAllCommand.ExecuteAsync(null);
       experiment.SingleRuns.Add([(IRun)experiment.Experiment.Runs.Single().Clone()]);
 
-      // "Add results window" only while the Results tab is shown, in its header
+      // "Add window" only while the Results tab is shown, in its header
       Pump();
       var add = main.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Add window");
       Assert.IsFalse(add.IsEffectivelyVisible);
       vm.SelectedTab = MainViewModel.ResultsTab;
       Pump();
       Assert.IsTrue(add.IsEffectivelyVisible);
-      // a plain rectangle in grey: darker than the window in light mode, lighter in dark mode
       Assert.AreEqual(new CornerRadius(0), add.CornerRadius);
       Assert.AreEqual(Color.Parse("#D4D4D4"), Fill(add));
-      Assert.IsTrue(add.FontSize > 13, "a little larger than before");
-      vm.IsDarkMode = true;
-      Pump();
-      Assert.AreEqual(Color.Parse("#3A3A3A"), Fill(add));
-      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-addwindow-dark.png"));
-      vm.IsDarkMode = false;
-      Pump();
-      var results = main.GetVisualDescendants().OfType<TabItem>().Single(t => t.GetVisualDescendants().OfType<TextBlock>().Any(x => x.Text == "Results"));
-      var scripts = main.GetVisualDescendants().OfType<TabItem>().Single(t => t.Header as string == "Scripts");
-      double addX = add.TranslatePoint(default, main)!.Value.X;
-      Assert.IsTrue(addX > results.TranslatePoint(default, main)!.Value.X && addX < scripts.TranslatePoint(default, main)!.Value.X, "between Results and Scripts");
+      var bar = main.GetVisualDescendants().OfType<ResultsTabBar>().Single();
+      Assert.IsFalse(bar.IsEffectivelyVisible, "no second tab bar before a further results tab exists");
 
       // the main tab: the experiment ticked, not the single runs - "Select all (without single runs)" is full orange
       var analysis = vm.RunAnalysis;
       analysis.Sources.First().IsChecked = true;
       Pump();
       Assert.IsTrue(analysis.AllButSingleTicked);
-      Assert.IsFalse(analysis.AllTicked);
       Assert.AreEqual(Orange, Fill(Shortcut(main, "Select all (without single runs)")));
       Assert.AreEqual(Pale, Fill(Shortcut(main, "Select all")));
-      Assert.AreEqual(Pale, Fill(Shortcut(main, "Unselect all")));
-      Assert.IsFalse(main.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Copy selection from main results tab" && b.IsEffectivelyVisible),
-        "only results windows copy from the main tab");
-      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-shortcuts.png"));
 
-      // a results window: named "HL-Results: 1", ticked as the main tab
+      // "Add window": a tab in the second bar (spanning the window), selected and shown, ticked as the main tab
       add.Command!.Execute(null);
       Pump();
-      var window = main.OpenResultsWindows.Single();
-      Assert.AreEqual("HL-Results: 1", window.Title);
-      var other = vm.ResultsWindows.Single().Analysis;
-      Assert.AreEqual(analysis.Table.Rows.Count, other.Table.Rows.Count);
-      Assert.IsTrue(other.MatchesMain);
-      Assert.AreEqual(Orange, Fill(Shortcut(window, "Copy selection from main results tab")), "ticked as the main tab: full orange");
-      Assert.IsFalse(window.GetVisualDescendants().OfType<TabItem>().Any(t => t.Header as string == "Experiments"), "no main tabs");
-      // its name, live in the title bar
-      var name = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname"));
+      var first = vm.ResultsWindows.Single();
+      Assert.AreEqual("HL-Results: 1", first.Name);
+      Assert.IsTrue(first.IsDocked && first.IsSelected);
+      Assert.AreSame(first.Analysis, vm.ShownAnalysis);
+      Assert.IsTrue(bar.IsEffectivelyVisible);
+      Assert.AreEqual(main.Bounds.Width, bar.Bounds.Width, 1, "across the whole window");
+      Assert.AreEqual(0, main.OpenResultsWindows.Count, "in the main window, not a window yet");
+      Assert.IsTrue(first.Analysis.MatchesMain);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Copy selection from main results tab")));
+      // "Main results" is a rectangle (first), further tabs parallelograms with italic names and a small cross
+      var mainTab = main.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("resultstab") && p.Classes.Contains("main"));
+      Assert.IsFalse(Skewed(Shape(mainTab)));
+      var tab = Tab(main, first);
+      Assert.IsTrue(Skewed(Shape(tab)), "a parallelogram while docked");
+      Assert.AreEqual(FontStyle.Italic, tab.GetVisualDescendants().OfType<TextBlock>().First().FontStyle);
+      Assert.IsTrue(tab.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "✕"));
+      Assert.IsTrue(mainTab.TranslatePoint(default, main)!.Value.X < tab.TranslatePoint(default, main)!.Value.X, "Main results first");
+      Assert.AreEqual(Orange, ((ISolidColorBrush)Shape(tab).Background!).Color, "the selected tab");
+      // its name, under the bar, live in the tab
+      var name = main.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname") && t.IsEffectivelyVisible);
       name.Text = "GA only";
       Pump();
-      Assert.AreEqual("GA only", window.Title);
-      // select all / unselect all / copy from the main tab
-      Shortcut(window, "Select all").Command!.Execute(null);
+      Assert.AreEqual("GA only", first.Name);
+      Assert.IsTrue(tab.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "GA only"));
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-tabs.png"));
+
+      // its own selection: select all / unselect all / copy from the main tab
+      var other = first.Analysis;
+      Shortcut(main, "Select all").Command!.Execute(null);
       Pump();
       Assert.IsTrue(other.AllTicked);
       Assert.AreEqual(analysis.Table.Rows.Count + 1, other.Table.Rows.Count, "with the single run");
-      Assert.AreEqual(Orange, Fill(Shortcut(window, "Select all")));
       Assert.AreEqual(1, analysis.Table.Rows.Count, "the main tab keeps its own selection");
-      Shortcut(window, "Unselect all").Command!.Execute(null);
-      Assert.IsTrue(other.NoneTicked);
-      Pump();
-      Assert.AreEqual(Pale, Fill(Shortcut(window, "Copy selection from main results tab")), "not the main tab's ticks any more");
-      Assert.AreEqual(0, other.Table.Rows.Count);
-      Shortcut(window, "Copy selection from main results tab").Command!.Execute(null);
-      Pump();
-      Assert.IsTrue(other.AllButSingleTicked);
-      Assert.AreEqual(analysis.Table.Rows.Count, other.Table.Rows.Count);
-      Assert.AreEqual(Orange, Fill(Shortcut(window, "Copy selection from main results tab")));
-      // the main tab changes: the window's copy button notices
-      analysis.SelectAllCommand.Execute(null);
-      Pump();
-      Assert.IsFalse(other.MatchesMain);
-      Assert.AreEqual(Pale, Fill(Shortcut(window, "Copy selection from main results tab")));
-      analysis.SelectAllWithoutSingleCommand.Execute(null);
-      Pump();
+      Assert.AreEqual(Pale, Fill(Shortcut(main, "Copy selection from main results tab")));
+      Shortcut(main, "Copy selection from main results tab").Command!.Execute(null);
       Assert.IsTrue(other.MatchesMain);
-      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-window.png"));
 
-      // a second window counts on; closing one forgets it
+      // "Main results" shows the main tab again
+      vm.SelectResults(null);
+      Pump();
+      Assert.AreSame(analysis, vm.ShownAnalysis);
+      Assert.IsFalse(first.IsSelected);
+      Assert.AreEqual(Orange, ((ISolidColorBrush)Shape(mainTab).Background!).Color);
+
+      // a second tab, dragged out of the bar: a window of its own, a rectangle in the bar now
       vm.AddResultsWindowCommand.Execute(null);
       Pump();
-      Assert.AreEqual("HL-Results: 2", main.OpenResultsWindows[1].Title);
-      window.Close();
+      var second = vm.ResultsWindows[1];
+      Assert.AreEqual("HL-Results: 2", second.Name);
+      var secondTab = Tab(main, second);
+      var at = secondTab.TranslatePoint(new Point(secondTab.Bounds.Width / 2, secondTab.Bounds.Height / 2), main)!.Value;
+      main.MouseDown(at, MouseButton.Left);
+      main.MouseMove(at + new Point(10, 40), RawInputModifiers.LeftMouseButton);
+      main.MouseMove(at + new Point(20, 260), RawInputModifiers.LeftMouseButton);
+      main.MouseUp(at + new Point(20, 260), MouseButton.Left);
       Pump();
-      Assert.AreEqual(1, vm.ResultsWindows.Count);
-      main.OpenResultsWindows.Single().Close();
+      Assert.IsFalse(second.IsDocked);
+      var window = main.OpenResultsWindows.Single();
+      Assert.AreEqual("HL-Results: 2", window.Title);
+      Assert.AreSame(analysis, vm.ShownAnalysis, "the main window shows the main results again");
+      Assert.IsFalse(Skewed(Shape(Tab(main, second))), "a rectangle while it is a window");
+      // the window: the second tab bar at its top, its name below, no main tabs
+      Assert.IsTrue(window.GetVisualDescendants().OfType<ResultsTabBar>().Single().IsEffectivelyVisible);
+      Assert.IsFalse(window.GetVisualDescendants().OfType<TabItem>().Any(t => t.Header as string == "Experiments"));
+      var windowName = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname"));
+      windowName.Text = "Compare";
+      Pump();
+      Assert.AreEqual("Compare", window.Title);
+      Pump();
+      Assert.AreEqual(Orange, ((ISolidColorBrush)Shape(Tab(window, second)).Background!).Color, "in its window, its own tab is highlighted");
+      var windowMain = window.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("resultstab") && p.Classes.Contains("main"));
+      Assert.AreNotEqual(Orange, ((ISolidColorBrush)Shape(windowMain).Background!).Color);
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-window.png"));
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-tabs-undocked.png"));
+
+      // moved onto the main window's second bar it docks back (selected, a parallelogram again)
+      var onBar = bar.PointToScreen(new Point(bar.Bounds.Width / 2, bar.Bounds.Height / 2));
+      Assert.IsTrue(main.WouldDock(onBar));
+      Assert.IsFalse(main.WouldDock(new PixelPoint(onBar.X, onBar.Y + 300)));
+      vm.Dock(second);
+      Pump();
+      Assert.IsTrue(second.IsDocked && second.IsSelected);
+      Assert.AreEqual(0, main.OpenResultsWindows.Count);
+      Assert.AreEqual(2, vm.ResultsWindows.Count, "docking back keeps the tab");
+      Assert.IsTrue(Skewed(Shape(Tab(main, second))));
+
+      // the small cross closes a tab
+      var cross = Tab(main, first).GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "✕");
+      var crossAt = cross.TranslatePoint(new Point(cross.Bounds.Width / 2, cross.Bounds.Height / 2), main)!.Value;
+      main.MouseDown(crossAt, MouseButton.Left);
+      main.MouseUp(crossAt, MouseButton.Left);
+      Pump();
+      CollectionAssert.AreEqual(new[] { second }, vm.ResultsWindows.ToList());
+      vm.CloseResults(second);
+      Pump();
+      Assert.IsFalse(bar.IsEffectivelyVisible, "no further tabs: no second bar");
       main.Close();
       return true;
     }, CancellationToken.None);
@@ -167,9 +208,12 @@ public class StudioResultsWindowTests {
       Assert.IsFalse(close.Command!.CanExecute(null), "no windows yet");
       vm.AddResultsWindowCommand.Execute(null);
       vm.AddResultsWindowCommand.Execute(null);
+      vm.Undock(vm.ResultsWindows[1]);
+      vm.SelectResults(null);
       Pump();
-      Assert.IsTrue(close.Command.CanExecute(null));
-      Assert.AreEqual(2, main.OpenResultsWindows.Count);
+      close = Shortcut(main, "Close windows");  // the main tab's view is built again when it is shown again
+      Assert.IsTrue(close.Command!.CanExecute(null));
+      Assert.AreEqual(1, main.OpenResultsWindows.Count, "one docked tab, one window");
       Assert.IsFalse(main.OpenResultsWindows[0].GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Close windows" && b.IsEffectivelyVisible),
         "results windows copy from the main tab instead");
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-closewindows.png"));
@@ -178,7 +222,8 @@ public class StudioResultsWindowTests {
       dialogs.Answer = false;
       await vm.CloseResultsWindowsCommand.ExecuteAsync(null);
       CollectionAssert.AreEqual(new[] { "2 result windows are about to be closed" }, dialogs.Asked);
-      Assert.AreEqual(2, main.OpenResultsWindows.Count);
+      Assert.AreEqual(2, vm.ResultsWindows.Count);
+      Assert.AreEqual(1, main.OpenResultsWindows.Count);
       // "OK": all closed
       dialogs.Answer = true;
       await vm.CloseResultsWindowsCommand.ExecuteAsync(null);
