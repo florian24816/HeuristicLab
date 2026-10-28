@@ -28,12 +28,10 @@ It contains:
 
 | | Windows | Linux |
 |---|---|---|
-| **.NET 10 SDK** (required) | `winget install e below |
+| **.NET 10 SDK** (required) | `winget install below |
 | **Git** (required) | `winget install Git.Git` | `sudo apt install git` / `sudo dnf install git` |
-| Python 3 + pandas, seaborn (optional, for thetall Python.Python.3.12`, then `pip install
-pandas seaborn matplotlib` | `sudo apt install python3-pandas python3-seaborn` or `pip install pandas seaborn matplotlib` |
-| Desktop notifications (optional) | built in |otify-bin` on Debian/Ubuntu, `libnotify` on
-Fedora) |
+| Desktop notifications (optional) | built in |notify-bin` on Debian/Ubuntu, `libnotify` on
+Fedora |
 
 #### Windows
 
@@ -64,7 +62,7 @@ Fedora) |
    ```
 3. Check: `dotnet --version` should print `10.0
 
-### Get, build and run
+### Get, build and run (preferred method of running the project)
 
 ```bash
 git clone https://github.com/florian24816/HeuristicLab.git
@@ -80,7 +78,9 @@ The command-line tool:
 dotnet run --project next/app/HeuristicLab.Cli -- list algorithms
 ```
 
-### Install for everyday use (Linux)
+### Install for everyday use (not tested)
+
+On Linux:
 
 ```bash
 next/tools/install.sh              # installs hl and hl-studio into ~/.local/bin, plus a desktop entry
