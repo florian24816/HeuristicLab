@@ -26,12 +26,12 @@ It contains:
 
 ### What you need
 
-| | Windows | Linux |
-|---|---|---|
-| **.NET 10 SDK** (required) | `winget install below |
-| **Git** (required) | `winget install Git.Git` | `sudo apt install git` / `sudo dnf install git` |
-| Desktop notifications (optional) | built in |notify-bin` on Debian/Ubuntu, `libnotify` on
-Fedora |
+  | | Windows | Linux |
+  |---|---|---|
+  | .NET 10 SDK (required) | winget install Microsoft.DotNet.SDK.10 | see below |
+  | Git (required) | winget install Git.Git | sudo apt install git / sudo dnf install git |
+  | Python 3 + pandas, seaborn (optional, for the Python export) | winget install Python.Python.3.12, then pip install pandas seaborn matplotlib | sudo apt install python3-pandas python3-seaborn or pip install pandas seaborn matplotlib |
+  | Desktop notifications (optional) | built in | notify-send (package libnotify-bin on Debian/Ubuntu, libnotify on Fedora) |
 
 #### Windows
 
