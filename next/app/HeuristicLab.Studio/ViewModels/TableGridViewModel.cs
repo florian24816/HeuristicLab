@@ -24,6 +24,12 @@ public sealed partial class GridRow(object item, Func<GridRow, IReadOnlyList<Gri
   /// <summary>Built when the row is first drawn: a long table makes cells only for the rows on screen.</summary>
   public IReadOnlyList<GridCell> Cells => built ??= cells(this);
 
+  /// <summary>Its colors changed: the cells are made again (when drawn).</summary>
+  internal void Rebuild() {
+    built = null;
+    OnPropertyChanged(nameof(Cells));
+  }
+
   [ObservableProperty]
   public partial bool IsSelected { get; set; }
 }
@@ -57,9 +63,28 @@ public partial class TableGridViewModel : ViewModelBase {
     Rows = rows.Select((r, index) => {
       double strength = index % 2 == 0 ? 1 : WeakRow;
       var texts = r.Texts;
-      return new GridRow(r.Item, row => columns.Select((c, i) => new GridCell(i < texts.Count ? texts[i] : "", Brush(colors[i], strength), c.Width, c.Fixed != null, row)).ToList());
+      return new GridRow(r.Item, row => {
+        // a row may wear other colors in its fixed columns (a run open in a window), in their order
+        var tint = FixedTint?.Invoke(row.Item);
+        int fixedIndex = 0;
+        return columns.Select((c, i) => {
+          var color = c.Fixed != null && tint != null && fixedIndex < tint.Count ? tint[fixedIndex++] : colors[i];
+          return new GridCell(i < texts.Count ? texts[i] : "", Brush(color, strength), c.Width, c.Fixed != null, row);
+        }).ToList();
+      });
     }).ToList();
     ShownRows = Rows.Count > Limit ? Rows.Take(Limit).ToList() : Rows;
+  }
+
+  /// <summary>Other colors for a row's fixed columns (null: their own).</summary>
+  public Func<object, IReadOnlyList<Color>?>? FixedTint { get; set; }
+
+  /// <summary>The menu of a row (right-click), if any.</summary>
+  public Func<object, IReadOnlyList<MenuChoice>>? RowMenu { get; set; }
+
+  /// <summary><see cref="FixedTint"/> changed: the rows are colored again.</summary>
+  public void Retint() {
+    foreach (var row in Rows) row.Rebuild();
   }
 
   /// <summary>Rows shown before the table is expanded.</summary>

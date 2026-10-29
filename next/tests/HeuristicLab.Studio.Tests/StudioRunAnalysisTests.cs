@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.VisualTree;
 using HeuristicLab.Next.Runtime;
@@ -318,12 +320,76 @@ public class StudioRunAnalysisTests {
       StringAssert.StartsWith(analysis.AllGroupsTest, "Kruskal-Wallis over all 2 groups");
       Shot("statistics");
 
-      // one run: its parameters and results, with the problem's picture of its best solution
-      analysis.SelectedView = RunAnalysisViewModel.RunView;
-      analysis.SelectedRow = analysis.Rows[0];
-      Assert.AreEqual("Best TSP Solution", analysis.SelectedRunResult!.Name);
-      Assert.IsTrue(analysis.RunResultDetail!.HasVisualization);
-      Shot("run");
+      // one run in a window of its own (right-click a row: "Open run in window"; the Run view is gone): its
+      // parameters and results, the problem's picture of its best solution; its row wears the window's color
+      Assert.AreEqual(3, window.GetVisualDescendants().OfType<TabItem>().Count(t => t.IsEffectivelyVisible && t.Parent is TabControl { Name: "Views" }));
+      analysis.SelectedView = RunAnalysisViewModel.TableView;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var results = window.GetVisualDescendants().OfType<RunAnalysisView>().First(v => v.IsEffectivelyVisible);
+      var gridView = results.GetVisualDescendants().OfType<TableGridView>().First(v => v.IsEffectivelyVisible);
+      List<Avalonia.Controls.Border> TableRows() => gridView.GetVisualDescendants().OfType<Avalonia.Controls.Border>().Where(b => b.Classes.Contains("row")).ToList();
+      Avalonia.Point RowAt(int i) => TableRows()[i].TranslatePoint(new Avalonia.Point(40, 10), window)!.Value;
+      // a click elsewhere in the tab ends the selection of sources
+      analysis.Sources.First().IsSelected = true;
+      window.MouseDown(RowAt(0), Avalonia.Input.MouseButton.Left);
+      window.MouseUp(RowAt(0), Avalonia.Input.MouseButton.Left);
+      Assert.IsFalse(analysis.AllSourceNodes.Any(n => n.IsSelected), "a click in the table unselects the sources");
+      window.MouseDown(RowAt(1), Avalonia.Input.MouseButton.Right);
+      window.MouseUp(RowAt(1), Avalonia.Input.MouseButton.Right);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.AreSame(analysis.Rows[1], analysis.SelectedRow, "a right-click selects the row");
+      var menu = gridView.Menu!;
+      Assert.IsTrue(menu.IsOpen);
+      CollectionAssert.AreEqual(new[] { "Open run in window" }, menu.Items.Cast<Avalonia.Controls.MenuItem>().Select(m => m.Header as string).ToList());
+      Shot("run-menu");
+      ((Avalonia.Controls.MenuItem)menu.Items[0]!).Command!.Execute(null);
+      menu.Close();
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var runWindow = results.RunWindows.Single();
+      var run = (RunWindowViewModel)runWindow.DataContext!;
+      Assert.AreEqual("Best TSP Solution", run.SelectedResult!.Name);
+      Assert.IsTrue(run.ResultDetail!.HasVisualization);
+      var cyan = RunPalette.All[0];
+      Avalonia.Media.Color CellColor(int row, int column) => ((Avalonia.Media.ISolidColorBrush)analysis.Grid!.Rows[row].Cells[column].Background).Color;
+      // (row 1: every other row at the weaker strength)
+      Avalonia.Media.Color Weak(Avalonia.Media.Color c) => ((Avalonia.Media.ISolidColorBrush)TableGridViewModel.Brush(c, TableGridViewModel.WeakRow)).Color;
+      Assert.AreEqual(Weak(cyan.Source), CellColor(1, 0), "source, origin and run in the window's three shades");
+      Assert.AreEqual(Weak(cyan.Origin), CellColor(1, 1));
+      Assert.AreEqual(Weak(cyan.Run), CellColor(1, 2));
+      Assert.AreEqual(TableGridViewModel.SourceShade, CellColor(0, 0), "the other runs keep the orange");
+      // in the window the table: names on two shades of its color, values on the two greys, row by row
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var cells = runWindow.GetVisualDescendants().OfType<Avalonia.Controls.Border>().Where(b => b.Classes.Contains("runcell")).ToList();
+      Avalonia.Media.Color Fill(Avalonia.Controls.Border b) => ((Avalonia.Media.ISolidColorBrush)b.Background!).Color;
+      var names = cells.Where(b => b.Classes.Contains("name")).ToList();
+      var values = cells.Where(b => b.Classes.Contains("value")).ToList();
+      Assert.AreEqual(cyan.Origin, Fill(names[0]));
+      Assert.AreEqual(cyan.Source, Fill(names[1]));
+      Assert.AreEqual(TableGridViewModel.Grey, Fill(values[0]));
+      Assert.AreEqual(TableGridViewModel.LightGrey, Fill(values[1]));
+      runWindow.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-run-window.png"));
+      Shot("run-colored");
+      // a second run: the next color; the first one again: no second window
+      var second = analysis.OpenRunWindow(analysis.Rows[3]);
+      Assert.AreEqual(RunPalette.All[1], second.Palette);
+      analysis.OpenRunWindow(analysis.Rows[1]);
+      Assert.AreEqual(2, results.RunWindows.Count);
+      // closed: the orange is back
+      runWindow.Close();
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.AreEqual(Weak(TableGridViewModel.SourceShade), CellColor(1, 0));
+      Assert.AreEqual(1, analysis.RunWindows.Count);
+      // "Close all run view windows"
+      var closeAll = results.GetVisualDescendants().OfType<Avalonia.Controls.Button>().Single(b => b.Content as string == "Close all run view windows");
+      Assert.IsTrue(closeAll.IsEffectivelyEnabled);
+      closeAll.Command!.Execute(null);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.AreEqual(0, results.RunWindows.Count);
+      Assert.AreEqual(0, analysis.RunWindows.Count);
+      Assert.IsFalse(closeAll.Command.CanExecute(null));
+      // the main window closing takes them along
+      analysis.OpenRunWindow(analysis.Rows[2]);
+      Assert.AreEqual(1, results.RunWindows.Count);
 
       var csv = Path.Combine(Path.GetTempPath(), $"runs-{Guid.NewGuid():N}.csv");
       analysis.Export(csv);
@@ -332,6 +398,8 @@ public class StudioRunAnalysisTests {
       StringAssert.Contains(lines[0], "BestQuality (result)");
       File.Delete(csv);
       window.Close();
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.AreEqual(0, results.RunWindows.Count, "run windows close with the main window");
       return 0;
     }, CancellationToken.None);
   }

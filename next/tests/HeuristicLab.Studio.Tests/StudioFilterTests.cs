@@ -61,7 +61,7 @@ public class StudioFilterTests {
         }
       }
 
-      foreach (var view in new[] { RunAnalysisViewModel.TableView, RunAnalysisViewModel.ChartsView, RunAnalysisViewModel.StatisticsView, RunAnalysisViewModel.RunView }) {
+      foreach (var view in new[] { RunAnalysisViewModel.TableView, RunAnalysisViewModel.ChartsView, RunAnalysisViewModel.StatisticsView }) {
         foreach (var kind in view == RunAnalysisViewModel.ChartsView ? analysis.ChartKinds : ["-"]) {
           Step($"view {view} {kind}", () => {
             analysis.SelectedView = view;

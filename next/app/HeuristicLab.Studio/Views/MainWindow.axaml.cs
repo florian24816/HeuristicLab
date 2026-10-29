@@ -127,6 +127,13 @@ public partial class MainWindow : Window
         Close();
     }
 
+    /// <summary>Run windows close with the main window.</summary>
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        subscribed?.CloseAllRunWindows();
+    }
+
     private void CloseResultsWindow(ResultsWindowViewModel results)
     {
         if (windows.TryGetValue(results, out var window)) window.Close();

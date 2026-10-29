@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             xmlns:c="using:HeuristicLab.Studio.Controls"
+             x:Class="HeuristicLab.Studio.Views.RunWindowView"
+             x:DataType="vm:RunWindowViewModel">
+    <UserControl.Styles>
+        <!-- the run's table: names on the window's color, values on grey (fixed colors in both modes) -->
+        <Style Selector="Border.runcell">
+            <Setter Property="Padding" Value="6,4" />
+        </Style>
+        <Style Selector="Border.runcell TextBlock">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+    </UserControl.Styles>
+    <Grid ColumnDefinitions="400,4,*" Margin="10">
+        <Grid RowDefinitions="*,Auto,*">
+            <ScrollViewer>
+                <ItemsControl x:Name="Lines" ItemsSource="{Binding Lines}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RunDetailLine">
+                            <Grid ColumnDefinitions="170,*">
+                                <Border Classes="runcell name" Background="{Binding NameBackground}">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" ToolTip.Tip="{Binding Name}" />
+                                </Border>
+                                <Border Grid.Column="1" Classes="runcell value" Background="{Binding ValueBackground}">
+                                    <TextBlock Text="{Binding Value}" ToolTip.Tip="{Binding Value}" />
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <TextBlock Grid.Row="1" Text="Results of this run" FontWeight="SemiBold" Margin="0,8,0,4" />
+            <ListBox Grid.Row="2" ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ResultEntryViewModel">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <c:Pictogram Symbol="{Binding KindPictogram}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
+                                         ToolTip.Tip="{Binding KindTip}" Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding Summary}" FontFamily="monospace" Opacity="0.75" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+        <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+        <ContentControl Grid.Column="2" Margin="8,0,0,0" Content="{Binding ResultDetail}" />
+    </Grid>
+</UserControl>

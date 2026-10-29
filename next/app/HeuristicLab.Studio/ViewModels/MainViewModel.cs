@@ -210,9 +210,16 @@ public partial class MainViewModel : ViewModelBase {
     ActivateRequested?.Invoke(null);
   }
 
+  /// <summary>The main window closes: every run window goes (of the main Results tab and of the further ones).</summary>
+  public void CloseAllRunWindows() {
+    RunAnalysis.CloseRunWindows();
+    foreach (var results in ResultsWindows) results.Analysis.CloseRunWindows();
+  }
+
   /// <summary>The small cross of a tab: the results tab goes (its window too).</summary>
   public void CloseResults(ResultsWindowViewModel results) {
     if (!ResultsWindows.Remove(results)) return;
+    results.Analysis.CloseRunWindows();
     if (ReferenceEquals(SelectedResults, results)) SelectedResults = null;
     RefreshShown();
     if (!results.IsDocked) {

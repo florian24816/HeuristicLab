@@ -279,7 +279,18 @@
   AcknowledgeAsync - "n result windows are about to be closed" with only "OK" (closing the dialog aborts) - then
   all of them (docked and windows) go.
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
-  Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05), Run (one run's results with visualizations).
+  Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05).
+  No Run view any more (removed 2026-10-29, user's request): right-click a table row (TableGridViewModel.RowMenu,
+  TableGridView.RowMenu - selects it, then the menu) -> "Open run in window": Views/RunWindow (not owned) with
+  RunWindowView over RunWindowViewModel - the run's columns as a table (names on two shades of the window's color
+  alternating per row, values on Grey / LightGrey), its results and the selected result's picture. Each window
+  takes a RunPalette not in use (cyan, green, purple, pink, blue, teal; three shades like Source/Origin/Run's
+  orange): the run's Source/Origin/Run cells wear them while it is open (TableGridViewModel.FixedTint, Retint;
+  rows found by their IRun), orange again when it closes; opening an open run brings its window to the front.
+  "Close all run view windows" (Button.closewindows) next to "Export to Python..."; run windows also close with
+  their results tab (MainViewModel.CloseResults) and the main window (OnClosed -> CloseAllRunWindows). Only a
+  RunAnalysisView on screen opens them (subscribes while attached). A left click anywhere in the Results tab
+  outside the source list ends the selection of sources.
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
   process affinity (hard limit, Linux/Windows), threads per algorithm (1 = HeuristicLab's default
   SequentialEngine; more = ParallelEngine with that DegreeOfParallelism, set by Resources.Configure

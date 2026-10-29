@@ -41,7 +41,7 @@
                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:GridRow">
-                        <Border Classes="row" Tapped="RowTapped" Background="Transparent">
+                        <Border Classes="row" Tapped="RowTapped" ContextRequested="RowMenu" Background="Transparent">
                             <ItemsControl Classes="cells" ItemsSource="{Binding Cells}">
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>

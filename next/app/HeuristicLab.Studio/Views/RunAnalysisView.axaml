@@ -90,7 +90,7 @@
 
             <!-- while a large table is built in the background: a bright layer over the views, an orange progress bar -->
             <Panel>
-            <TabControl Padding="0,6,0,0" SelectedIndex="{Binding SelectedView}">
+            <TabControl x:Name="Views" Padding="0,6,0,0" SelectedIndex="{Binding SelectedView}">
                 <TabItem Header="Table">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
@@ -98,7 +98,9 @@
                             <Button Content="Export CSV..." Command="{Binding ExportCommand}" ToolTip.Tip="The table as shown: filtered, sorted, these columns" />
                             <Button Content="Export to Python..." Command="{Binding ExportPythonCommand}"
                                     ToolTip.Tip="The shown runs as a Python module named after the experiment: its blocks as attributes (exp.batch_run_1.ga), typed parameters, results and curves, pandas tables via .df and compare(...)" />
-                            <TextBlock Text="Click a column title to sort; select a run to see it under Run." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
+                            <Button Classes="closewindows" Content="Close all run view windows" Command="{Binding CloseRunWindowsCommand}"
+                                    ToolTip.Tip="Close the windows of runs opened from this table" />
+                            <TextBlock Text="Click a column title to sort; right-click a run to open it in a window." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
                         </StackPanel>
                         <ContentControl Content="{Binding Grid}" HorizontalAlignment="Left" VerticalAlignment="Top" />
                     </DockPanel>
@@ -151,42 +153,6 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Run">
-                    <Grid ColumnDefinitions="360,4,*">
-                        <Panel>
-                            <TextBlock Text="Select a run in the table." Opacity="0.6" IsVisible="{Binding SelectedRow, Converter={x:Static ObjectConverters.IsNull}}" />
-                            <Grid RowDefinitions="*,Auto,*" IsVisible="{Binding SelectedRow, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                <ScrollViewer>
-                                    <ItemsControl ItemsSource="{Binding RunDetails}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:NameValue">
-                                                <Grid ColumnDefinitions="170,*" Margin="0,1">
-                                                    <TextBlock Text="{Binding Name}" Opacity="0.7" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding Value}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Value}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-                                <TextBlock Grid.Row="1" Text="Results of this run" FontWeight="SemiBold" Margin="0,8,0,4" />
-                                <ListBox Grid.Row="2" ItemsSource="{Binding RunResults}" SelectedItem="{Binding SelectedRunResult}">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ResultEntryViewModel">
-                                            <Grid ColumnDefinitions="Auto,*,Auto">
-                                                <c:Pictogram Symbol="{Binding KindPictogram}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
-                                                 ToolTip.Tip="{Binding KindTip}" Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
-                                                <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                                                <TextBlock Grid.Column="2" Text="{Binding Summary}" FontFamily="monospace" Opacity="0.75" Margin="8,0,0,0" VerticalAlignment="Center" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </Grid>
-                        </Panel>
-                        <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
-                        <ContentControl Grid.Column="2" Margin="8,0,0,0" Content="{Binding RunResultDetail}" />
-                    </Grid>
-                </TabItem>
             </TabControl>
             <Border Classes="busy" IsVisible="{Binding IsBusy}">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" Width="380">
