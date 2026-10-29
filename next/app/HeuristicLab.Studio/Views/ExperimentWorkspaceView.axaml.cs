@@ -233,7 +233,8 @@ public partial class ExperimentWorkspaceView : UserControl {
       e.Handled = true;
       return;
     }
-    if (ExperimentWorkspaceViewModel.Movable(block) is not { IsPicked: true }) Workspace?.ClearPicks();
+    // a plain click (no drag: that is no tap) ends picking several, also on a picked block
+    Workspace?.ClearPicks();
     block.SelectCommand.Execute(null);
   }
 

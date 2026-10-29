@@ -64,8 +64,8 @@
   TreeView's own selection highlight is turned off; buttons "Tick selected" / "Untick selected" / "Only
   selected" - tick them and untick all others). Experiments tab: Ctrl+click picks blocks (BlockViewModel.
   IsPicked, name field inverted to #1E1E1E/white in both modes - blocks keep fixed light fields), pressing on
-  empty space draws a rectangle (BandLayer) that picks the blocks it covers (Ctrl: adds); a plain click on a
-  block or on empty space clears them; dragging a picked block moves all picked ones (PickedGroup: tree
+  empty space draws a rectangle (BandLayer) that picks the blocks it covers (Ctrl: adds); a plain click on any
+  block (also a picked one; a drag is no click) or on empty space clears them; dragging a picked block moves all picked ones (PickedGroup: tree
   order, a block inside a picked container goes with it) one after the other to the target (MoveGroup;
   not into a time-limit run). Picked blocks belong to one experiment: the rectangle picks only in the experiment it
   started in (else the first touched block's), Ctrl+click in another experiment starts anew there. While the

@@ -248,9 +248,17 @@ public class StudioMultiSelectTests {
       Click(window, Center(Name(c), window), RawInputModifiers.Control);
       CollectionAssert.AreEquivalent(new[] { c }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
 
-      // two picked: the menu acts on all of them
+      // a plain click on a picked block ends picking several: only that one is selected
       Click(window, Center(Name(a), window), RawInputModifiers.Control);
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Assert.IsTrue(a.IsPicked && b.IsPicked);
+      Click(window, Center(Name(a), window));
+      Assert.IsFalse(ws.AllBlocks().Any(x => x.IsPicked), "a plain click unselects them");
+      Assert.AreSame(a, ws.Selected);
+
+      // two picked: the menu acts on all of them (B first: two quick clicks on A would be a double click)
+      Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
       CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
       var menu = a.Menu.Select(m => m.Display).ToList();
       CollectionAssert.IsSubsetOf(new[] { "Delete selected items", "Copy selected items", "Copy selected items n times..." }, menu);
@@ -259,8 +267,8 @@ public class StudioMultiSelectTests {
       a.Menu.Single(m => m.Display == "Copy selected items").Command.Execute(null);
       Pump();
       CollectionAssert.AreEqual(new[] { "A", "A (copy 1)", "B", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
-      Click(window, Center(Name(a), window), RawInputModifiers.Control);
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
       Assert.IsTrue(a.IsPicked && b.IsPicked);
       a.Menu.Single(m => m.Display == "Delete selected items").Command.Execute(null);
       Pump();
