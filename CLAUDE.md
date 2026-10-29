@@ -57,12 +57,17 @@
   runs of all experiments" when several have some; never while running; marks it unsaved. Several entries
   at once (IDialogService.ChooseAsync returns the picked indices).
   Selecting several (user's request): Controls/SweepSelection - click = one, Ctrl+click toggles, Shift+click
-  a range from the last clicked, press and sweep = the rows passed over; rows are visible "selectrow" Borders
-  whose DataContext is ViewModels.IPickable (tick boxes / expanders keep their own clicks). Selected rows
+  a range from the last clicked, press and drag (on a row or empty space) = a rectangle as in the Experiments
+  tab (see-through #2E6FD8 in the list's adorner layer, placed by its margin): rows whose height it reaches get
+  a blue frame meanwhile (class "bandcovered"), selected only when let go (Ctrl: added); a click on empty space
+  clears. Rows are visible "selectrow" Borders whose DataContext is ViewModels.IPickable (tick boxes / expanders
+  / scroll bars keep their own clicks; only the list's own capture loss cancels - a row's TreeViewItem loses
+  its capture to the list). Selected rows
   inverted by theme (App.axaml InvertBrush/InvertInkBrush: light mode #1E1E1E/white, dark #F2F2F2/#1E1E1E).
   Used by ChooseWindow (ChoiceRow) and the Results tab's source tree (RunSourceViewModel.IsSelected; the
-  TreeView's own selection highlight is turned off; buttons "Tick selected" / "Untick selected" / "Only
-  selected" - tick them and untick all others). Experiments tab: Ctrl+click picks blocks (BlockViewModel.
+  TreeView's own selection highlight is turned off; right-click on a source - RunAnalysisView.SourceMenu, a
+  source not selected is selected alone first - offers "Tick selected" / "Untick selected" / "Only selected" (tick
+  them and untick all others; one source: "Tick" / "Untick" / "Only this"); the buttons for it were removed). Experiments tab: Ctrl+click picks blocks (BlockViewModel.
   IsPicked, name field inverted to #1E1E1E/white in both modes - blocks keep fixed light fields), pressing on
   empty space draws a rectangle (BandLayer) that picks the blocks it covers (Ctrl: adds); a plain click on any
   block (also a picked one; a drag is no click) or on empty space clears them; dragging a picked block moves all picked ones (PickedGroup: tree

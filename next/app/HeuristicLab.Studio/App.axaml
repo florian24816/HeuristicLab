@@ -83,7 +83,13 @@
         <!-- rows selected among several (SweepSelection): inverted colors, by theme -->
         <Style Selector="Border.selectrow">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Padding" Value="6,3" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="Padding" Value="4,1" />
+        </Style>
+        <!-- under the rectangle being drawn: a blue frame (the rectangle's blue, as in the Experiments tab); inverted only once let go -->
+        <Style Selector="Border.selectrow.bandcovered">
+            <Setter Property="BorderBrush" Value="#2E6FD8" />
         </Style>
         <!-- the source tree selects its own way (several, inverted rows): no Fluent selection highlight -->
         <Style Selector="TreeView.sources TreeViewItem:selected /template/ Border#PART_LayoutRoot, TreeView.sources TreeViewItem:selected:pointerover /template/ Border#PART_LayoutRoot">

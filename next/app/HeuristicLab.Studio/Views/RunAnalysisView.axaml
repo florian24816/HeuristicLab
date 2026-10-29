@@ -21,20 +21,14 @@
                         Command="{Binding SelectAllWithoutSingleCommand}" />
                 <Button Classes="ticks" Classes.on="{Binding NoneTicked}" Content="Unselect all" Command="{Binding UnselectAllCommand}" />
             </WrapPanel>
-            <!-- several sources at once: select them (shown inverted), then tick / untick them, or tick only them -->
-            <WrapPanel DockPanel.Dock="Top" ItemSpacing="4" LineSpacing="4" Margin="0,0,0,6">
-                <Button Content="Tick selected" Command="{Binding TickSelectedCommand}" ToolTip.Tip="Tick the selected sources (and everything below them)" />
-                <Button Content="Untick selected" Command="{Binding UntickSelectedCommand}" ToolTip.Tip="Untick the selected sources" />
-                <Button Content="Only selected" Command="{Binding OnlySelectedCommand}" ToolTip.Tip="Tick the selected sources, untick all others" />
-            </WrapPanel>
             <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
-                       Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked). Select several sources (click a name, Ctrl+click, Shift+click, or press and sweep) to tick or untick them together." />
+                       Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked). Select several sources (click a name, Ctrl+click, Shift+click, or press and drag a rectangle), then right-click one of them to tick or untick them together." />
             <TreeView x:Name="SourceTree" Classes="sources" ItemsSource="{Binding Sources}">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate DataType="vm:RunSourceViewModel" ItemsSource="{Binding Children}">
                         <StackPanel Orientation="Horizontal" Spacing="2">
                             <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" MinWidth="0" />
-                            <Border Classes="selectrow" Classes.selected="{Binding IsSelected}">
+                            <Border Classes="selectrow" Classes.selected="{Binding IsSelected}" ContextRequested="SourceMenu">
                                 <StackPanel>
                                     <TextBlock Text="{Binding Label}" />
                                     <TextBlock Text="{Binding Kind}" FontSize="11" Opacity="0.6" />

@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -18,6 +20,31 @@ public partial class RunAnalysisView : UserControl {
   }
 
   public ChartsFullscreenWindow? Fullscreen { get; private set; }
+
+  /// <summary>
+  /// Right-click on a source: tick, untick or tick only the selected ones (a source not selected is selected alone
+  /// first). The menu is the last one opened (tests).
+  /// </summary>
+  public ContextMenu? Menu { get; private set; }
+
+  private void SourceMenu(object? sender, ContextRequestedEventArgs e) {
+    if (sender is not Control { DataContext: RunSourceViewModel source } row || DataContext is not RunAnalysisViewModel analysis) return;
+    e.Handled = true;
+    if (!source.IsSelected) {
+      foreach (var other in analysis.AllSourceNodes) if (other.IsSelected) other.IsSelected = false;
+      source.IsSelected = true;
+    }
+    int count = analysis.AllSourceNodes.Count(s => s.IsSelected);
+    MenuItem Item(string header, ICommand command, string tip) => new() { Header = header, Command = command, [ToolTip.TipProperty] = tip };
+    Menu = new ContextMenu {
+      ItemsSource = new[] {
+        Item(count > 1 ? "Tick selected" : "Tick", analysis.TickSelectedCommand, "Tick the selected sources (and everything below them)"),
+        Item(count > 1 ? "Untick selected" : "Untick", analysis.UntickSelectedCommand, "Untick the selected sources"),
+        Item(count > 1 ? "Only selected" : "Only this", analysis.OnlySelectedCommand, "Tick the selected sources, untick all others")
+      }
+    };
+    Menu.Open(row);
+  }
 
   private void OnFullscreen(object? sender, RoutedEventArgs e) => OpenFullscreen();
 
