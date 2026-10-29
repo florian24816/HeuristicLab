@@ -82,6 +82,9 @@ public partial class TableGridViewModel : ViewModelBase {
   /// <summary>The menu (right-click) for the selected rows' items, if any.</summary>
   public Func<IReadOnlyList<object>, IReadOnlyList<MenuChoice>>? RowMenu { get; set; }
 
+  /// <summary>How far the table is scrolled sideways (a table made again, e.g. sorted, starts there again).</summary>
+  public double ScrollX { get; set; }
+
   /// <summary>Several rows can be selected (Ctrl+click, Shift+click, a rectangle - Controls.SweepSelection).</summary>
   public bool MultiSelect { get; init; }
 

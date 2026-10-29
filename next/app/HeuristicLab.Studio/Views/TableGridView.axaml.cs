@@ -11,6 +11,46 @@ public partial class TableGridView : UserControl {
     // a table of several selectable rows: click, Ctrl+click, Shift+click, a rectangle (as the Results tab's sources)
     HeuristicLab.Studio.Controls.SweepSelection.Attach(this, () => DataContext is TableGridViewModel { MultiSelect: true } grid ? grid.Rows : [],
       "row", () => DataContext is TableGridViewModel { MultiSelect: true });
+    // the sideways position is the table's: a table made again (sorted) starts where the last one was (at the top)
+    Scroll.ScrollChanged += (_, _) => {
+      if (!restoring && DataContext is TableGridViewModel grid) grid.ScrollX = Scroll.Offset.X;
+    };
+  }
+
+  private bool restoring;
+
+  protected override void OnDataContextChanged(System.EventArgs e) {
+    base.OnDataContextChanged(e);
+    if (DataContext is not TableGridViewModel { ScrollX: > 0 } grid) return;
+    restoring = true;
+    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+      restoring = false;
+      if (ReferenceEquals(DataContext, grid)) Scroll.Offset = new Avalonia.Vector(grid.ScrollX, 0);
+    }, Avalonia.Threading.DispatcherPriority.Loaded);
+  }
+
+  // ---- several selected rows: a press anywhere else in the window (empty space, another tab, ...; not in a menu)
+  // unselects them (handler on the window: a press on empty space reaches only the window)
+
+  private TopLevel? top;
+
+  protected override void OnAttachedToVisualTree(Avalonia.VisualTreeAttachmentEventArgs e) {
+    base.OnAttachedToVisualTree(e);
+    top = TopLevel.GetTopLevel(this);
+    top?.AddHandler(PointerPressedEvent, ElsewherePressed, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+  }
+
+  protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e) {
+    base.OnDetachedFromVisualTree(e);
+    top?.RemoveHandler(PointerPressedEvent, ElsewherePressed);
+    top = null;
+  }
+
+  private void ElsewherePressed(object? sender, PointerPressedEventArgs e) {
+    if (DataContext is not TableGridViewModel { MultiSelect: true } grid) return;
+    for (var v = e.Source as Avalonia.Visual; v != null; v = Avalonia.VisualTree.VisualExtensions.GetVisualParent(v))
+      if (ReferenceEquals(v, this) || v is MenuItem or Avalonia.Controls.ContextMenu) return;
+    grid.Mark(null);
   }
 
   private void RowTapped(object? sender, TappedEventArgs e) {

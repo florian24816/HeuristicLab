@@ -343,6 +343,9 @@ public class StudioRunAnalysisTests {
       }
       List<string?> Entries(ContextMenu m) => m.Items.Cast<MenuItem>().Select(i => i.Header as string).ToList();
       List<RunWindow> RunWindows() => window.RunWindows.ToList();
+      // (scrolled sideways above: back to the start, the rows' points count on it)
+      GridView().GetVisualDescendants().OfType<ScrollViewer>().First(x => x.Name == "Scroll").Offset = default;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       // a click anywhere else ends the selection of sources: in the table, on empty space, on another tab
       analysis.Sources.First().IsSelected = true;
       Press(RowAt(0));
@@ -404,6 +407,37 @@ public class StudioRunAnalysisTests {
       Press(RowAt(0));
       Press(RowAt(2), keys: Avalonia.Input.RawInputModifiers.Control);
       CollectionAssert.AreEqual(new[] { 0, 2 }, analysis.Grid!.Rows.Select((r, i) => (r, i)).Where(p => p.r.IsSelected).Select(p => p.i).ToList());
+      // a click anywhere else unselects them: on empty space of the source list, on another tab
+      var sourceTree = window.GetVisualDescendants().OfType<TreeView>().First(t => t.Name == "SourceTree" && t.IsEffectivelyVisible);
+      Press(sourceTree.TranslatePoint(new Avalonia.Point(sourceTree.Bounds.Width / 2, sourceTree.Bounds.Height - 30), window)!.Value);
+      Assert.IsFalse(analysis.Grid!.Rows.Any(r => r.IsSelected), "a click on empty space outside the table unselects the rows");
+      Press(RowAt(0));
+      Press(RowAt(2), keys: Avalonia.Input.RawInputModifiers.Control);
+      Press(window.GetVisualDescendants().OfType<TabItem>().First(t => t.Header as string == "Charts" && t.IsEffectivelyVisible).TranslatePoint(new Avalonia.Point(10, 10), window)!.Value);
+      Assert.IsFalse(analysis.Grid!.Rows.Any(r => r.IsSelected), "a click on another tab too");
+      analysis.SelectedView = RunAnalysisViewModel.TableView;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      // sorted by a click on a column title: still scrolled sideways where it was (at the top again)
+      Press(RowAt(0));
+      Press(RowAt(2), keys: Avalonia.Input.RawInputModifiers.Control);
+      var picked = analysis.Grid!.SelectedItems.Cast<AnalysisRow>().Select(r => r.Row.Run).ToHashSet();
+      Assert.AreEqual(2, picked.Count);
+      var scroll = GridView().GetVisualDescendants().OfType<ScrollViewer>().First(x => x.Name == "Scroll");
+      Assert.IsTrue(scroll.Extent.Width > scroll.Viewport.Width + 200, "the table is wider than its view");
+      scroll.Offset = new Avalonia.Vector(200, 40);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      analysis.Grid!.SortCommand.Execute(analysis.Grid.Columns[4].Key);
+      for (int i = 0; i < 3; i++) Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      scroll = GridView().GetVisualDescendants().OfType<ScrollViewer>().First(x => x.Name == "Scroll");
+      Assert.AreEqual(200, scroll.Offset.X, 1, "sideways where it was");
+      Assert.AreEqual(0, scroll.Offset.Y, 1, "at the top");
+      CollectionAssert.AreEquivalent(picked.ToList(), analysis.Grid!.SelectedItems.Cast<AnalysisRow>().Select(r => r.Row.Run).ToList(), "the selected runs stay selected");
+      Shot("sorted-scrolled");
+      scroll.Offset = default;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      analysis.Grid!.SortCommand.Execute(analysis.Grid.Columns[4].Key);  // back to the order before (the rows below count on it)
+      analysis.Grid!.SortCommand.Execute(analysis.Grid.Columns[4].Key);
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       var from = RowAt(3);
       var to = RowAt(5);
       window.MouseDown(from, Avalonia.Input.MouseButton.Left);

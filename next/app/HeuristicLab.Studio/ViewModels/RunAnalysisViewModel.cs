@@ -643,14 +643,16 @@ public partial class RunAnalysisViewModel : ViewModelBase {
         ? (SortDescending ? rows.OrderByDescending(r => r.Number(SortKey) ?? double.MinValue) : rows.OrderBy(r => r.Number(SortKey) ?? double.MaxValue))
         : (SortDescending ? rows.OrderByDescending(r => r.Text(SortKey), StringComparer.OrdinalIgnoreCase) : rows.OrderBy(r => r.Text(SortKey), StringComparer.OrdinalIgnoreCase));
     }
-    var selected = SelectedRow?.Row;
+    // the rows selected now stay selected (sorted, filtered: those still shown)
+    var selected = (Grid?.SelectedItems ?? []).OfType<AnalysisRow>().Select(r => r.Row).ToHashSet();
     Rows = rows.Select(r => new AnalysisRow(r, TableColumns.Select(c => r.Text(c.Key)).ToList())).ToList();
+    double scrollX = Grid?.ScrollX ?? 0;  // sorted or filtered: still scrolled sideways as before
     Grid = new TableGridViewModel(TableColumns.Select(c => new GridColumn(c.Key, c.Display, 150, c.Key switch {
         "source" => TableGridViewModel.SourceShade, "origin" => TableGridViewModel.OriginShade, "run" => TableGridViewModel.RunShade, _ => (Avalonia.Media.Color?)null
       })).ToList(),
-      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort) { FixedTint = TintOf, RowMenu = MenuOf, MultiSelect = true };
-    SelectedRow = Rows.FirstOrDefault(r => ReferenceEquals(r.Row, selected));
-    Grid.Mark(SelectedRow);
+      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort) { FixedTint = TintOf, RowMenu = MenuOf, MultiSelect = true, ScrollX = scrollX };
+    foreach (var row in Grid.Rows) row.IsSelected = selected.Contains(((AnalysisRow)row.Item).Row);
+    SelectedRow = null;
   }
 
   /// <summary>The table as shown: where a run comes from and which run it is stay in view.</summary>
@@ -717,7 +719,9 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   // ---- the selected run (blue in the table); runs open in windows of their own, each in its own color
 
-  partial void OnSelectedRowChanged(AnalysisRow? value) => Grid?.Mark(value);
+  partial void OnSelectedRowChanged(AnalysisRow? value) {
+    if (value != null) Grid?.Mark(value);
+  }
 
   /// <summary>The open run windows, shared by all Results tabs (a further tab gets the main tab's).</summary>
   public RunWindowSet RunWindows {

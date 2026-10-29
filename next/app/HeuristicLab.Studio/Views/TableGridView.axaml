@@ -28,7 +28,7 @@
             <Setter Property="IsVisible" Value="True" />
         </Style>
     </UserControl.Styles>
-    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer x:Name="Scroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
         <!-- room at the bottom for the horizontal scroll bar, so it does not cover the last row -->
         <StackPanel HorizontalAlignment="Left" Margin="0,0,0,14">
             <c:Sticky StickY="True" ZIndex="2">

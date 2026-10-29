@@ -295,7 +295,10 @@
   them (RunWindowSet.Requested) and closes them in OnClosed; a further tab closing leaves them open.
   "Close all run view windows" (Button.closewindows) next to "Export to Python...".
   A press anywhere in the window outside the source list (empty space, another tab, the table; not in menus -
-  handler on the TopLevel, RunAnalysisView.ElsewherePressed) ends the selection of sources.
+  handler on the TopLevel, RunAnalysisView.ElsewherePressed) ends the selection of sources. The table's selected rows
+  end the same way (TableGridView.ElsewherePressed, multi-select tables); sorting / filtering keeps the selected
+  runs selected and the sideways scroll position (TableGridViewModel.ScrollX, restored by the view after layout;
+  vertically at the top again).
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
   process affinity (hard limit, Linux/Windows), threads per algorithm (1 = HeuristicLab's default
   SequentialEngine; more = ParallelEngine with that DegreeOfParallelism, set by Resources.Configure
