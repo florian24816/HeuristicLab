@@ -21,7 +21,7 @@
 
         <!-- one building block: squares, name (inline rename), last field; context menu (rename/delete/...) -->
         <DataTemplate x:Key="Block" x:DataType="vm:BlockViewModel">
-            <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.picked="{Binding IsPicked}" Classes.fixed="{Binding FixedWidth}"
+            <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.picked="{Binding IsPicked}" Classes.bandcovered="{Binding IsBandCovered}" Classes.fixed="{Binding FixedWidth}"
                     Tapped="BlockTapped" DoubleTapped="BlockDoubleTapped" PointerPressed="BlockPressed">
                 <Border.ContextMenu>
                     <ContextMenu ItemsSource="{Binding Menu}">
@@ -205,6 +205,15 @@
         </Style>
         <Style Selector="Border.block.fixed Border.name">
             <Setter Property="Width" Value="200" />
+        </Style>
+        <!-- under the rectangle being drawn: a blue frame (the rectangle's blue) - what would be picked; inverted only once let go -->
+        <Style Selector="Border.block.bandcovered Border.name">
+            <Setter Property="BorderBrush" Value="#2E6FD8" />
+            <Setter Property="BorderThickness" Value="3" />
+        </Style>
+        <Style Selector="Border.block.bandcovered Border.square">
+            <Setter Property="BorderBrush" Value="#2E6FD8" />
+            <Setter Property="BorderThickness" Value="3" />
         </Style>
         <!-- picked among several (to move together): the name field inverted - blocks keep fixed light fields in both modes, so dark -->
         <Style Selector="Border.block.picked Border.name">

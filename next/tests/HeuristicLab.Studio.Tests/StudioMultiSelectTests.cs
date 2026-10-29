@@ -203,4 +203,72 @@ public class StudioMultiSelectTests {
       return true;
     }, CancellationToken.None);
   }
+
+  [TestMethod]
+  [Timeout(300_000)]
+  public async Task PickedBlocksStayInOneExperimentAndShareTheMenu() {
+    await session.Dispatch(() => {
+      var vm = new MainViewModel(null, new Dialogs());
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+      window.Show();
+      var ga = Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!;
+      var first = ws.NewExperiment();
+      var a = ws.AddAlgorithm(first, ga);
+      var b = ws.AddAlgorithm(first, ga);
+      var second = ws.NewExperiment();
+      var c = ws.AddAlgorithm(second, ga);
+      a.Name = "A"; b.Name = "B"; c.Name = "C";
+      ws.Selected = null;
+      Pump();
+      Border Name(BlockViewModel block) => window.GetVisualDescendants().OfType<Border>()
+        .First(x => x.Classes.Contains("name") && x.DataContext == block && x.IsEffectivelyVisible);
+
+      // a rectangle started in the first experiment, swept down over the second: only the first's blocks
+      var area = window.GetVisualDescendants().OfType<Border>().First(x => x.Classes.Contains("experiment") && x.DataContext == first);
+      var start = area.TranslatePoint(new Point(4, Name(a).TranslatePoint(new Point(0, -3), area)!.Value.Y), window)!.Value;
+      var end = Name(c).TranslatePoint(new Point(Name(c).Bounds.Width + 30, Name(c).Bounds.Height + 3), window)!.Value;
+      window.MouseDown(start, MouseButton.Left);
+      window.MouseMove(new Point((start.X + end.X) / 2, (start.Y + end.Y) / 2), RawInputModifiers.LeftMouseButton);
+      window.MouseMove(end, RawInputModifiers.LeftMouseButton);
+      Pump();
+      // while it is drawn: what it would pick has a blue frame, nothing is inverted yet
+      Assert.IsTrue(a.IsBandCovered && b.IsBandCovered && !c.IsBandCovered, "not the other experiment's block");
+      Assert.IsFalse(a.IsPicked);
+      Assert.AreEqual(Color.Parse("#2E6FD8"), ((ISolidColorBrush)Name(a).BorderBrush!).Color);
+      Assert.AreNotEqual(Color.Parse("#1E1E1E"), Fill(Name(a)), "not inverted while hovering");
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-band-hover.png"));
+      window.MouseUp(end, MouseButton.Left);
+      Pump();
+      CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+      Assert.IsFalse(a.IsBandCovered);
+      Assert.AreEqual(Color.Parse("#1E1E1E"), Fill(Name(a)), "picked: inverted");
+
+      // Ctrl+click in the other experiment starts anew there
+      Click(window, Center(Name(c), window), RawInputModifiers.Control);
+      CollectionAssert.AreEquivalent(new[] { c }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+
+      // two picked: the menu acts on all of them
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
+      Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+      var menu = a.Menu.Select(m => m.Display).ToList();
+      CollectionAssert.IsSubsetOf(new[] { "Delete selected items", "Copy selected items", "Copy selected items n times..." }, menu);
+      CollectionAssert.DoesNotContain(menu, "Delete");
+      CollectionAssert.Contains(c.Menu.Select(m => m.Display).ToList(), "Delete", "a block not picked keeps its own menu");
+      a.Menu.Single(m => m.Display == "Copy selected items").Command.Execute(null);
+      Pump();
+      CollectionAssert.AreEqual(new[] { "A", "A (copy 1)", "B", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
+      Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Assert.IsTrue(a.IsPicked && b.IsPicked);
+      a.Menu.Single(m => m.Display == "Delete selected items").Command.Execute(null);
+      Pump();
+      CollectionAssert.AreEqual(new[] { "A (copy 1)", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
+      CollectionAssert.AreEqual(new[] { "C" }, second.Children.Select(x => x.Name).ToList());
+      Assert.IsFalse(ws.AllBlocks().Any(x => x.IsPicked));
+      window.Close();
+      return true;
+    }, CancellationToken.None);
+  }
 }

@@ -600,6 +600,12 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       var what = block is ExperimentBlockViewModel ? "Remove the experiment" : $"Delete {block.Name}";
       if (!await dialogs.ConfirmAsync("Delete", $"{what} and its {container.Children.Count} building block(s)?")) return;
     }
+    DeleteNow(block);
+  }
+
+  private void DeleteNow(BlockViewModel block) {
+    if (IsRunning) return;
+    block.IsPicked = false;
     if (Selected != null && IsWithin(Selected, block)) Selected = null;
     switch (block) {
       case ProblemBlockViewModel problem:
@@ -695,19 +701,75 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     return picked.Where(b => !picked.Any(other => other != b && other is ContainerBlockViewModel c && IsWithin(b, c))).ToList();
   }
 
-  /// <summary>Adds a block to the picked ones or takes it out (Ctrl+click); a problem stands for its algorithm, experiments are not picked.</summary>
+  /// <summary>
+  /// Adds a block to the picked ones or takes it out (Ctrl+click); a problem stands for its algorithm, experiments are
+  /// not picked. Picked blocks belong to one experiment: a block of another one starts anew there.
+  /// </summary>
   public void TogglePick(BlockViewModel block) {
     if (Movable(block) is not { } movable) return;
+    if (!movable.IsPicked) foreach (var other in AllBlocks().Where(b => b.IsPicked && b.Root != movable.Root)) other.IsPicked = false;
     movable.IsPicked = !movable.IsPicked;
   }
 
-  /// <summary>Picks these blocks (a rectangle); <paramref name="add"/> keeps the ones picked before.</summary>
-  public void Pick(IEnumerable<BlockViewModel> blocks, bool add) {
-    var chosen = blocks.Select(Movable).OfType<BlockViewModel>().ToHashSet();
+  /// <summary>
+  /// Picks these blocks (a rectangle), only those of one experiment (<paramref name="within"/>, else the first
+  /// one's); <paramref name="add"/> keeps the ones picked before in that experiment.
+  /// </summary>
+  public void Pick(IEnumerable<BlockViewModel> blocks, bool add, ExperimentBlockViewModel? within = null) {
+    var chosen = InOneExperiment(blocks, within);
+    var experiment = chosen.FirstOrDefault()?.Root ?? within;
     foreach (var block in AllBlocks()) {
-      bool on = chosen.Contains(block) || add && block.IsPicked;
+      bool on = chosen.Contains(block) || add && block.IsPicked && block.Root == experiment;
       if (block.IsPicked != on) block.IsPicked = on;
     }
+  }
+
+  /// <summary>The movable blocks among these that belong to one experiment (the given one, else the first block's).</summary>
+  public HashSet<BlockViewModel> InOneExperiment(IEnumerable<BlockViewModel> blocks, ExperimentBlockViewModel? within) {
+    var movable = blocks.Select(Movable).OfType<BlockViewModel>().ToList();
+    var experiment = within ?? movable.FirstOrDefault()?.Root;
+    return movable.Where(b => b.Root == experiment).ToHashSet();
+  }
+
+  /// <summary>The blocks the rectangle being drawn covers (a blue frame on them; null: none).</summary>
+  public void CoverWithBand(IEnumerable<BlockViewModel>? blocks) {
+    var covered = blocks == null ? [] : blocks.ToHashSet();
+    foreach (var block in AllBlocks()) if (block.IsBandCovered != covered.Contains(block)) block.IsBandCovered = covered.Contains(block);
+  }
+
+  /// <summary>The picked blocks changed: the menus offer the actions for all of them, or for one block again.</summary>
+  internal void PicksChanged() {
+    foreach (var block in AllBlocks()) block.RefreshMenu();
+  }
+
+  // ---- the menu of a picked block: delete or copy all picked ones
+
+  /// <summary>Deletes all picked blocks (asked once).</summary>
+  public async Task DeleteSelectedAsync() {
+    var group = PickedGroup();
+    if (!IsEditable || group.Count == 0) return;
+    if (dialogs != null && !await dialogs.ConfirmAsync("Delete", $"Delete the {group.Count} selected building blocks (with what is inside them)?")) return;
+    foreach (var block in group) DeleteNow(block);
+    Status = $"Deleted {group.Count} building blocks.";
+  }
+
+  /// <summary>Each picked block can be copied (none inside a time-limit run).</summary>
+  public bool CanCopySelected() => PickedGroup() is { Count: > 0 } group && group.All(CanCopy);
+
+  /// <summary>Copies every picked block <paramref name="count"/> times, the copies right after each one.</summary>
+  public void CopySelected(int count) {
+    var group = PickedGroup();
+    if (!IsEditable || count < 1 || !CanCopySelected()) return;
+    ClearPicks();
+    foreach (var block in group) Copy(block, count);
+    Status = count == 1 ? $"Copied {group.Count} building blocks." : $"Made {count} copies each of {group.Count} building blocks.";
+  }
+
+  internal async Task CopySelectedManyAsync() {
+    var group = PickedGroup();
+    if (dialogs != null && CanCopySelected()
+        && await dialogs.AskNumberAsync("Copy n times", $"How many copies of each of the {group.Count} selected building blocks?", 2, 1, MaxCopies) is int n)
+      CopySelected(n);
   }
 
   public void ClearPicks() {

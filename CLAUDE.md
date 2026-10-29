@@ -67,7 +67,12 @@
   empty space draws a rectangle (BandLayer) that picks the blocks it covers (Ctrl: adds); a plain click on a
   block or on empty space clears them; dragging a picked block moves all picked ones (PickedGroup: tree
   order, a block inside a picked container goes with it) one after the other to the target (MoveGroup;
-  not into a time-limit run).
+  not into a time-limit run). Picked blocks belong to one experiment: the rectangle picks only in the experiment it
+  started in (else the first touched block's), Ctrl+click in another experiment starts anew there. While the
+  rectangle is drawn, what it would pick gets a blue frame (BlockViewModel.IsBandCovered, the rectangle's #2E6FD8;
+  inverted only once let go). A picked block's menu acts on all picked ones: "Delete selected items" (asked once),
+  "Copy selected items", "Copy selected items n times..." (each block's copies after it; menus refresh on
+  PicksChanged).
   Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
   warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
   HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once

@@ -50,6 +50,15 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   /// <summary>One of several blocks picked to move together (Ctrl+click or a rectangle); shown inverted.</summary>
   [ObservableProperty]
   public partial bool IsPicked { get; set; }
+
+  partial void OnIsPickedChanged(bool value) => Workspace.PicksChanged();
+
+  /// <summary>Under the rectangle being drawn (it would be picked when let go): a blue frame, not yet inverted.</summary>
+  [ObservableProperty]
+  public partial bool IsBandCovered { get; set; }
+
+  /// <summary>This block is one of several picked ones: its menu acts on all of them.</summary>
+  protected bool InPickedGroup => Workspace.PickedGroup() is { Count: > 1 } group && group.Contains(ExperimentWorkspaceViewModel.Movable(this)!);
   public abstract INamedItem Item { get; }
   /// <summary>What kind of block this is, e.g. "Batch Run" or "Traveling Salesman Problem".</summary>
   public string Kind => Item.ItemName;
@@ -140,15 +149,29 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [RelayCommand]
   private Task CopyManyAsync() => Workspace.CopyManyAsync(this);
 
-  /// <summary>"Copy" and "Copy n times..." where a copy can go next to the block.</summary>
+  [RelayCommand]
+  private Task DeleteSelectedAsync() => Workspace.DeleteSelectedAsync();
+
+  [RelayCommand]
+  private void CopySelected() => Workspace.CopySelected(1);
+
+  [RelayCommand]
+  private Task CopySelectedManyAsync() => Workspace.CopySelectedManyAsync();
+
+  /// <summary>"Copy" and "Copy n times..." where a copy can go next to the block; for several picked blocks the same for all of them.</summary>
   protected IReadOnlyList<MenuChoice> CopyMenu =>
-    Workspace.IsEditable && Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
+    !Workspace.IsEditable ? []
+    : InPickedGroup ? (Workspace.CanCopySelected() ? [new("Copy selected items", CopySelectedCommand), new("Copy selected items n times...", CopySelectedManyCommand)] : [])
+    : Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
 
   /// <summary>Context menu of the block (while experiments run only what changes nothing).</summary>
   public virtual IReadOnlyList<MenuChoice> Menu => EditMenu;
 
   /// <summary>Rename and Delete, if the tree can be changed now.</summary>
-  protected IReadOnlyList<MenuChoice> EditMenu => Workspace.IsEditable ? [new("Rename", RenameCommand), new("Delete", DeleteCommand)] : [];
+  protected IReadOnlyList<MenuChoice> EditMenu =>
+    !Workspace.IsEditable ? []
+    : InPickedGroup ? [new("Rename", RenameCommand), new("Delete selected items", DeleteSelectedCommand)]
+    : [new("Rename", RenameCommand), new("Delete", DeleteCommand)];
 
   public void RefreshLabel() => OnPropertyChanged(nameof(Label));
 
