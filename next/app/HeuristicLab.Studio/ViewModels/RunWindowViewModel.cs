@@ -73,3 +73,56 @@ public sealed partial class RunWindowViewModel : ViewModelBase {
 
   public void RequestActivate() => ActivateRequested?.Invoke();
 }
+
+/// <summary>
+/// The open run windows, shared by every Results tab (the main one and the further ones): at most <see cref="Max"/>,
+/// one color each; every results table colors their runs.
+/// </summary>
+public sealed class RunWindowSet {
+  /// <summary>At most this many run windows (one per color).</summary>
+  public static int Max => RunPalette.All.Count;
+
+  private readonly List<RunWindowViewModel> open = [];
+
+  public IReadOnlyList<RunWindowViewModel> Open => open;
+
+  /// <summary>How many more can be opened.</summary>
+  public int Free => Max - open.Count;
+
+  /// <summary>Opened or closed: tables color their rows again.</summary>
+  public event Action? Changed;
+
+  /// <summary>A window to show (the main window opens it).</summary>
+  public event Action<RunWindowViewModel>? Requested;
+
+  /// <summary>The same run (rows are made again by every filter or sort; a folder's runs have no run object).</summary>
+  private static bool SameRun(RunRow a, RunRow b) => ReferenceEquals(a, b) || a.Run != null && ReferenceEquals(a.Run, b.Run);
+
+  public RunWindowViewModel? WindowOf(RunRow row) => open.FirstOrDefault(w => SameRun(w.Row, row));
+
+  /// <summary>A window for this run in a color not in use (null: <see cref="Max"/> are open); open already: to the front.</summary>
+  public RunWindowViewModel? Show(AnalysisRow row, IReadOnlyList<ColumnChoice> columns) {
+    if (WindowOf(row.Row) is { } existing) { existing.RequestActivate(); return existing; }
+    if (Free <= 0) return null;
+    var used = open.Select(w => w.Palette).ToHashSet();
+    var window = new RunWindowViewModel(row, columns, RunPalette.All.First(p => !used.Contains(p)));
+    open.Add(window);
+    Changed?.Invoke();
+    Requested?.Invoke(window);
+    return window;
+  }
+
+  /// <summary>A run window was closed: its run gets the orange back.</summary>
+  public void Closed(RunWindowViewModel window) {
+    if (open.Remove(window)) Changed?.Invoke();
+  }
+
+  public void Close(RunWindowViewModel window) {
+    window.RequestClose();
+    Closed(window);
+  }
+
+  public void CloseAll() {
+    foreach (var window in open.ToList()) Close(window);
+  }
+}

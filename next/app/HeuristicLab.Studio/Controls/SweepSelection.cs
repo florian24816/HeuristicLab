@@ -26,6 +26,8 @@ public sealed class SweepSelection {
 
   private readonly Control root;
   private readonly Func<IEnumerable<IPickable>> all;
+  private readonly string rowClass;
+  private readonly Func<bool> enabled;
   private IPickable? anchor;
   private Point? start;
   private bool adds;
@@ -34,9 +36,11 @@ public sealed class SweepSelection {
   private Border? band;
 
   /// <param name="all">Every row's item, also those not shown now (e.g. in collapsed branches): a plain click clears them.</param>
-  private SweepSelection(Control root, Func<IEnumerable<IPickable>> all) {
+  private SweepSelection(Control root, Func<IEnumerable<IPickable>> all, string rowClass, Func<bool>? enabled) {
     this.root = root;
     this.all = all;
+    this.rowClass = rowClass;
+    this.enabled = enabled ?? (() => true);
     root.AddHandler(InputElement.PointerPressedEvent, Pressed, RoutingStrategies.Tunnel, handledEventsToo: true);
     root.AddHandler(InputElement.PointerMovedEvent, Moved, RoutingStrategies.Tunnel, handledEventsToo: true);
     root.AddHandler(InputElement.PointerReleasedEvent, Released, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -44,12 +48,15 @@ public sealed class SweepSelection {
     root.AddHandler(InputElement.PointerCaptureLostEvent, (_, e) => { if (ReferenceEquals(e.Source, root)) Cancel(); }, RoutingStrategies.Bubble, handledEventsToo: true);
   }
 
-  public static SweepSelection Attach(Control root, Func<IEnumerable<IPickable>> all) => new(root, all);
+  /// <param name="rowClass">The class marking rows ("selectrow": inverted when selected; a table's "row" draws its own).</param>
+  /// <param name="enabled">Whether it selects now (a table that selects one row at a time: no).</param>
+  public static SweepSelection Attach(Control root, Func<IEnumerable<IPickable>> all, string rowClass = "selectrow", Func<bool>? enabled = null) =>
+    new(root, all, rowClass, enabled);
 
   /// <summary>The rows shown, top to bottom, with their place in <see cref="root"/>.</summary>
   private List<(Control Row, IPickable Item, Rect Bounds)> Rows() =>
     root.GetVisualDescendants().OfType<Control>()
-      .Where(c => c.Classes.Contains("selectrow") && c.IsEffectivelyVisible && c.DataContext is IPickable)
+      .Where(c => c.Classes.Contains(rowClass) && c.IsEffectivelyVisible && c.DataContext is IPickable)
       .Select(c => (Row: c, Item: (IPickable)c.DataContext!, Bounds: new Rect(c.TranslatePoint(default, root) ?? default, c.Bounds.Size)))
       .OrderBy(r => r.Bounds.Y).ToList();
 
@@ -59,10 +66,10 @@ public sealed class SweepSelection {
   }
 
   private void Pressed(object? sender, PointerPressedEventArgs e) {
-    if (!e.GetCurrentPoint(root).Properties.IsLeftButtonPressed) return;
+    if (!e.GetCurrentPoint(root).Properties.IsLeftButtonPressed || !enabled()) return;
     // a tick box, an expander arrow or a scroll bar does its own thing
     for (var v = e.Source as Visual; v != null && v != root; v = v.GetVisualParent())
-      if (v is ToggleButton or ScrollBar) return;
+      if (v is ToggleButton or ScrollBar or Button) return;
     start = e.GetPosition(root);
     pressed = ItemAt(start.Value);
     keys = e.KeyModifiers;

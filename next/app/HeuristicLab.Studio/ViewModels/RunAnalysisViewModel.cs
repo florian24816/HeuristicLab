@@ -151,6 +151,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   public RunAnalysisViewModel(ExperimentWorkspaceViewModel workspace, IFileDialogService? fileDialogs = null) {
     this.workspace = workspace;
     this.fileDialogs = fileDialogs;
+    runWindows.Changed += RunWindowsChanged;
   }
 
   public ObservableCollection<RunSourceViewModel> Sources { get; } = [];
@@ -647,7 +648,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     Grid = new TableGridViewModel(TableColumns.Select(c => new GridColumn(c.Key, c.Display, 150, c.Key switch {
         "source" => TableGridViewModel.SourceShade, "origin" => TableGridViewModel.OriginShade, "run" => TableGridViewModel.RunShade, _ => (Avalonia.Media.Color?)null
       })).ToList(),
-      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort) { FixedTint = TintOf, RowMenu = MenuOf };
+      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort) { FixedTint = TintOf, RowMenu = MenuOf, MultiSelect = true };
     SelectedRow = Rows.FirstOrDefault(r => ReferenceEquals(r.Row, selected));
     Grid.Mark(SelectedRow);
   }
@@ -718,44 +719,43 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   partial void OnSelectedRowChanged(AnalysisRow? value) => Grid?.Mark(value);
 
-  /// <summary>The run windows open from this Results tab.</summary>
-  public ObservableCollection<RunWindowViewModel> RunWindows { get; } = [];
-
-  public bool HasRunWindows => RunWindows.Count > 0;
-
-  /// <summary>A run window to show (the view opens it).</summary>
-  public event Action<RunWindowViewModel>? RunWindowRequested;
-
-  /// <summary>The same run in the table (rows are made again by every filter or sort; a folder's runs have no run object).</summary>
-  private static bool SameRun(RunRow a, RunRow b) => ReferenceEquals(a, b) || a.Run != null && ReferenceEquals(a.Run, b.Run);
-
-  private RunWindowViewModel? WindowOf(RunRow row) => RunWindows.FirstOrDefault(w => SameRun(w.Row, row));
-
-  /// <summary>"Open run in window": a window with the run's columns and results in a color not in use; open already: to the front.</summary>
-  public RunWindowViewModel OpenRunWindow(AnalysisRow row) {
-    if (WindowOf(row.Row) is { } open) { open.RequestActivate(); return open; }
-    var used = RunWindows.Select(w => w.Palette).ToHashSet();
-    var palette = RunPalette.All.FirstOrDefault(p => !used.Contains(p)) ?? RunPalette.All[RunWindows.Count % RunPalette.All.Count];
-    var window = new RunWindowViewModel(row, TableColumns, palette);
-    RunWindows.Add(window);
-    RunWindowsChanged();
-    RunWindowRequested?.Invoke(window);
-    return window;
-  }
-
-  /// <summary>A run window was closed: its run gets the orange back.</summary>
-  public void RunWindowClosed(RunWindowViewModel window) {
-    if (RunWindows.Remove(window)) RunWindowsChanged();
-  }
-
-  /// <summary>"Close all run view windows" (also when the main window or this results tab closes).</summary>
-  [RelayCommand(CanExecute = nameof(HasRunWindows))]
-  public void CloseRunWindows() {
-    foreach (var window in RunWindows.ToList()) {
-      window.RequestClose();
-      RunWindowClosed(window);
+  /// <summary>The open run windows, shared by all Results tabs (a further tab gets the main tab's).</summary>
+  public RunWindowSet RunWindows {
+    get => runWindows;
+    init {
+      runWindows.Changed -= RunWindowsChanged;
+      runWindows = value;
+      runWindows.Changed += RunWindowsChanged;
     }
   }
+
+  private RunWindowSet runWindows = new();
+
+  /// <summary>This tab is gone (a further tab closed): it no longer follows the run windows.</summary>
+  public void Forget() => runWindows.Changed -= RunWindowsChanged;
+
+  public bool HasRunWindows => runWindows.Open.Count > 0;
+
+  /// <summary>
+  /// "Open run in window" / "Open runs in windows": a window for each of these runs (one open already comes to the
+  /// front); nothing when that would make more than <see cref="RunWindowSet.Max"/>. The rows are unselected.
+  /// </summary>
+  public IReadOnlyList<RunWindowViewModel> OpenRunWindows(IReadOnlyList<AnalysisRow> rows) {
+    if (Missing(rows) > runWindows.Free) return [];
+    var opened = rows.Select(r => runWindows.Show(r, TableColumns)).OfType<RunWindowViewModel>().ToList();
+    SelectedRow = null;
+    Grid?.Mark(null);
+    return opened;
+  }
+
+  public RunWindowViewModel? OpenRunWindow(AnalysisRow row) => OpenRunWindows([row]).SingleOrDefault();
+
+  /// <summary>How many of these runs have no window yet.</summary>
+  private int Missing(IReadOnlyList<AnalysisRow> rows) => rows.Count(r => runWindows.WindowOf(r.Row) == null);
+
+  /// <summary>"Close all run view windows" (also when the main window closes).</summary>
+  [RelayCommand(CanExecute = nameof(HasRunWindows))]
+  public void CloseRunWindows() => runWindows.CloseAll();
 
   private void RunWindowsChanged() {
     OnPropertyChanged(nameof(HasRunWindows));
@@ -763,11 +763,36 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     Grid?.Retint();
   }
 
-  private IReadOnlyList<Avalonia.Media.Color>? TintOf(object item) => item is AnalysisRow row ? WindowOf(row.Row)?.Palette.Shades : null;
+  private IReadOnlyList<Avalonia.Media.Color>? TintOf(object item) => item is AnalysisRow row ? runWindows.WindowOf(row.Row)?.Palette.Shades : null;
 
-  private IReadOnlyList<MenuChoice> MenuOf(object item) => item is AnalysisRow row
-    ? [new MenuChoice("Open run in window", new RelayCommand(() => OpenRunWindow(row)), "Its parameters and results in a window of its own; its row wears the window's color while it is open")]
-    : [];
+  /// <summary>
+  /// The table's right-click menu for the selected rows: runs without a window - open them (not past six windows:
+  /// then the entry says so and cannot be clicked); runs that all have one - go to their windows or close them.
+  /// </summary>
+  private IReadOnlyList<MenuChoice> MenuOf(IReadOnlyList<object> items) {
+    var rows = items.OfType<AnalysisRow>().ToList();
+    if (rows.Count == 0) return [];
+    int missing = Missing(rows);
+    bool one = rows.Count == 1;
+    if (missing == 0) {
+      var windows = rows.Select(r => runWindows.WindowOf(r.Row)!).ToList();
+      return [
+        new MenuChoice(one ? "Go to view window" : "Go to view windows", new RelayCommand(() => {
+          foreach (var w in windows) w.RequestActivate();
+          Grid?.Mark(null);
+        }), "Bring the run's window to the front"),
+        new MenuChoice(one ? "Close run view window" : "Close run view windows", new RelayCommand(() => {
+          foreach (var w in windows) runWindows.Close(w);
+          Grid?.Mark(null);
+        }), "Close the run's window: its row is orange again")
+      ];
+    }
+    if (missing > runWindows.Free)
+      return [new MenuChoice($"{RunWindowSet.Max}/{RunWindowSet.Max} run windows can not be exceeded", new RelayCommand(() => { }, () => false),
+        $"{runWindows.Open.Count} run windows are open, {missing} more would be too many: close some first")];
+    return [new MenuChoice(one ? "Open run in window" : "Open runs in windows", new RelayCommand(() => OpenRunWindows(rows)),
+      "Parameters and results in a window of their own; a run's row wears its window's color while it is open")];
+  }
 
   // ---- charts
 

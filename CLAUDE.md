@@ -280,17 +280,22 @@
   all of them (docked and windows) go.
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
   Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05).
-  No Run view any more (removed 2026-10-29, user's request): right-click a table row (TableGridViewModel.RowMenu,
-  TableGridView.RowMenu - selects it, then the menu) -> "Open run in window": Views/RunWindow (not owned) with
-  RunWindowView over RunWindowViewModel - the run's columns as a table (names on two shades of the window's color
-  alternating per row, values on Grey / LightGrey), its results and the selected result's picture. Each window
-  takes a RunPalette not in use (cyan, green, purple, pink, blue, teal; three shades like Source/Origin/Run's
-  orange): the run's Source/Origin/Run cells wear them while it is open (TableGridViewModel.FixedTint, Retint;
-  rows found by their IRun), orange again when it closes; opening an open run brings its window to the front.
-  "Close all run view windows" (Button.closewindows) next to "Export to Python..."; run windows also close with
-  their results tab (MainViewModel.CloseResults) and the main window (OnClosed -> CloseAllRunWindows). Only a
-  RunAnalysisView on screen opens them (subscribes while attached). A left click anywhere in the Results tab
-  outside the source list ends the selection of sources.
+  No Run view any more (removed 2026-10-29, user's request): runs open in windows of their own from the Results
+  table. The table selects several rows (TableGridViewModel.MultiSelect: GridRow is IPickable, SweepSelection with
+  row class "row" - click, Ctrl+click, Shift+click, a rectangle with a blue frame on the rows, Border.bandframe);
+  right-click (TableGridViewModel.RowMenu over the selected items; a row not selected is selected alone first):
+  "Open run in window" / "Open runs in windows" (then the rows are unselected), "6/6 run windows can not be
+  exceeded" (disabled) when that would make more than six, and for runs that all have a window "Go to view
+  window(s)" / "Close run view window(s)". Views/RunWindow (not owned) with RunWindowView over RunWindowViewModel:
+  the run's columns as a table (names on two shades of the window's color alternating per row, values on Grey /
+  LightGrey), its results and the selected result's picture. The open run windows are one RunWindowSet shared by
+  every Results tab (main and further ones; at most six, one RunPalette each - cyan, green, purple, pink, blue,
+  teal, three shades like Source/Origin/Run's orange); every table colors their runs' Source/Origin/Run cells
+  (FixedTint, Retint on RunWindowSet.Changed; rows found by their IRun), orange again when closed. MainWindow opens
+  them (RunWindowSet.Requested) and closes them in OnClosed; a further tab closing leaves them open.
+  "Close all run view windows" (Button.closewindows) next to "Export to Python...".
+  A press anywhere in the window outside the source list (empty space, another tab, the table; not in menus -
+  handler on the TopLevel, RunAnalysisView.ElsewherePressed) ends the selection of sources.
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
   process affinity (hard limit, Linux/Windows), threads per algorithm (1 = HeuristicLab's default
   SequentialEngine; more = ParallelEngine with that DegreeOfParallelism, set by Resources.Configure

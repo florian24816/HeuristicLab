@@ -16,7 +16,7 @@ public sealed record GridCell(string Text, IBrush Background, double Width, bool
   public int ZIndex => IsFixed ? 1 : 0;
 }
 
-public sealed partial class GridRow(object item, Func<GridRow, IReadOnlyList<GridCell>> cells) : ObservableObject {
+public sealed partial class GridRow(object item, Func<GridRow, IReadOnlyList<GridCell>> cells) : ObservableObject, IPickable {
   private IReadOnlyList<GridCell>? built;
 
   public object Item { get; } = item;
@@ -79,8 +79,14 @@ public partial class TableGridViewModel : ViewModelBase {
   /// <summary>Other colors for a row's fixed columns (null: their own).</summary>
   public Func<object, IReadOnlyList<Color>?>? FixedTint { get; set; }
 
-  /// <summary>The menu of a row (right-click), if any.</summary>
-  public Func<object, IReadOnlyList<MenuChoice>>? RowMenu { get; set; }
+  /// <summary>The menu (right-click) for the selected rows' items, if any.</summary>
+  public Func<IReadOnlyList<object>, IReadOnlyList<MenuChoice>>? RowMenu { get; set; }
+
+  /// <summary>Several rows can be selected (Ctrl+click, Shift+click, a rectangle - Controls.SweepSelection).</summary>
+  public bool MultiSelect { get; init; }
+
+  /// <summary>The selected rows' items, in table order.</summary>
+  public IReadOnlyList<object> SelectedItems => Rows.Where(r => r.IsSelected).Select(r => r.Item).ToList();
 
   /// <summary><see cref="FixedTint"/> changed: the rows are colored again.</summary>
   public void Retint() {
