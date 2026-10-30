@@ -35,27 +35,29 @@
         <Style Selector="Button.colbtn:pointerover Border.face">
             <Setter Property="Opacity" Value="0.8" />
         </Style>
-        <Style Selector="Button.colbtn Path">
-            <Setter Property="Fill" Value="#4A4A4A" />
+        <Style Selector="Button.colbtn c|Pictogram">
+            <Setter Property="Foreground" Value="#4A4A4A" />
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="Button.sort Path"><Setter Property="Data" Value="M4,0 L8,4 L0,4 Z M0,6 L8,6 L4,10 Z" /></Style>
-        <Style Selector="Button.sort.asc Path"><Setter Property="Data" Value="M5,0 L10,8 L0,8 Z" /></Style>
-        <Style Selector="Button.sort.desc Path"><Setter Property="Data" Value="M0,0 L10,0 L5,8 Z" /></Style>
+        <Style Selector="Button.sort c|Pictogram"><Setter Property="Symbol" Value="not_sorting_columne" /></Style>
+        <Style Selector="Button.sort.asc c|Pictogram"><Setter Property="Symbol" Value="sorting_ascending" /></Style>
+        <Style Selector="Button.sort.desc c|Pictogram"><Setter Property="Symbol" Value="sorting_descending" /></Style>
         <Style Selector="Button.sort.asc Border.face"><Setter Property="Background" Value="#2EA043" /></Style>
         <Style Selector="Button.sort.desc Border.face"><Setter Property="Background" Value="#D73A3A" /></Style>
-        <Style Selector="Button.sort.asc Path, Button.sort.desc Path"><Setter Property="Fill" Value="White" /></Style>
-        <Style Selector="Button.widen Path, Button.size Path"><Setter Property="Data" Value="M0,4 L4,0 L4,8 Z M12,4 L8,0 L8,8 Z" /></Style>
-        <Style Selector="Button.narrow Path, Button.size.on Path"><Setter Property="Data" Value="M5,4 L1,0 L1,8 Z M7,4 L11,0 L11,8 Z" /></Style>
+        <Style Selector="Button.sort.asc c|Pictogram, Button.sort.desc c|Pictogram"><Setter Property="Foreground" Value="White" /></Style>
+        <Style Selector="Button.widen c|Pictogram, Button.size c|Pictogram"><Setter Property="Symbol" Value="expand_table" /></Style>
+        <Style Selector="Button.narrow c|Pictogram, Button.size.on c|Pictogram"><Setter Property="Symbol" Value="collapse_table" /></Style>
         <Style Selector="Button.size.on Border.face"><Setter Property="Background" Value="#4A4A4A" /></Style>
-        <Style Selector="Button.size.on Path"><Setter Property="Fill" Value="White" /></Style>
+        <Style Selector="Button.size.on c|Pictogram"><Setter Property="Foreground" Value="White" /></Style>
         <Style Selector="Button.fixed Border.face"><Setter Property="Background" Value="#F7931D" /></Style>
-        <Style Selector="Button.fixed Path"><Setter Property="Fill" Value="#1E1E1E" /></Style>
+        <Style Selector="Button.fixed c|Pictogram"><Setter Property="Foreground" Value="#1E1E1E" /></Style>
         <Style Selector="Button.fixed.sort.asc Border.face, Button.fixed.sort.desc Border.face"><Setter Property="Background" Value="#B85F00" /></Style>
-        <Style Selector="Button.fixed.sort.asc Path, Button.fixed.sort.desc Path"><Setter Property="Fill" Value="White" /></Style>
+        <Style Selector="Button.fixed.sort.asc c|Pictogram, Button.fixed.sort.desc c|Pictogram"><Setter Property="Foreground" Value="White" /></Style>
         <Style Selector="Button.colbtn:disabled Border.face"><Setter Property="Background" Value="#D0D0D0" /></Style>
-        <Style Selector="Button.colbtn:disabled Path"><Setter Property="Fill" Value="#9A9A9A" /></Style>
+        <Style Selector="Button.colbtn:disabled c|Pictogram"><Setter Property="Foreground" Value="#9A9A9A" /></Style>
         <Style Selector="c|Sticky.cell TextBlock">
             <Setter Property="Foreground" Value="#1E1E1E" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -90,19 +92,19 @@
                                                     IsVisible="{Binding Column.HasButtons}">
                                             <Button Classes="colbtn sort" Classes.asc="{Binding Column.IsAscending}" Classes.desc="{Binding Column.IsDescending}"
                                                     Classes.fixed="{Binding IsFixed}" Command="{Binding Column.CycleSortCommand}" ToolTip.Tip="{Binding Column.SortTip}">
-                                                <Border Classes="face"><Path /></Border>
+                                                <Border Classes="face"><c:Pictogram /></Border>
                                             </Button>
                                             <Button Classes="colbtn narrow fixed" Command="{Binding Column.CollapseCommand}" IsVisible="{Binding Column.ShowsCollapse}"
                                                     ToolTip.Tip="Narrower">
-                                                <Border Classes="face"><Path /></Border>
+                                                <Border Classes="face"><c:Pictogram /></Border>
                                             </Button>
                                             <Button Classes="colbtn widen fixed" Command="{Binding Column.ExpandCommand}" IsVisible="{Binding Column.ShowsExpand}"
                                                     ToolTip.Tip="Wider (at most 120 characters)">
-                                                <Border Classes="face"><Path /></Border>
+                                                <Border Classes="face"><c:Pictogram /></Border>
                                             </Button>
                                             <Button Classes="colbtn size" Classes.on="{Binding Column.IsExpanded}" Command="{Binding Column.ToggleSizeCommand}"
                                                     IsVisible="{Binding Column.ShowsToggle}" ToolTip.Tip="Wider (at most 120 characters) / as before">
-                                                <Border Classes="face"><Path /></Border>
+                                                <Border Classes="face"><c:Pictogram /></Border>
                                             </Button>
                                         </StackPanel>
                                     </Grid>

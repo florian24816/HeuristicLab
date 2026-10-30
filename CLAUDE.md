@@ -347,7 +347,8 @@
   parameters/results changed (Studio tags runs with "Resources: ..." after they were first read).
   Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
   it (blue overlay).
-  Results table titles (user's request 2026-10-30; TableGridViewModel with a TableLook - HeaderButtons): small square
+  Results table titles (user's request 2026-10-30; TableGridViewModel with a TableLook - HeaderButtons): small square (18 px, the user's pictograms
+  not_sorting_columne / sorting_ascending / sorting_descending / expand_table / collapse_table at 14 px)
   buttons right after the title (Views[i] = GridColumnView, shared by the column's cells, which bind its Width): a sort
   button cycling none / ascending / descending (one column at a time: RunAnalysisViewModel.Sort; a double-click on
   the title does the same, not one on its buttons) - plain columns #F2F2F2, ascending green #2EA043, descending red
