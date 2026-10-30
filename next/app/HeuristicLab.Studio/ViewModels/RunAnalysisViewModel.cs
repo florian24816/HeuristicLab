@@ -651,12 +651,17 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   partial void OnShowAllParametersChanged(bool value) => RebuildRows();
 
+  /// <summary>Sorts by a column: ascending, then descending, then not sorted (one column at a time).</summary>
   [RelayCommand]
   private void Sort(string key) {
-    if (SortKey == key) SortDescending = !SortDescending;
-    else { SortKey = key; SortDescending = false; }
+    if (SortKey != key) { SortKey = key; SortDescending = false; }
+    else if (!SortDescending) SortDescending = true;
+    else { SortKey = null; SortDescending = false; }
     RebuildRows();
   }
+
+  /// <summary>The table's column sizes (collapsed / regular / expanded), kept while the table is made again.</summary>
+  private readonly Dictionary<string, ColumnSize> columnSizes = [];
 
   private void RebuildRows() {
     var varying = Table.Columns.Where(c => c.Kind == "Parameter" && Table.Rows.Select(r => r.Text(c.Key)).Distinct().Skip(1).Any()).Select(c => c.Key).ToHashSet();
@@ -676,7 +681,8 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     Grid = new TableGridViewModel(TableColumns.Select(c => new GridColumn(c.Key, c.Display, 150, c.Key switch {
         "source" => TableGridViewModel.SourceShade, "origin" => TableGridViewModel.OriginShade, "run" => TableGridViewModel.RunShade, _ => (Avalonia.Media.Color?)null
       })).ToList(),
-      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort) { FixedTint = TintOf, RowMenu = MenuOf, MultiSelect = true, ScrollX = scrollX };
+      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort,
+      new TableLook(SortKey, SortKey == null ? SortOrder.None : SortDescending ? SortOrder.Descending : SortOrder.Ascending, columnSizes)) { FixedTint = TintOf, RowMenu = MenuOf, MultiSelect = true, ScrollX = scrollX };
     foreach (var row in Grid.Rows) row.IsSelected = selected.Contains(((AnalysisRow)row.Item).Row);
     SelectedRow = null;
   }

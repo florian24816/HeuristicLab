@@ -73,10 +73,10 @@ public partial class TableGridView : UserControl {
     Menu.Open(control);
   }
 
-  private void HeaderTapped(object? sender, TappedEventArgs e) {
-    if (sender is Control { DataContext: GridCell cell } && DataContext is TableGridViewModel grid && grid.CanSort) {
-      int index = System.Linq.Enumerable.ToList(grid.Header).IndexOf(cell);
-      if (index >= 0) grid.SortCommand.Execute(grid.Columns[index].Key);
-    }
+  /// <summary>A double-click on a column's title sorts as its sort button does (not one on its buttons: each click counts there).</summary>
+  private void HeaderDoubleTapped(object? sender, TappedEventArgs e) {
+    for (var v = e.Source as Avalonia.Visual; v != null && !ReferenceEquals(v, sender); v = Avalonia.VisualTree.VisualExtensions.GetVisualParent(v))
+      if (v is Button) return;
+    if (sender is Control { DataContext: GridCell cell } && DataContext is TableGridViewModel { HeaderButtons: true }) cell.Column.CycleSortCommand.Execute(null);
   }
 }

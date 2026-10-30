@@ -12,6 +12,50 @@
         <Style Selector="c|Sticky.cell">
             <Setter Property="Padding" Value="6,4" />
         </Style>
+        <!-- the title buttons: small squares; sort none / ascending (green) / descending (red), size regular / expanded
+             (dark); in fixed columns the logo orange (sorting: darker), greyed out when they cannot be used -->
+        <Style Selector="Button.colbtn">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.colbtn:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.colbtn:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.colbtn:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.colbtn Border.face">
+            <Setter Property="Background" Value="#F2F2F2" />
+        </Style>
+        <Style Selector="Button.colbtn:pointerover Border.face">
+            <Setter Property="Opacity" Value="0.8" />
+        </Style>
+        <Style Selector="Button.colbtn Path">
+            <Setter Property="Fill" Value="#4A4A4A" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.sort Path"><Setter Property="Data" Value="M4,0 L8,4 L0,4 Z M0,6 L8,6 L4,10 Z" /></Style>
+        <Style Selector="Button.sort.asc Path"><Setter Property="Data" Value="M5,0 L10,8 L0,8 Z" /></Style>
+        <Style Selector="Button.sort.desc Path"><Setter Property="Data" Value="M0,0 L10,0 L5,8 Z" /></Style>
+        <Style Selector="Button.sort.asc Border.face"><Setter Property="Background" Value="#2EA043" /></Style>
+        <Style Selector="Button.sort.desc Border.face"><Setter Property="Background" Value="#D73A3A" /></Style>
+        <Style Selector="Button.sort.asc Path, Button.sort.desc Path"><Setter Property="Fill" Value="White" /></Style>
+        <Style Selector="Button.widen Path, Button.size Path"><Setter Property="Data" Value="M0,4 L4,0 L4,8 Z M12,4 L8,0 L8,8 Z" /></Style>
+        <Style Selector="Button.narrow Path, Button.size.on Path"><Setter Property="Data" Value="M5,4 L1,0 L1,8 Z M7,4 L11,0 L11,8 Z" /></Style>
+        <Style Selector="Button.size.on Border.face"><Setter Property="Background" Value="#4A4A4A" /></Style>
+        <Style Selector="Button.size.on Path"><Setter Property="Fill" Value="White" /></Style>
+        <Style Selector="Button.fixed Border.face"><Setter Property="Background" Value="#F7931D" /></Style>
+        <Style Selector="Button.fixed Path"><Setter Property="Fill" Value="#1E1E1E" /></Style>
+        <Style Selector="Button.fixed.sort.asc Border.face, Button.fixed.sort.desc Border.face"><Setter Property="Background" Value="#B85F00" /></Style>
+        <Style Selector="Button.fixed.sort.asc Path, Button.fixed.sort.desc Path"><Setter Property="Fill" Value="White" /></Style>
+        <Style Selector="Button.colbtn:disabled Border.face"><Setter Property="Background" Value="#D0D0D0" /></Style>
+        <Style Selector="Button.colbtn:disabled Path"><Setter Property="Fill" Value="#9A9A9A" /></Style>
         <Style Selector="c|Sticky.cell TextBlock">
             <Setter Property="Foreground" Value="#1E1E1E" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -36,9 +80,36 @@
                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:GridCell">
-                            <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Width}" Background="{Binding Background}"
-                                      Tapped="HeaderTapped" ToolTip.Tip="{Binding Text}">
-                                <TextBlock Text="{Binding Text}" FontWeight="SemiBold" />
+                            <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Column.Width}" Background="{Binding Background}"
+                                      Padding="0" DoubleTapped="HeaderDoubleTapped">
+                                <Panel>
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="6,4,3,4">
+                                        <TextBlock Text="{Binding Text}" FontWeight="SemiBold" VerticalAlignment="Center" IsVisible="{Binding !Column.IsCollapsed}"
+                                                   ToolTip.Tip="{Binding Text}" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="4,0,0,0" VerticalAlignment="Center"
+                                                    IsVisible="{Binding Column.HasButtons}">
+                                            <Button Classes="colbtn sort" Classes.asc="{Binding Column.IsAscending}" Classes.desc="{Binding Column.IsDescending}"
+                                                    Classes.fixed="{Binding IsFixed}" Command="{Binding Column.CycleSortCommand}" ToolTip.Tip="{Binding Column.SortTip}">
+                                                <Border Classes="face"><Path /></Border>
+                                            </Button>
+                                            <Button Classes="colbtn narrow fixed" Command="{Binding Column.CollapseCommand}" IsVisible="{Binding Column.ShowsCollapse}"
+                                                    ToolTip.Tip="Narrower">
+                                                <Border Classes="face"><Path /></Border>
+                                            </Button>
+                                            <Button Classes="colbtn widen fixed" Command="{Binding Column.ExpandCommand}" IsVisible="{Binding Column.ShowsExpand}"
+                                                    ToolTip.Tip="Wider (at most 120 characters)">
+                                                <Border Classes="face"><Path /></Border>
+                                            </Button>
+                                            <Button Classes="colbtn size" Classes.on="{Binding Column.IsExpanded}" Command="{Binding Column.ToggleSizeCommand}"
+                                                    IsVisible="{Binding Column.ShowsToggle}" ToolTip.Tip="Wider (at most 120 characters) / as before">
+                                                <Border Classes="face"><Path /></Border>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                    <!-- the sorted column's frame -->
+                                    <Border Classes="sortframe" BorderBrush="{Binding FrameBrush}" BorderThickness="{Binding FrameThickness}"
+                                            IsVisible="{Binding FrameBrush, Converter={x:Static ObjectConverters.IsNotNull}}" IsHitTestVisible="False" />
+                                </Panel>
                             </c:Sticky>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -55,9 +126,11 @@
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:GridCell">
-                                        <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Width}" Background="{Binding Background}" Padding="0">
+                                        <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Column.Width}" Background="{Binding Background}" Padding="0">
                                             <Panel>
                                                 <TextBlock Text="{Binding Text}" Margin="6,4" ToolTip.Tip="{Binding Text}" />
+                                                <Border BorderBrush="{Binding FrameBrush}" BorderThickness="{Binding FrameThickness}" IsHitTestVisible="False"
+                                                        IsVisible="{Binding FrameBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                                 <!-- the selected run -->
                                                 <Border Background="#401E78D4" BorderBrush="#1E78D4" BorderThickness="0,1.5"
                                                         IsVisible="{Binding Row.IsSelected, FallbackValue=False}" />
