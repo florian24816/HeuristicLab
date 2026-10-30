@@ -307,12 +307,17 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>The further results tab this is (its name is edited next to Refresh); null for the main tab.</summary>
   public ResultsWindowViewModel? ResultsTab { get; set; }
 
-  /// <summary>The main Results tab's "Close windows" (closes all results windows, after asking).</summary>
+  /// <summary>The main Results tab's "Close all result windows" (closes all results windows, after asking).</summary>
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(ClosesWindows))]
   public partial System.Windows.Input.ICommand? CloseWindowsCommand { get; set; }
 
-  public bool ClosesWindows => !IsWindow && CloseWindowsCommand != null;
+  partial void OnCloseWindowsCommandChanged(System.Windows.Input.ICommand? value) {
+    if (value != null) value.CanExecuteChanged += (_, _) => OnPropertyChanged(nameof(ClosesWindows));
+  }
+
+  /// <summary>"Close all result windows" is shown in the main tab only, and only while further results tabs exist.</summary>
+  public bool ClosesWindows => !IsWindow && CloseWindowsCommand?.CanExecute(null) == true;
 
   /// <summary>Raised when the ticks change (a results window compares its own with them).</summary>
   public event Action? TicksAltered;

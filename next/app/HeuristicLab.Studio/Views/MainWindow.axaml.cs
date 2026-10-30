@@ -114,7 +114,7 @@ public partial class MainWindow : Window
         main.Dock(results, index);
     }
 
-    // ---- closing the main window while results windows are open: asked first, as "Close windows" does
+    // ---- closing the main window while results windows are open: asked first, as "Close all result windows" does
 
     private bool closeConfirmed;
 

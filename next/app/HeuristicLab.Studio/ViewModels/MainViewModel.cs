@@ -61,7 +61,7 @@ public partial class MainViewModel : ViewModelBase {
       Priority = Enum.TryParse<ResourcePriority>(loaded.ResourcePriority, out var priority) ? priority : ResourcePriority.Normal
     };
     Resources = new ResourcesViewModel(limits, _ => { if (Resources != null) SaveSettings(); }, StopEverything);
-    // the main Results tab closes the results windows ("Close windows", enabled while there are some)
+    // the main Results tab closes the results windows ("Close all result windows", shown while there are some)
     RunAnalysis.CloseWindowsCommand = CloseResultsWindowsCommand;
     ResultsWindows.CollectionChanged += (_, _) => {
       OnPropertyChanged(nameof(HasResultsWindows));
@@ -231,13 +231,13 @@ public partial class MainViewModel : ViewModelBase {
     OnPropertyChanged(nameof(SelectedDocked));
   }
 
-  /// <summary>"Close windows" (main Results tab): after "OK" in "n result windows are about to be closed", all of them.</summary>
+  /// <summary>"Close all result windows" (main Results tab): after "OK" in "n result windows are about to be closed", all of them.</summary>
   [RelayCommand(CanExecute = nameof(HasResultsWindows))]
   private async System.Threading.Tasks.Task CloseResultsWindowsAsync() {
     int count = ResultsWindows.Count;
     if (count == 0) return;
     var message = count == 1 ? "1 result window is about to be closed" : $"{count} result windows are about to be closed";
-    if (dialogs != null && !await dialogs.AcknowledgeAsync("Close windows", message)) return;
+    if (dialogs != null && !await dialogs.AcknowledgeAsync("Close all result windows", message)) return;
     foreach (var results in ResultsWindows.ToList()) CloseResults(results);
   }
 
@@ -252,7 +252,7 @@ public partial class MainViewModel : ViewModelBase {
   /// <summary>Asked before the main window closes while results windows are open (closing the dialog keeps it open).</summary>
   public async System.Threading.Tasks.Task<bool> ConfirmCloseResultsWindowsAsync(int count) {
     var message = count == 1 ? "1 result window is about to be closed" : $"{count} result windows are about to be closed";
-    return dialogs == null || await dialogs.AcknowledgeAsync("Close windows", message);
+    return dialogs == null || await dialogs.AcknowledgeAsync("Close all result windows", message);
   }
 
   /// <summary>A results window was closed by the user (its title bar's X): the tab goes too.</summary>

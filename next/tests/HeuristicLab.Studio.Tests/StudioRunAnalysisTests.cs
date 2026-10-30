@@ -505,6 +505,9 @@ public class StudioRunAnalysisTests {
       Assert.AreEqual(0, RunWindows().Count);
       Assert.AreEqual(0, analysis.RunWindows.Open.Count);
       Assert.IsFalse(closeAll.Command.CanExecute(null));
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsFalse(closeAll.IsEffectivelyVisible, "shown only while run windows are open");
+      Assert.AreEqual(new Avalonia.CornerRadius(0), closeAll.CornerRadius);
       // the main window closing takes them along
       analysis.OpenRunWindow(analysis.Rows[2]);
       Assert.AreEqual(1, RunWindows().Count);

@@ -114,7 +114,15 @@ public class StudioResultsWindowTests {
       Assert.IsFalse(main.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Same as main results" && b.IsEffectivelyVisible),
         "only in further tabs");
       Border Custom() => box.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate"));
-      Assert.AreEqual(Pale, ((ISolidColorBrush)Custom().Background!).Color);
+      Assert.AreEqual(Color.Parse("#E3E3E3"), ((ISolidColorBrush)Custom().Background!).Color, "grey: not the state, cannot be pressed");
+      // low buttons: the text close to the edge, not touching it; Custom as high as the buttons
+      var allButton = Shortcut(main, "All");
+      var allText = allButton.GetVisualDescendants().OfType<TextBlock>().Single();
+      double textTop = allText.TranslatePoint(default, allButton)!.Value.Y;
+      Assert.IsTrue(textTop >= 1 && textTop <= 4, $"text {textTop:0.#} below the top edge");
+      double textBelow = allButton.Bounds.Height - textTop - allText.Bounds.Height;
+      Assert.IsTrue(textBelow >= 1 && textBelow <= 5, $"text {textBelow:0.#} above the bottom edge");
+      Assert.AreEqual(allButton.Bounds.Height, Custom().Bounds.Height, 1);
       // only the single runs, then one of two experiment sources by hand: "Custom"
       Shortcut(main, "Only singles").Command!.Execute(null);
       Pump();
@@ -390,19 +398,19 @@ public class StudioResultsWindowTests {
       vm.Workspace.NewExperiment();
       vm.SelectedTab = MainViewModel.ResultsTab;
       Pump();
-      // in the main Results tab only, pale red, usable while results windows are open
-      var close = Shortcut(main, "Close windows");
-      Assert.AreEqual(Color.Parse("#F6CACA"), Fill(close));
-      Assert.IsFalse(close.Command!.CanExecute(null), "no windows yet");
+      // in the main Results tab only, pale red, square, shown only while results windows are open
+      Assert.IsFalse(main.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Close all result windows" && b.IsEffectivelyVisible), "no windows yet");
       vm.AddResultsWindowCommand.Execute(null);
       vm.AddResultsWindowCommand.Execute(null);
       vm.Undock(vm.ResultsWindows[1]);
       vm.SelectResults(null);
       Pump();
-      close = Shortcut(main, "Close windows");  // the main tab's view is built again when it is shown again
+      var close = Shortcut(main, "Close all result windows");  // the main tab's view is built again when it is shown again
+      Assert.AreEqual(Color.Parse("#F6CACA"), Fill(close));
+      Assert.AreEqual(new CornerRadius(0), close.CornerRadius);
       Assert.IsTrue(close.Command!.CanExecute(null));
       Assert.AreEqual(1, main.OpenResultsWindows.Count, "one docked tab, one window");
-      Assert.IsFalse(main.OpenResultsWindows[0].GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Close windows" && b.IsEffectivelyVisible),
+      Assert.IsFalse(main.OpenResultsWindows[0].GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Close all result windows" && b.IsEffectivelyVisible),
         "results windows copy from the main tab instead");
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-closewindows.png"));
 
@@ -419,6 +427,7 @@ public class StudioResultsWindowTests {
       Assert.AreEqual(0, main.OpenResultsWindows.Count);
       Assert.AreEqual(0, vm.ResultsWindows.Count);
       Assert.IsFalse(close.Command.CanExecute(null));
+      Assert.IsFalse(close.IsEffectivelyVisible, "gone with the last window");
 
       // closing the main window while a results window is open: the same question first
       vm.AddResultsWindowCommand.Execute(null);
@@ -434,7 +443,7 @@ public class StudioResultsWindowTests {
       Assert.IsTrue(main.IsVisible, "the dialog closed: the main window stays");
       Assert.AreEqual(1, main.OpenResultsWindows.Count);
       // the dialog itself: only "OK" (closing it is the way back)
-      var ask = new ConfirmWindow("Close windows", "2 result windows are about to be closed", yes: "OK", cancel: false);
+      var ask = new ConfirmWindow("Close all result windows", "2 result windows are about to be closed", yes: "OK", cancel: false);
       ask.Show(main);
       Pump();
       var buttons = ask.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible).Select(b => b.Content as string).ToList();

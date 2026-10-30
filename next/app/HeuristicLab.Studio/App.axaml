@@ -102,7 +102,7 @@
             <Setter Property="Foreground" Value="{DynamicResource InvertInkBrush}" />
         </Style>
         <!-- the Results tab's selection state: a box of its own; its buttons in the logo orange, pale, full when its
-             state is the one now; square corners. "Custom" (Border.tickstate) looks the same but cannot be pressed -->
+             state is the one now; square corners. "Custom" (Border.tickstate) cannot be pressed: grey unless it is the state -->
         <Style Selector="Border.selectionstate">
             <Setter Property="Background" Value="{DynamicResource ExperimentBrush}" />
             <Setter Property="Padding" Value="8,0" />
@@ -114,6 +114,8 @@
             <Setter Property="Background" Value="#FDE5C8" />
             <Setter Property="Foreground" Value="#1E1E1E" />
             <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="6,2,6,3" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
         </Style>
@@ -129,16 +131,20 @@
             <Setter Property="Background" Value="#E8850F" />
         </Style>
         <Style Selector="Border.tickstate">
-            <Setter Property="Background" Value="#FDE5C8" />
-            <Setter Property="Padding" Value="12,5,12,6" />
+            <Setter Property="Background" Value="#E3E3E3" />
+            <Setter Property="Padding" Value="6,2,6,3" />
         </Style>
         <Style Selector="Border.tickstate.on">
             <Setter Property="Background" Value="#F7931D" />
         </Style>
+        <!-- grey while it is not the state (it cannot be pressed), full orange when it is -->
         <Style Selector="Border.tickstate TextBlock">
-            <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="Foreground" Value="#8C8C8C" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.tickstate.on TextBlock">
+            <Setter Property="Foreground" Value="#1E1E1E" />
         </Style>
         <!-- "Add window" in the Results tab's header: a plain rectangle, in the tabs' font, a little smaller than their titles -->
         <Style Selector="Button.addwindow">
@@ -153,14 +159,16 @@
             <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseHighBrush}" />
             <Setter Property="CornerRadius" Value="0" />
         </Style>
-        <!-- "Close windows" (main Results tab): pale red -->
+        <!-- "Close all result windows" (main Results tab), "Close all run view windows": pale red, square corners -->
         <Style Selector="Button.closewindows">
             <Setter Property="Background" Value="#F6CACA" />
             <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="CornerRadius" Value="0" />
         </Style>
         <Style Selector="Button.closewindows:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#EFB0B0" />
             <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="CornerRadius" Value="0" />
         </Style>
         <Style Selector="Border.caution">
             <Setter Property="Background" Value="#F4E803" />

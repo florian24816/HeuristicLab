@@ -250,11 +250,12 @@
   Selection state (user's request 2026-10-30): a box (Border.selectionstate, ExperimentBrush) with Refresh in a cut-out
   at its top left, "Selection state" beside it; square buttons (Button.ticks: pale logo orange #FDE5C8, full #F7931D
   when it is the state now): "All" (AllTicked, single runs too), "All w/o singles" (AllButSingleTicked), "Only singles"
-  (OnlySinglesTicked), "None" (NoneTicked), "Custom" (Border.tickstate, cannot be pressed; IsCustom = none of those
+  (OnlySinglesTicked), "None" (NoneTicked) - low buttons (padding 6,2,6,3, no MinHeight), "Custom" (Border.tickstate, cannot be pressed: grey #E3E3E3 with grey writing unless it is the state; IsCustom = none of those
   four, so it can be full orange together with "Same as main results"), last in further tabs "Same as main results"
   (MatchesMain). Controls/JustifiedWrapPanel: as many per row as fit, every row stretched from edge to edge (a child
   alone takes the row). Level with Refresh in the right column: a further tab's "Window name" (RunAnalysisViewModel.
-  ResultsTab.Name), the main tab's "Close windows".
+  ResultsTab.Name), the main tab's "Close all result windows" (only while further results tabs exist: ClosesWindows
+  follows the command's CanExecute).
   Results tabs and windows (user's request 2026-10-28): "Add window" (Button.addwindow:
   square rectangle, tab font at 17 px, AddWindowBrush grey - darker than the window in light mode #D4D4D4, lighter
   in dark mode #3A3A3A) in the Results tab's header while it is shown (MainViewModel.IsResultsTab) adds a further
@@ -278,9 +279,9 @@
   it is over the bar; unknown elsewhere: resting MainWindow.DockAfter counts as let go) - the window manager moves
   windows without telling when the button is released (PositionChanged -> MainWindow.WindowOver / CheckLetGo ->
   MainViewModel.Dock). Closing the
-  main window while results windows are open asks the same as "Close windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
+  main window while results windows are open asks the same as "Close all result windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
   "Same as main results" in further tabs' selection state box (IsWindow; full orange while MatchesMain
-  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" (Button.closewindows, pale red #F6CACA; enabled while further tabs exist): IDialogService.
+  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close all result windows" (Button.closewindows, pale red #F6CACA, square; shown while further tabs exist): IDialogService.
   AcknowledgeAsync - "n result windows are about to be closed" with only "OK" (closing the dialog aborts) - then
   all of them (docked and windows) go.
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
@@ -298,7 +299,7 @@
   teal, three shades like Source/Origin/Run's orange); every table colors their runs' Source/Origin/Run cells
   (FixedTint, Retint on RunWindowSet.Changed; rows found by their IRun), orange again when closed. MainWindow opens
   them (RunWindowSet.Requested) and closes them in OnClosed; a further tab closing leaves them open.
-  "Close all run view windows" (Button.closewindows) next to "Export to Python...".
+  "Close all run view windows" (Button.closewindows, square) next to "Export to Python...", shown only while run windows are open.
   A press anywhere in the window outside the source list (empty space, another tab, the table; not in menus -
   handler on the TopLevel, RunAnalysisView.ElsewherePressed) ends the selection of sources. The table's selected rows
   end the same way (TableGridView.ElsewherePressed, multi-select tables); sorting / filtering keeps the selected

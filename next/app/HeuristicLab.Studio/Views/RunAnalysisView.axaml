@@ -55,13 +55,13 @@
 
         <DockPanel Grid.Column="2" Margin="10">
             <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,6">
-                <!-- level with Refresh: a further tab's name (title of its tab and window), or the main tab's "Close windows" -->
+                <!-- level with Refresh: a further tab's name (title of its tab and window), or the main tab's "Close all result windows" -->
                 <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsWindow}">
                     <TextBlock Text="Window name" VerticalAlignment="Center" FontWeight="SemiBold" />
                     <TextBox Classes="windowname" Width="320" Text="{Binding ResultsTab.Name, FallbackValue=''}" />
                 </StackPanel>
-                <Button Classes="closewindows" Content="Close windows" Command="{Binding CloseWindowsCommand}"
-                        IsVisible="{Binding ClosesWindows}" ToolTip.Tip="Close all results windows (asks first)" />
+                <Button Classes="closewindows" Content="Close all result windows" Command="{Binding CloseWindowsCommand}"
+                        IsVisible="{Binding ClosesWindows}" ToolTip.Tip="Close all further results tabs and windows (asks first)" />
                 <TextBlock Text="{Binding Status}" Opacity="0.8" />
                 <!-- filters: any number of conditions, all must hold -->
                 <WrapPanel ItemSpacing="6" LineSpacing="4">
@@ -117,7 +117,7 @@
                             <Button Content="Export CSV..." Command="{Binding ExportCommand}" ToolTip.Tip="The table as shown: filtered, sorted, these columns" />
                             <Button Content="Export to Python..." Command="{Binding ExportPythonCommand}"
                                     ToolTip.Tip="The shown runs as a Python module named after the experiment: its blocks as attributes (exp.batch_run_1.ga), typed parameters, results and curves, pandas tables via .df and compare(...)" />
-                            <Button Classes="closewindows" Content="Close all run view windows" Command="{Binding CloseRunWindowsCommand}"
+                            <Button Classes="closewindows" Content="Close all run view windows" Command="{Binding CloseRunWindowsCommand}" IsVisible="{Binding HasRunWindows}"
                                     ToolTip.Tip="Close the windows of runs opened from this table" />
                             <TextBlock Text="Click a column title to sort; right-click a run to open it in a window." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
                         </StackPanel>
