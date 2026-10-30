@@ -247,11 +247,14 @@
   and replaces AllColumns/NumericColumns/XChoices/CurveTables only when they change - a new list under a
   filter's ComboBox reset its selection, which rebuilt and replaced the list again: endless recursion, a
   stack overflow that closed Studio without a message (test StudioFilterTests types filters key by key).
-  Selection state (user's request 2026-10-30): a box of its own under Refresh (Border.selectionstate, ExperimentBrush
-  background, "Selection state" title) with square buttons (Button.ticks: pale logo orange #FDE5C8, full #F7931D when
-  it is the state now): "All" (everything but the single runs, AllButSingleTicked), "All w/ singles" (AllTicked),
-  "Only singles" (OnlySinglesTicked), "None" (NoneTicked), in further tabs "Same as main results" (MatchesMain), and
-  "Custom" (Border.tickstate, cannot be pressed; full orange when none of the others is, IsCustom).
+  Selection state (user's request 2026-10-30): a box (Border.selectionstate, ExperimentBrush) with Refresh in a cut-out
+  at its top left, "Selection state" beside it; square buttons (Button.ticks: pale logo orange #FDE5C8, full #F7931D
+  when it is the state now): "All" (AllTicked, single runs too), "All w/o singles" (AllButSingleTicked), "Only singles"
+  (OnlySinglesTicked), "None" (NoneTicked), "Custom" (Border.tickstate, cannot be pressed; IsCustom = none of those
+  four, so it can be full orange together with "Same as main results"), last in further tabs "Same as main results"
+  (MatchesMain). Controls/JustifiedWrapPanel: as many per row as fit, every row stretched from edge to edge (a child
+  alone takes the row). Level with Refresh in the right column: a further tab's "Window name" (RunAnalysisViewModel.
+  ResultsTab.Name), the main tab's "Close windows".
   Results tabs and windows (user's request 2026-10-28): "Add window" (Button.addwindow:
   square rectangle, tab font at 17 px, AddWindowBrush grey - darker than the window in light mode #D4D4D4, lighter
   in dark mode #3A3A3A) in the Results tab's header while it is shown (MainViewModel.IsResultsTab) adds a further
@@ -260,14 +263,14 @@
   in the Results tab, while there are further tabs, across the whole window) and selected: "Main results" first
   (rectangle), then one tab per further results tab (italic name, a small ✕; a parallelogram - skewed shape -
   while docked, a rectangle while it is a window; the shown one in the logo orange). A click shows a docked tab in
-  the main window (MainViewModel.SelectedResults / ShownAnalysis; its "Window name" field under the bar) or brings
+  the main window (MainViewModel.SelectedResults / ShownAnalysis; its "Window name" field in the tab, level with Refresh) or brings
   its window to the front; "Main results" shows the main tab and brings the main window to the front. A dragged
   tab disappears and one see-through copy (the ghost, ResultsTabBar.Ghost in the adorner layer, placed by its margin
   - the adorner layer sets RenderTransform itself; clipping off) shows instead: along the bar in the gap where it
   lands (the other tabs drawn shifted by RenderTransform; ResultsTabBar.Landing; released there: MoveResults -
   "Main results" stays first), off the bar following the pointer (released well above/below: MainViewModel.Undock,
   a window of its own at the pointer - Views/ResultsWindow with the same bar at its top, its own tab highlighted
-  there, the name field below, title bound live; anywhere else: back where it was). The tab list is never changed
+  there, title bound live to the name; anywhere else: back where it was). The tab list is never changed
   while dragging and every change is posted after the pointer event (changing it inside the tab's pointer event
   mixed up names, showed several ghosts and crashed); a stress test shuffles three tabs. A window moved over the
   main window's bar shows its tab's gap and ghost (ShowArriving) and docks back there only when the mouse button is
@@ -277,7 +280,7 @@
   MainViewModel.Dock). Closing the
   main window while results windows are open asks the same as "Close windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
   "Same as main results" in further tabs' selection state box (IsWindow; full orange while MatchesMain
-  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" next to Refresh (Button.closewindows, pale red #F6CACA; enabled while further tabs exist): IDialogService.
+  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" (Button.closewindows, pale red #F6CACA; enabled while further tabs exist): IDialogService.
   AcknowledgeAsync - "n result windows are about to be closed" with only "OK" (closing the dialog aborts) - then
   all of them (docked and windows) go.
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with

@@ -298,14 +298,14 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     init {
       main = value;
       // the copy button shows (full orange) whether this window's ticks are the main tab's: both can change
-      if (value != null) value.TicksAltered += () => {
-        OnPropertyChanged(nameof(MatchesMain));
-        OnPropertyChanged(nameof(IsCustom));
-      };
+      if (value != null) value.TicksAltered += () => OnPropertyChanged(nameof(MatchesMain));
     }
   }
   private readonly RunAnalysisViewModel? main;
   public bool IsWindow => Main != null;
+
+  /// <summary>The further results tab this is (its name is edited next to Refresh); null for the main tab.</summary>
+  public ResultsWindowViewModel? ResultsTab { get; set; }
 
   /// <summary>The main Results tab's "Close windows" (closes all results windows, after asking).</summary>
   [ObservableProperty]
@@ -337,10 +337,10 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>The boxes whose own tick counts (no children).</summary>
   private List<RunSourceViewModel> Leaves() => AllSources(Sources).Where(s => s.Counts).ToList();
 
-  /// <summary>Everything ticked, the single runs too (the button "All w/ singles" shows it in full orange).</summary>
+  /// <summary>Everything ticked, the single runs too (the button "All" shows it in full orange).</summary>
   public bool AllTicked => Leaves() is { Count: > 0 } leaves && leaves.All(s => s.Own);
 
-  /// <summary>Everything but the single runs ticked ("All").</summary>
+  /// <summary>Everything but the single runs ticked ("All w/o singles").</summary>
   public bool AllButSingleTicked {
     get {
       var leaves = Leaves();
@@ -361,8 +361,8 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>Nothing ticked.</summary>
   public bool NoneTicked => Leaves().All(s => !s.Own);
 
-  /// <summary>None of the states above (nor, in a further tab, the main tab's ticks): "Custom" is full orange.</summary>
-  public bool IsCustom => !(AllTicked || AllButSingleTicked || OnlySinglesTicked || NoneTicked || MatchesMain);
+  /// <summary>None of the states above: "Custom" is full orange (also when it is the main tab's ticks - both are then).</summary>
+  public bool IsCustom => !(AllTicked || AllButSingleTicked || OnlySinglesTicked || NoneTicked);
 
   private void NotifyTickStates() {
     OnPropertyChanged(nameof(AllTicked));

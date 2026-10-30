@@ -14,8 +14,9 @@ namespace HeuristicLab.Studio.Tests;
 
 /// <summary>
 /// "Add results window" (next to the Results tab's header): another Results tab in its own window, named in its title
-/// bar ("HL-Results: n", changed live), ticked as the main tab; the selection state box: "All", "All w/ singles",
-/// "Only singles", "None" (full orange when that is the state), in a further tab "Same as main results", else "Custom".
+/// bar ("HL-Results: n", changed live), ticked as the main tab; the selection state box: "All", "All w/o singles",
+/// "Only singles", "None" (full orange when that is the state), "Custom" when none of them is, in a further tab
+/// "Same as main results"; Refresh in a cut-out of the box, level with a further tab's name; rows reaching edge to edge.
 /// </summary>
 [TestClass]
 public class StudioResultsWindowTests {
@@ -72,17 +73,44 @@ public class StudioResultsWindowTests {
       var bar = main.GetVisualDescendants().OfType<ResultsTabBar>().Single();
       Assert.IsFalse(bar.IsEffectivelyVisible, "no second tab bar before a further results tab exists");
 
-      // the main tab: the experiment ticked, not the single runs - "All" is full orange, in a box of its own
+      // the main tab: the experiment ticked, not the single runs - "All w/o singles" is full orange, in a box of its own
       var analysis = vm.RunAnalysis;
       analysis.Sources.First().IsChecked = true;
       Pump();
       Assert.IsTrue(analysis.AllButSingleTicked);
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "All")));
-      Assert.AreEqual(Pale, Fill(Shortcut(main, "All w/ singles")));
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/o singles")));
+      Assert.AreEqual(Pale, Fill(Shortcut(main, "All")));
       Assert.AreEqual(new CornerRadius(0), Shortcut(main, "All").CornerRadius, "square corners");
-      var box = main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("selectionstate") && b.IsEffectivelyVisible);
-      Assert.IsTrue(box.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Selection state"));
+      var box = main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("selectionstate") && b.Child is HeuristicLab.Studio.Controls.JustifiedWrapPanel && b.IsEffectivelyVisible);
       Assert.AreEqual(Color.Parse("#D5CFC6"), ((ISolidColorBrush)box.Background!).Color);
+      // Refresh in a cut-out at the box's top left, "Selection state" beside it on the box's color
+      var header = main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("selectionstate") && b.Child is TextBlock { Text: "Selection state" } && b.IsEffectivelyVisible);
+      var refresh = Shortcut(main, "Refresh");
+      double Left(Visual v) => v.TranslatePoint(default, main)!.Value.X;
+      double Top(Visual v) => v.TranslatePoint(default, main)!.Value.Y;
+      Assert.AreEqual(Top(refresh), Top(header), 1, "level with Refresh");
+      Assert.IsTrue(Left(header) > Left(refresh) + refresh.Bounds.Width, "right of Refresh");
+      Assert.AreEqual(Top(header) + header.Bounds.Height, Top(box), 1, "one piece with the box below");
+      Assert.AreEqual(Left(refresh), Left(box), 1, "the box reaches under Refresh");
+      Assert.AreEqual(Left(header) + header.Bounds.Width, Left(box) + box.Bounds.Width, 1);
+      // its rows of buttons reach from edge to edge, at any width of the source list
+      void RowsJustified() {
+        var cells = box.GetVisualDescendants().OfType<Control>().Where(c => (c.Classes.Contains("ticks") || c.Classes.Contains("tickstate")) && c.IsEffectivelyVisible).ToList();
+        double right = cells.Max(c => Left(c) + c.Bounds.Width);
+        foreach (var line in cells.GroupBy(c => Math.Round(Top(c))))
+          Assert.AreEqual(right, line.Max(c => Left(c) + c.Bounds.Width), 1, $"a row ends at the right edge (row at {line.Key})");
+        Assert.AreEqual(Left(box) + box.Bounds.Width - right, cells.Min(Left) - Left(box), 1, "as far from the right edge as from the left");
+      }
+      RowsJustified();
+      var split = main.GetVisualDescendants().OfType<Grid>().First(g => g.ColumnDefinitions.Count == 3 && g.ColumnDefinitions[0].Width.Value == 280 && g.IsEffectivelyVisible);
+      foreach (var width in new[] { 140, 420, 900 }) {
+        split.ColumnDefinitions[0].Width = new GridLength(width);
+        Pump();
+        RowsJustified();
+        main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, $"studio-selection-state-{width}.png"));
+      }
+      split.ColumnDefinitions[0].Width = new GridLength(280);
+      Pump();
       Assert.IsFalse(main.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Same as main results" && b.IsEffectivelyVisible),
         "only in further tabs");
       Border Custom() => box.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate"));
@@ -96,7 +124,7 @@ public class StudioResultsWindowTests {
       analysis.Sources.First().IsChecked = true;
       Pump();
       Assert.IsTrue(analysis.AllTicked);
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/ singles")));
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All")));
       analysis.Sources.Single(s => s.Name == "Single runs").IsChecked = false;
       analysis.Sources.First().IsChecked = false;
       Pump();
@@ -109,9 +137,9 @@ public class StudioResultsWindowTests {
       Pump();
       Assert.IsTrue(analysis.IsCustom);
       Assert.AreEqual(Orange, ((ISolidColorBrush)Custom().Background!).Color);
-      Assert.IsFalse(new[] { "All", "All w/ singles", "Only singles", "None" }.Any(t => Fill(Shortcut(main, t)) == Orange));
+      Assert.IsFalse(new[] { "All", "All w/o singles", "Only singles", "None" }.Any(t => Fill(Shortcut(main, t)) == Orange));
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selection-state.png"));
-      Shortcut(main, "All").Command!.Execute(null);
+      Shortcut(main, "All w/o singles").Command!.Execute(null);
       Pump();
       Assert.IsTrue(analysis.AllButSingleTicked);
 
@@ -127,7 +155,25 @@ public class StudioResultsWindowTests {
       Assert.AreEqual(0, main.OpenResultsWindows.Count, "in the main window, not a window yet");
       Assert.IsTrue(first.Analysis.MatchesMain);
       Assert.AreEqual(Orange, Fill(Shortcut(main, "Same as main results")));
-      Assert.IsFalse(first.Analysis.IsCustom, "the main tab's ticks are a state too");
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/o singles")), "both: the main tab's ticks are All w/o singles");
+      // the window's name, level with Refresh
+      Assert.AreEqual(Top(Shortcut(main, "Refresh")), Top(main.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname") && t.IsEffectivelyVisible)), 1);
+      // the main tab ticked by hand, the further tab the same: "Custom" and "Same as main results" both full orange
+      analysis.Sources.First().Children.First().IsChecked = false;
+      first.Analysis.CopySelectionFromMain();
+      Pump();
+      Assert.IsTrue(analysis.IsCustom);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Same as main results")));
+      Assert.AreEqual(Orange, ((ISolidColorBrush)main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate") && b.IsEffectivelyVisible).Background!).Color);
+      Assert.IsTrue(Left(Shortcut(main, "Same as main results")) > Left(main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate") && b.IsEffectivelyVisible))
+                    || Top(Shortcut(main, "Same as main results")) > Top(main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate") && b.IsEffectivelyVisible)), "last");
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selection-state-window.png"));
+      vm.SelectResults(null);
+      Pump();
+      Shortcut(main, "All w/o singles").Command!.Execute(null);
+      vm.SelectResults(first);
+      first.Analysis.CopySelectionFromMain();
+      Pump();
       // "Main results" is a rectangle (first), further tabs parallelograms with italic names and a small cross
       var mainTab = main.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("resultstab") && p.Classes.Contains("main"));
       Assert.IsFalse(Skewed(Shape(mainTab)));
@@ -137,7 +183,7 @@ public class StudioResultsWindowTests {
       Assert.IsTrue(tab.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "✕"));
       Assert.IsTrue(mainTab.TranslatePoint(default, main)!.Value.X < tab.TranslatePoint(default, main)!.Value.X, "Main results first");
       Assert.AreEqual(Orange, ((ISolidColorBrush)Shape(tab).Background!).Color, "the selected tab");
-      // its name, under the bar, live in the tab
+      // its name, live in the tab
       var name = main.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname") && t.IsEffectivelyVisible);
       name.Text = "GA only";
       Pump();
@@ -147,7 +193,7 @@ public class StudioResultsWindowTests {
 
       // its own selection: select all / unselect all / copy from the main tab
       var other = first.Analysis;
-      Shortcut(main, "All w/ singles").Command!.Execute(null);
+      Shortcut(main, "All").Command!.Execute(null);
       Pump();
       Assert.IsTrue(other.AllTicked);
       Assert.AreEqual(analysis.Table.Rows.Count + 1, other.Table.Rows.Count, "with the single run");

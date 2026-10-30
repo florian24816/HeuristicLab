@@ -105,15 +105,17 @@
              state is the one now; square corners. "Custom" (Border.tickstate) looks the same but cannot be pressed -->
         <Style Selector="Border.selectionstate">
             <Setter Property="Background" Value="{DynamicResource ExperimentBrush}" />
-            <Setter Property="Padding" Value="8,6,8,8" />
+            <Setter Property="Padding" Value="8,0" />
         </Style>
-        <Style Selector="Border.selectionstate > StackPanel > TextBlock">
+        <Style Selector="Border.selectionstate > TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource ExperimentInkBrush}" />
         </Style>
         <Style Selector="Button.ticks">
             <Setter Property="Background" Value="#FDE5C8" />
             <Setter Property="Foreground" Value="#1E1E1E" />
             <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="Button.ticks:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#FBCD96" />
@@ -135,6 +137,7 @@
         </Style>
         <Style Selector="Border.tickstate TextBlock">
             <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <!-- "Add window" in the Results tab's header: a plain rectangle, in the tabs' font, a little smaller than their titles -->

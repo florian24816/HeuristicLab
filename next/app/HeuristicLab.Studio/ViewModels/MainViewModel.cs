@@ -170,6 +170,7 @@ public partial class MainViewModel : ViewModelBase {
     var analysis = new RunAnalysisViewModel(Workspace, fileDialogs) { Main = RunAnalysis, RunWindows = RunAnalysis.RunWindows };
     analysis.CopySelectionFromMain();
     var results = new ResultsWindowViewModel(++resultsWindowsMade, analysis);
+    analysis.ResultsTab = results;
     ResultsWindows.Add(results);
     SelectResults(results);
     return results;
