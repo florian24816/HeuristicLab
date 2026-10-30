@@ -438,6 +438,9 @@ public class StudioRunAnalysisTests {
       analysis.Grid!.SortCommand.Execute(analysis.Grid.Columns[4].Key);  // back to the order before (the rows below count on it)
       analysis.Grid!.SortCommand.Execute(analysis.Grid.Columns[4].Key);
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      // nothing selected before the rectangle (where the runs picked above land after sorting depends on their values)
+      Press(sourceTree.TranslatePoint(new Avalonia.Point(sourceTree.Bounds.Width / 2, sourceTree.Bounds.Height - 30), window)!.Value);
+      Assert.IsFalse(analysis.Grid!.Rows.Any(r => r.IsSelected));
       var from = RowAt(3);
       var to = RowAt(5);
       window.MouseDown(from, Avalonia.Input.MouseButton.Left);

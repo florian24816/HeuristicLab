@@ -9,18 +9,30 @@
         <DockPanel Margin="10">
             <WrapPanel DockPanel.Dock="Top" ItemSpacing="6" LineSpacing="4" Margin="0,0,0,6">
                 <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
-                <Button Classes="ticks" Classes.on="{Binding MatchesMain}" Content="Copy selection from main results tab" Command="{Binding CopySelectionFromMainCommand}"
-                        IsVisible="{Binding IsWindow}" ToolTip.Tip="Tick what the main window's Results tab has ticked" />
                 <Button Classes="closewindows" Content="Close windows" Command="{Binding CloseWindowsCommand}"
                         IsVisible="{Binding ClosesWindows}" ToolTip.Tip="Close all results windows (asks first)" />
             </WrapPanel>
-            <!-- tick all / all but the single runs / nothing; the button of the state there is now is full orange -->
-            <WrapPanel DockPanel.Dock="Top" ItemSpacing="4" LineSpacing="4" Margin="0,0,0,6">
-                <Button Classes="ticks" Classes.on="{Binding AllTicked}" Content="Select all" Command="{Binding SelectAllCommand}" />
-                <Button Classes="ticks" Classes.on="{Binding AllButSingleTicked}" Content="Select all (without single runs)"
-                        Command="{Binding SelectAllWithoutSingleCommand}" />
-                <Button Classes="ticks" Classes.on="{Binding NoneTicked}" Content="Unselect all" Command="{Binding UnselectAllCommand}" />
-            </WrapPanel>
+            <!-- the selection state: a button ticks that state, the one there is now is full orange; "Custom" only shows it -->
+            <Border DockPanel.Dock="Top" Classes="selectionstate" Margin="0,0,0,6">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Selection state" FontWeight="SemiBold" />
+                    <WrapPanel ItemSpacing="4" LineSpacing="4">
+                        <Button Classes="ticks" Classes.on="{Binding AllButSingleTicked}" Content="All" Command="{Binding SelectAllWithoutSingleCommand}"
+                                ToolTip.Tip="Tick every experiment, not the single runs" />
+                        <Button Classes="ticks" Classes.on="{Binding AllTicked}" Content="All w/ singles" Command="{Binding SelectAllCommand}"
+                                ToolTip.Tip="Tick everything, the single runs too" />
+                        <Button Classes="ticks" Classes.on="{Binding OnlySinglesTicked}" Content="Only singles" Command="{Binding SelectOnlySinglesCommand}"
+                                ToolTip.Tip="Tick only the single runs" />
+                        <Button Classes="ticks" Classes.on="{Binding NoneTicked}" Content="None" Command="{Binding UnselectAllCommand}"
+                                ToolTip.Tip="Untick everything" />
+                        <Button Classes="ticks" Classes.on="{Binding MatchesMain}" Content="Same as main results" Command="{Binding CopySelectionFromMainCommand}"
+                                IsVisible="{Binding IsWindow}" ToolTip.Tip="Tick what the main Results tab has ticked" />
+                        <Border Classes="tickstate" Classes.on="{Binding IsCustom}" ToolTip.Tip="Ticked by hand: none of the states here">
+                            <TextBlock Text="Custom" />
+                        </Border>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
             <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
                        Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked). Select several sources (click a name, Ctrl+click, Shift+click, or press and drag a rectangle), then right-click one of them to tick or untick them together." />
             <TreeView x:Name="SourceTree" Classes="sources" ItemsSource="{Binding Sources}">

@@ -247,9 +247,12 @@
   and replaces AllColumns/NumericColumns/XChoices/CurveTables only when they change - a new list under a
   filter's ComboBox reset its selection, which rebuilt and replaced the list again: endless recursion, a
   stack overflow that closed Studio without a message (test StudioFilterTests types filters key by key).
-  Tick shortcuts (Button.ticks: pale logo orange #FDE5C8, full #F7931D when it is the state now - AllTicked /
-  AllButSingleTicked / NoneTicked): "Select all", "Select all (without single runs)", "Unselect all" between
-  Refresh and the multi-select buttons. Results tabs and windows (user's request 2026-10-28): "Add window" (Button.addwindow:
+  Selection state (user's request 2026-10-30): a box of its own under Refresh (Border.selectionstate, ExperimentBrush
+  background, "Selection state" title) with square buttons (Button.ticks: pale logo orange #FDE5C8, full #F7931D when
+  it is the state now): "All" (everything but the single runs, AllButSingleTicked), "All w/ singles" (AllTicked),
+  "Only singles" (OnlySinglesTicked), "None" (NoneTicked), in further tabs "Same as main results" (MatchesMain), and
+  "Custom" (Border.tickstate, cannot be pressed; full orange when none of the others is, IsCustom).
+  Results tabs and windows (user's request 2026-10-28): "Add window" (Button.addwindow:
   square rectangle, tab font at 17 px, AddWindowBrush grey - darker than the window in light mode #D4D4D4, lighter
   in dark mode #3A3A3A) in the Results tab's header while it is shown (MainViewModel.IsResultsTab) adds a further
   results tab (ResultsWindowViewModel "HL-Results: n", ticked as the main tab at first - RunAnalysisViewModel.Main /
@@ -273,9 +276,8 @@
   windows without telling when the button is released (PositionChanged -> MainWindow.WindowOver / CheckLetGo ->
   MainViewModel.Dock). Closing the
   main window while results windows are open asks the same as "Close windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
-  "Copy selection from main results tab" next to Refresh in further tabs (IsWindow; full orange while MatchesMain
-  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" there
-  instead (Button.closewindows, pale red #F6CACA; enabled while further tabs exist): IDialogService.
+  "Same as main results" in further tabs' selection state box (IsWindow; full orange while MatchesMain
+  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" next to Refresh (Button.closewindows, pale red #F6CACA; enabled while further tabs exist): IDialogService.
   AcknowledgeAsync - "n result windows are about to be closed" with only "OK" (closing the dialog aborts) - then
   all of them (docked and windows) go.
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with

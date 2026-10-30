@@ -14,8 +14,8 @@ namespace HeuristicLab.Studio.Tests;
 
 /// <summary>
 /// "Add results window" (next to the Results tab's header): another Results tab in its own window, named in its title
-/// bar ("HL-Results: n", changed live), ticked as the main tab; "Select all", "Select all (without single runs)",
-/// "Unselect all" (full orange when that is the state), and in a window "Copy selection from main results tab".
+/// bar ("HL-Results: n", changed live), ticked as the main tab; the selection state box: "All", "All w/ singles",
+/// "Only singles", "None" (full orange when that is the state), in a further tab "Same as main results", else "Custom".
 /// </summary>
 [TestClass]
 public class StudioResultsWindowTests {
@@ -72,13 +72,48 @@ public class StudioResultsWindowTests {
       var bar = main.GetVisualDescendants().OfType<ResultsTabBar>().Single();
       Assert.IsFalse(bar.IsEffectivelyVisible, "no second tab bar before a further results tab exists");
 
-      // the main tab: the experiment ticked, not the single runs - "Select all (without single runs)" is full orange
+      // the main tab: the experiment ticked, not the single runs - "All" is full orange, in a box of its own
       var analysis = vm.RunAnalysis;
       analysis.Sources.First().IsChecked = true;
       Pump();
       Assert.IsTrue(analysis.AllButSingleTicked);
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "Select all (without single runs)")));
-      Assert.AreEqual(Pale, Fill(Shortcut(main, "Select all")));
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All")));
+      Assert.AreEqual(Pale, Fill(Shortcut(main, "All w/ singles")));
+      Assert.AreEqual(new CornerRadius(0), Shortcut(main, "All").CornerRadius, "square corners");
+      var box = main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("selectionstate") && b.IsEffectivelyVisible);
+      Assert.IsTrue(box.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Selection state"));
+      Assert.AreEqual(Color.Parse("#D5CFC6"), ((ISolidColorBrush)box.Background!).Color);
+      Assert.IsFalse(main.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Same as main results" && b.IsEffectivelyVisible),
+        "only in further tabs");
+      Border Custom() => box.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate"));
+      Assert.AreEqual(Pale, ((ISolidColorBrush)Custom().Background!).Color);
+      // only the single runs, then one of two experiment sources by hand: "Custom"
+      Shortcut(main, "Only singles").Command!.Execute(null);
+      Pump();
+      Assert.IsTrue(analysis.OnlySinglesTicked);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Only singles")));
+      Assert.AreEqual(1, analysis.Table.Rows.Count, "the single run");
+      analysis.Sources.First().IsChecked = true;
+      Pump();
+      Assert.IsTrue(analysis.AllTicked);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/ singles")));
+      analysis.Sources.Single(s => s.Name == "Single runs").IsChecked = false;
+      analysis.Sources.First().IsChecked = false;
+      Pump();
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "None")));
+      Assert.IsFalse(analysis.IsCustom);
+      // a second algorithm (no runs yet): only the first one ticked is none of the states
+      ws.AddAlgorithm(experiment, Catalog.Find(Catalog.Algorithms(), "TabuSearch")!);
+      analysis.RefreshSources();
+      analysis.Sources.First().Children.First().IsChecked = true;
+      Pump();
+      Assert.IsTrue(analysis.IsCustom);
+      Assert.AreEqual(Orange, ((ISolidColorBrush)Custom().Background!).Color);
+      Assert.IsFalse(new[] { "All", "All w/ singles", "Only singles", "None" }.Any(t => Fill(Shortcut(main, t)) == Orange));
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selection-state.png"));
+      Shortcut(main, "All").Command!.Execute(null);
+      Pump();
+      Assert.IsTrue(analysis.AllButSingleTicked);
 
       // "Add window": a tab in the second bar (spanning the window), selected and shown, ticked as the main tab
       add.Command!.Execute(null);
@@ -91,7 +126,8 @@ public class StudioResultsWindowTests {
       Assert.AreEqual(main.Bounds.Width, bar.Bounds.Width, 1, "across the whole window");
       Assert.AreEqual(0, main.OpenResultsWindows.Count, "in the main window, not a window yet");
       Assert.IsTrue(first.Analysis.MatchesMain);
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "Copy selection from main results tab")));
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Same as main results")));
+      Assert.IsFalse(first.Analysis.IsCustom, "the main tab's ticks are a state too");
       // "Main results" is a rectangle (first), further tabs parallelograms with italic names and a small cross
       var mainTab = main.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("resultstab") && p.Classes.Contains("main"));
       Assert.IsFalse(Skewed(Shape(mainTab)));
@@ -111,13 +147,13 @@ public class StudioResultsWindowTests {
 
       // its own selection: select all / unselect all / copy from the main tab
       var other = first.Analysis;
-      Shortcut(main, "Select all").Command!.Execute(null);
+      Shortcut(main, "All w/ singles").Command!.Execute(null);
       Pump();
       Assert.IsTrue(other.AllTicked);
       Assert.AreEqual(analysis.Table.Rows.Count + 1, other.Table.Rows.Count, "with the single run");
       Assert.AreEqual(1, analysis.Table.Rows.Count, "the main tab keeps its own selection");
-      Assert.AreEqual(Pale, Fill(Shortcut(main, "Copy selection from main results tab")));
-      Shortcut(main, "Copy selection from main results tab").Command!.Execute(null);
+      Assert.AreEqual(Pale, Fill(Shortcut(main, "Same as main results")));
+      Shortcut(main, "Same as main results").Command!.Execute(null);
       Assert.IsTrue(other.MatchesMain);
 
       // "Main results" shows the main tab again

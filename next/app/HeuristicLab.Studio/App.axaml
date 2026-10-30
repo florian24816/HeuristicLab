@@ -101,20 +101,41 @@
         <Style Selector="Border.selectrow.selected TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource InvertInkBrush}" />
         </Style>
-        <!-- tick shortcuts (Results tab, "Add results window"): the logo orange, pale; full when its state is the one now -->
+        <!-- the Results tab's selection state: a box of its own; its buttons in the logo orange, pale, full when its
+             state is the one now; square corners. "Custom" (Border.tickstate) looks the same but cannot be pressed -->
+        <Style Selector="Border.selectionstate">
+            <Setter Property="Background" Value="{DynamicResource ExperimentBrush}" />
+            <Setter Property="Padding" Value="8,6,8,8" />
+        </Style>
+        <Style Selector="Border.selectionstate > StackPanel > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ExperimentInkBrush}" />
+        </Style>
         <Style Selector="Button.ticks">
             <Setter Property="Background" Value="#FDE5C8" />
             <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="CornerRadius" Value="0" />
         </Style>
         <Style Selector="Button.ticks:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#FBCD96" />
             <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="CornerRadius" Value="0" />
         </Style>
         <Style Selector="Button.ticks.on">
             <Setter Property="Background" Value="#F7931D" />
         </Style>
         <Style Selector="Button.ticks.on:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#E8850F" />
+        </Style>
+        <Style Selector="Border.tickstate">
+            <Setter Property="Background" Value="#FDE5C8" />
+            <Setter Property="Padding" Value="12,5,12,6" />
+        </Style>
+        <Style Selector="Border.tickstate.on">
+            <Setter Property="Background" Value="#F7931D" />
+        </Style>
+        <Style Selector="Border.tickstate TextBlock">
+            <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <!-- "Add window" in the Results tab's header: a plain rectangle, in the tabs' font, a little smaller than their titles -->
         <Style Selector="Button.addwindow">

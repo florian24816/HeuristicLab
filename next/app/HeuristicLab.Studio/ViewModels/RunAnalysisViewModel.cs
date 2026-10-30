@@ -289,15 +289,19 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     Rebuild();
   }
 
-  // ---- ticking all, all but the single runs, none; a results window copies the main tab's ticks
+  // ---- the selection state: all, all with the single runs, only the single runs, none; a results window can
+  // match the main tab's ticks; anything else is "Custom" 
 
-  /// <summary>The main Results tab, for a results window (its "Copy selection from main results tab"); null for the main tab.</summary>
+  /// <summary>The main Results tab, for a results window (its "Same as main results"); null for the main tab.</summary>
   public RunAnalysisViewModel? Main {
     get => main;
     init {
       main = value;
       // the copy button shows (full orange) whether this window's ticks are the main tab's: both can change
-      if (value != null) value.TicksAltered += () => OnPropertyChanged(nameof(MatchesMain));
+      if (value != null) value.TicksAltered += () => {
+        OnPropertyChanged(nameof(MatchesMain));
+        OnPropertyChanged(nameof(IsCustom));
+      };
     }
   }
   private readonly RunAnalysisViewModel? main;
@@ -333,10 +337,10 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>The boxes whose own tick counts (no children).</summary>
   private List<RunSourceViewModel> Leaves() => AllSources(Sources).Where(s => s.Counts).ToList();
 
-  /// <summary>Everything ticked (the button "Select all" shows it in full orange).</summary>
+  /// <summary>Everything ticked, the single runs too (the button "All w/ singles" shows it in full orange).</summary>
   public bool AllTicked => Leaves() is { Count: > 0 } leaves && leaves.All(s => s.Own);
 
-  /// <summary>Everything but the single runs ticked.</summary>
+  /// <summary>Everything but the single runs ticked ("All").</summary>
   public bool AllButSingleTicked {
     get {
       var leaves = Leaves();
@@ -345,14 +349,28 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     }
   }
 
+  /// <summary>The single runs ticked and nothing else.</summary>
+  public bool OnlySinglesTicked {
+    get {
+      var leaves = Leaves();
+      var singles = leaves.Where(IsSingle).ToList();
+      return singles.Count > 0 && singles.All(s => s.Own) && leaves.Where(s => !IsSingle(s)).All(s => !s.Own);
+    }
+  }
+
   /// <summary>Nothing ticked.</summary>
   public bool NoneTicked => Leaves().All(s => !s.Own);
+
+  /// <summary>None of the states above (nor, in a further tab, the main tab's ticks): "Custom" is full orange.</summary>
+  public bool IsCustom => !(AllTicked || AllButSingleTicked || OnlySinglesTicked || NoneTicked || MatchesMain);
 
   private void NotifyTickStates() {
     OnPropertyChanged(nameof(AllTicked));
     OnPropertyChanged(nameof(AllButSingleTicked));
+    OnPropertyChanged(nameof(OnlySinglesTicked));
     OnPropertyChanged(nameof(NoneTicked));
     OnPropertyChanged(nameof(MatchesMain));
+    OnPropertyChanged(nameof(IsCustom));
     TicksAltered?.Invoke();
   }
 
@@ -366,6 +384,9 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   [RelayCommand]
   private void SelectAllWithoutSingle() => TickWhere(n => !IsSingle(n));
+
+  [RelayCommand]
+  private void SelectOnlySingles() => TickWhere(IsSingle);
 
   [RelayCommand]
   private void UnselectAll() => TickWhere(_ => false);
