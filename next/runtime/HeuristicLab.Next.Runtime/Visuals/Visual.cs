@@ -44,8 +44,12 @@ public abstract record Visual(string Title) {
 public enum SeriesKind { Line, StepLine, Points, Columns, Bars, Histogram }
 
 /// <param name="Width">Column or histogram bin width in x units (0: derived from the spacing).</param>
+/// <param name="Size">Line thickness or point radius (0: the chart's default).</param>
+/// <param name="LabelColor">Its legend text in this color (a marked place).</param>
+/// <param name="Layer">Drawn in this order (lower first, same layer in list order): a marked run's halo behind its point (-1), the first place's curve on top.</param>
 public sealed record PlotSeries(string Name, SeriesKind Kind, IReadOnlyList<(double X, double Y)> Points,
-                                Rgb? Color = null, bool SecondYAxis = false, double Width = 0);
+                                Rgb? Color = null, bool SecondYAxis = false, double Width = 0, double Size = 0,
+                                Rgb? LabelColor = null, double Layer = 0);
 
 /// <param name="Markers">Labelled vertical lines, e.g. the start of the test partition.</param>
 public sealed record ChartVisual(string Title, IReadOnlyList<PlotSeries> Series, string XAxisTitle = "", string YAxisTitle = "",
@@ -104,7 +108,8 @@ public sealed record TextShape(Point2 At, string Text, Rgb Color, TextAnchor Anc
 /// </summary>
 public sealed record RasterShape(double X, double Y, double Width, double Height, int Rows, int Columns, Rgb[] Pixels) : Shape;
 
-public sealed record LegendEntry(string Label, Rgb Color);
+/// <param name="LabelColor">The text in this color (a marked place), else the picture's text color.</param>
+public sealed record LegendEntry(string Label, Rgb Color, Rgb? LabelColor = null);
 
 /// <summary>
 /// 2D drawing in its own coordinates. YUp: y grows upwards (maps, function spaces); otherwise

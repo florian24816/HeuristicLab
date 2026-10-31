@@ -452,6 +452,84 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   partial void OnBinsChanged(decimal value) => Rebuild();
 
+  // ---- "Mark best/worst": the first places by a numeric column, colored in the table and the charts
+
+  /// <summary>The marking in use (null: none).</summary>
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsMarked), nameof(MarkingText), nameof(ShowsMarkButton))]
+  public partial RunMarking? Marking { get; set; }
+
+  /// <summary>The marking's fields are shown instead of the button.</summary>
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(ShowsMarkButton))]
+  public partial bool IsMarking { get; set; }
+
+  public bool IsMarked => Marking != null;
+  public bool ShowsMarkButton => !IsMarking;
+
+  public static IReadOnlyList<string> MarkOrders { get; } = ["Ascending (smallest first)", "Descending (largest first)"];
+
+  [ObservableProperty]
+  public partial ColumnChoice? MarkColumn { get; set; }
+
+  [ObservableProperty]
+  public partial string MarkOrder { get; set; } = MarkOrders[0];
+
+  /// <summary>How many places are marked (6 to 100).</summary>
+  [ObservableProperty]
+  public partial decimal? MarkTop { get; set; } = 10;
+
+  /// <summary>Values within this of a place's first value share the place (0: only equal values).</summary>
+  [ObservableProperty]
+  public partial decimal? MarkTolerance { get; set; } = 0;
+
+  public decimal MinMarkTop => RunMarking.MinTop;
+  public decimal MaxMarkTop => RunMarking.MaxTop;
+
+  public string MarkingText => Marking is not { } m ? "" :
+    $"{(m.Descending ? "Largest" : "Smallest")} {m.Top} of {NumericColumns.FirstOrDefault(c => c.Key == m.Key)?.Display ?? m.Key}" +
+    (m.Tolerance > 0 ? $" (± {m.Tolerance.ToString("G6", Invariant)})" : "");
+
+  /// <summary>"Mark best/worst": its fields instead of the button, filled with the marking in use (else the chart's value).</summary>
+  [RelayCommand]
+  private void StartMarking() {
+    var m = Marking;
+    MarkColumn = NumericColumns.FirstOrDefault(c => c.Key == m?.Key) ?? ChartValue ?? NumericColumns.FirstOrDefault();
+    MarkOrder = MarkOrders[m?.Descending == true ? 1 : 0];
+    MarkTop = m?.Top ?? 10;
+    MarkTolerance = (decimal)(m?.Tolerance ?? 0);
+    IsMarking = true;
+  }
+
+  /// <summary>The tick: marks the runs.</summary>
+  [RelayCommand]
+  private void ApplyMarking() {
+    if (MarkColumn == null) return;
+    int top = (int)Math.Clamp(MarkTop ?? 10, RunMarking.MinTop, RunMarking.MaxTop);
+    Marking = new RunMarking(MarkColumn.Key, MarkOrder == MarkOrders[1], top, (double)Math.Max(0, MarkTolerance ?? 0));
+    IsMarking = false;
+    RebuildRows();
+    RebuildChart();
+  }
+
+  /// <summary>The cross: the fields go, the marking in use stays.</summary>
+  [RelayCommand]
+  private void CancelMarking() => IsMarking = false;
+
+  /// <summary>The marking's ✕: nothing marked any more.</summary>
+  [RelayCommand]
+  private void RemoveMarking() {
+    Marking = null;
+    RebuildRows();
+    RebuildChart();
+  }
+
+  /// <summary>The shown runs ranked by the marking (null: none, or its column is gone).</summary>
+  public MarkedRuns? Marks => Marking is { } m && Table.Column(m.Key) is { IsNumeric: true } ? MarkedRuns.Rank(Table.Rows, m) : null;
+
+  /// <summary>A marked row's layer: its place's color, light.</summary>
+  public const byte MarkAlpha = 0x55;
+
   // ---- building the table: small ones at once, large ones in the background with a progress bar
 
   /// <summary>What was read from each run (the slow part), so a new filter or grouping does not read them again.</summary>
@@ -694,6 +772,14 @@ public partial class RunAnalysisViewModel : ViewModelBase {
       Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort,
       new TableLook(SortKey, SortKey == null ? SortOrder.None : SortDescending ? SortOrder.Descending : SortOrder.Ascending, columnSizes)) { FixedTint = TintOf, RowMenu = MenuOf, MultiSelect = true, ScrollX = scrollX };
     foreach (var row in Grid.Rows) row.IsSelected = selected.Contains(((AnalysisRow)row.Item).Row);
+    // marked places: a light layer of their color over the row, the first three bold
+    if (Marks is { } marks)
+      foreach (var row in Grid.Rows)
+        if (marks.PlaceOf(((AnalysisRow)row.Item).Row) is int place) {
+          var c = marks.Color(place);
+          row.MarkBrush = new Avalonia.Media.Immutable.ImmutableSolidColorBrush(Avalonia.Media.Color.FromArgb(MarkAlpha, c.R, c.G, c.B));
+          row.IsBold = place <= 3;
+        }
     SelectedRow = null;
   }
 
@@ -900,14 +986,15 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   private void RebuildChart() {
     if (Groups.Count == 0) { Chart.Show([]); return; }
+    var marks = Marks;
     HeuristicLab.Next.Runtime.Visuals.Visual? visual = ChartKind switch {
-      "Curves" when CurveTable != null && CurveRow != null => RunCharts.Curves(Groups, CurveTable, CurveRow, CurveRuns, CurveMean),
+      "Curves" when CurveTable != null && CurveRow != null => RunCharts.Curves(Groups, CurveTable, CurveRow, CurveRuns, CurveMean, marks),
       "Curves" => new HeuristicLab.Next.Runtime.Visuals.TextVisual("Curves", "The ticked runs have no tables (results folders keep only numbers)."),
       _ when ChartValue == null => null,
-      "Scatter" when ChartX != null => RunCharts.Scatter(Table, Groups, ChartX.Key, ChartValue.Key),
+      "Scatter" when ChartX != null => RunCharts.Scatter(Table, Groups, ChartX.Key, ChartValue.Key, marks),
       "Histogram" => RunCharts.Histogram(Table, Groups, ChartValue.Key),
-      "Cumulative distribution" => RunCharts.Cumulative(Table, Groups, ChartValue.Key),
-      _ => RunCharts.BoxPlot(Table, Groups, ChartValue.Key)
+      "Cumulative distribution" => RunCharts.Cumulative(Table, Groups, ChartValue.Key, marks),
+      _ => RunCharts.BoxPlot(Table, Groups, ChartValue.Key, marks)
     };
     Chart.Show(visual == null ? [] : [visual]);
     BoxTable = IsBoxPlot && ChartValue != null ? BoxGrid(RunCharts.BoxStatistics(Groups, ChartValue.Key)) : null;

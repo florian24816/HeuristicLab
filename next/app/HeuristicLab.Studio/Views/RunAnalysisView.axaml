@@ -80,6 +80,31 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <Button Content="+ Filter" Command="{Binding AddFilterCommand}" />
+                    <!-- "Mark best/worst": the first places by a number, colored in the table and the charts -->
+                    <Button Content="Mark best/worst" Command="{Binding StartMarkingCommand}" IsVisible="{Binding ShowsMarkButton}" Margin="10,0,0,0"
+                            ToolTip.Tip="Rank the runs by a number and color the first places: gold, silver, bronze, then green over yellow to red" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsMarking}" Margin="10,0,0,0">
+                        <ComboBox ItemsSource="{Binding NumericColumns}" SelectedItem="{Binding MarkColumn}" Width="220" PlaceholderText="Number to rank by"
+                                  ToolTip.Tip="The runs are ranked by this column" />
+                        <ComboBox ItemsSource="{Binding MarkOrders}" SelectedItem="{Binding MarkOrder}" Width="235"
+                                  ToolTip.Tip="Ascending: the smallest value is 1st; descending: the largest" />
+                        <TextBlock Text="top" VerticalAlignment="Center" Margin="4,0,0,0" />
+                        <NumericUpDown Value="{Binding MarkTop}" Minimum="{Binding MinMarkTop}" Maximum="{Binding MaxMarkTop}" Increment="1" FormatString="0" Width="110"
+                                       ToolTip.Tip="How many places are marked (6 to 100)" />
+                        <TextBlock Text="±" VerticalAlignment="Center" Margin="4,0,0,0" />
+                        <NumericUpDown Value="{Binding MarkTolerance}" Minimum="0" Increment="1" FormatString="0.####" Width="120"
+                                       ToolTip.Tip="Values this close to a place's first value share its place and color (0: only equal values)" />
+                        <Button Classes="markapply" Content="✓" Command="{Binding ApplyMarkingCommand}" ToolTip.Tip="Mark the runs" />
+                        <Button Content="✕" Command="{Binding CancelMarkingCommand}" ToolTip.Tip="Close without changing the marking" />
+                    </StackPanel>
+                    <!-- the marking in use -->
+                    <Border Background="#F3E2A9" CornerRadius="10" Padding="10,3" IsVisible="{Binding IsMarked}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding MarkingText}" Foreground="#3A2E05" VerticalAlignment="Center" />
+                            <Button Content="✕" Padding="4,0" Background="Transparent" Foreground="#3A2E05" ToolTip.Tip="Mark nothing"
+                                    Command="{Binding RemoveMarkingCommand}" />
+                        </StackPanel>
+                    </Border>
                 </WrapPanel>
                 <!-- grouping: any combination of columns; numbers in bins -->
                 <WrapPanel ItemSpacing="6" LineSpacing="4">

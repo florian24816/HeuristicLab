@@ -284,6 +284,19 @@
   - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close all result windows" (Button.closewindows, pale red #F6CACA, square; shown while further tabs exist): IDialogService.
   AcknowledgeAsync - "n result windows are about to be closed" with only "OK" (closing the dialog aborts) - then
   all of them (docked and windows) go.
+  Mark best/worst (user's request 2026-11-01): a button right after "+ Filter"; pressed, its fields instead of it -
+  numeric column (NumericColumns), Ascending (smallest first) / Descending, top n (6..100), ± tolerance, ✓ applies,
+  ✕ closes (the marking in use stays); the marking in use shows as a chip ("Smallest 10 of BestQuality (result)" ✕
+  removes it). Runtime Runs/RunMarks: MarkedRuns.Rank over the filtered runs (RunAnalysisViewModel.Marks) - sorted,
+  a new place when a value is further than ± from the place's first value (0: only equal values share), places
+  dense (1, 1, 2, ...), the first n places marked; colors RunMarks.PlaceColor: gold, silver, bronze, then green over
+  yellow to red at the n-th place. Table: GridRow.MarkBrush (the place color at alpha MarkAlpha 0x55 over the row),
+  the first three bold (GridRow.IsBold). Charts (RunCharts ... marks): one legend entry per place ("1st: Copy 1, Copy
+  2 (1100)"), its text in the place's color (PlotSeries/ChartSeries.LabelColor, LegendEntry.LabelColor, LegendItem.Ink
+  in the fullscreen legend); scatter and cumulative distribution: a large dot of the place's color behind the run's
+  point (Size 8, Layer -1; LineChart draws by Layer); box plot: a large dot with the group's color in front, spread
+  over the box's width by place; curves: the marked runs' curves thick (Size 4) in the place's color, the 1st on top.
+  Not in histograms (bins hold many runs). Kept over filters/grouping/sorting (ranked again each rebuild).
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
   Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05).
   No Run view any more (removed 2026-10-29, user's request): runs open in windows of their own from the Results

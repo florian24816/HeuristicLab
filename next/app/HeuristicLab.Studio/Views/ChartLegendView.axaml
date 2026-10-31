@@ -13,7 +13,10 @@
                         <StackPanel Orientation="Horizontal" Spacing="8" Opacity="{Binding Opacity}">
                             <Border Width="14" Height="14" Background="{Binding Fill}" BorderBrush="{Binding Color}" BorderThickness="1.5"
                                     VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding !HasInk}" />
+                            <!-- a marked place: its text in the place's color -->
+                            <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding HasInk}"
+                                       Foreground="{Binding Ink}" FontWeight="SemiBold" />
                         </StackPanel>
                     </Border>
                 </DataTemplate>

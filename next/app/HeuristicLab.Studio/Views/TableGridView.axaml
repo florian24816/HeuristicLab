@@ -63,6 +63,9 @@
             <Setter Property="Foreground" Value="#1E1E1E" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
+        <Style Selector="c|Sticky.cell TextBlock.bold">
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
         <Style Selector="Border.row">
             <Setter Property="Cursor" Value="Hand" />
         </Style>
@@ -117,13 +120,17 @@
                                 <DataTemplate x:DataType="vm:GridCell">
                                     <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Column.Width}" Background="{Binding Background}" Padding="0">
                                         <Panel>
-                                            <TextBlock Text="{Binding Text}" Margin="6,4" ToolTip.Tip="{Binding Text}" />
+                                            <TextBlock Text="{Binding Text}" Margin="6,4" ToolTip.Tip="{Binding Text}"
+                                                       Classes.bold="{Binding Row.IsBold, FallbackValue=False}" />
                                             <Border Classes="columnedge" Classes.expanded="{Binding Column.IsExpanded}" IsVisible="{Binding Column.HasButtons}"
                                                     PointerPressed="EdgePressed" />
                                         </Panel>
                                     </c:Sticky>
                                 </DataTemplate>
                             </c:CellRow>
+                            <!-- a marked place (best/worst): a light layer of its color -->
+                            <Border Background="{Binding MarkBrush}" IsHitTestVisible="False"
+                                    IsVisible="{Binding MarkBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
                             <!-- the selected run -->
                             <Border Background="#401E78D4" BorderBrush="#1E78D4" BorderThickness="0,1.5" IsHitTestVisible="False"
                                     IsVisible="{Binding IsSelected}" />

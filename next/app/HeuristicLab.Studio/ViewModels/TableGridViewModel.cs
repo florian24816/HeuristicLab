@@ -113,6 +113,14 @@ public sealed partial class GridRow(object item, Func<GridRow, IReadOnlyList<Gri
 
   [ObservableProperty]
   public partial bool IsSelected { get; set; }
+
+  /// <summary>A marked place (Results tab, "Mark best/worst"): a light layer of its color over the row.</summary>
+  [ObservableProperty]
+  public partial IBrush? MarkBrush { get; set; }
+
+  /// <summary>The first three places: bold text.</summary>
+  [ObservableProperty]
+  public partial bool IsBold { get; set; }
 }
 
 /// <summary>

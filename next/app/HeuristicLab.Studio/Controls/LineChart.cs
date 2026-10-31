@@ -17,8 +17,12 @@ public sealed record ChartMarker(double X, string Label);
 /// <param name="Kind">Line, step line, points, columns, bars (drawn as columns) or histogram (counts per bin).</param>
 /// <param name="SecondYAxis">Scaled on its own axis on the right.</param>
 /// <param name="Width">Column or histogram bin width in x units; 0 derives it from the spacing.</param>
+/// <param name="Size">Line thickness or point radius; 0: 2 and 3.5.</param>
+/// <param name="LabelColor">The legend text in this color (a marked place).</param>
+/// <param name="Layer">Drawn in this order (lower first; columns always first).</param>
 public sealed record ChartSeries(string Name, Color Color, IReadOnlyList<ChartPoint> Points, bool PointsOnly = false,
-                                 SeriesKind Kind = SeriesKind.Line, bool SecondYAxis = false, double Width = 0) {
+                                 SeriesKind Kind = SeriesKind.Line, bool SecondYAxis = false, double Width = 0, double Size = 0,
+                                 Color? LabelColor = null, double Layer = 0) {
   private static readonly Color[] Palette = [
     Color.FromRgb(0x2E, 0x6F, 0xD8), Color.FromRgb(0xE0, 0x7B, 0x24), Color.FromRgb(0x3A, 0xA6, 0x5B),
     Color.FromRgb(0xC2, 0x3B, 0x4A), Color.FromRgb(0x7B, 0x52, 0xC4)
@@ -300,11 +304,11 @@ public class LineChart : Control {
 
     using (context.PushClip(plot.Inflate(1))) {
       // columns first, so lines and points stay visible on top
-      foreach (var s in series.OrderBy(s => s.IsColumns ? 0 : 1)) {
+      foreach (var s in series.OrderBy(s => s.IsColumns ? 0 : 1).ThenBy(s => s.Layer)) {
         var axis = s.SecondYAxis && y2 != null ? y2 : y1;
         var finite = s.Points.Where(p => double.IsFinite(p.Y) && double.IsFinite(p.X)).ToList();
         var brush = new SolidColorBrush(s.Color);
-        var pen = new Pen(brush, 2);
+        var pen = new Pen(brush, s.Size > 0 ? s.Size : 2);
         if (s.IsColumns) {
           double width = ColumnWidth(s), baseline = MapY(Math.Clamp(0, axis.Min, axis.Max), axis);
           // overlapping histograms stay readable when translucent
@@ -318,7 +322,8 @@ public class LineChart : Control {
         }
         var mapped = finite.Select(p => new Point(MapX(p.X), MapY(p.Y, axis))).ToList();
         if (s.IsPoints || mapped.Count == 1) {
-          foreach (var p in mapped) context.DrawEllipse(brush, null, p, 3.5, 3.5);
+          double radius = s.Size > 0 ? s.Size : 3.5;
+          foreach (var p in mapped) context.DrawEllipse(brush, null, p, radius, radius);
           continue;
         }
         // a point without a value (NaN) ends a line: several curves (runs) in one series
@@ -350,7 +355,8 @@ public class LineChart : Control {
       var brush = new SolidColorBrush(s.Color);
       if (off) context.DrawRectangle(null, new Pen(brush, 1.2), new Rect(area.X, area.Y + 4, 14, 10));
       else context.DrawRectangle(brush, null, s.IsColumns ? new Rect(area.X, area.Y + 4, 14, 10) : new Rect(area.X, area.Y + 7, 16, 4));
-      var text = MakeText(s.Name + (s.SecondYAxis ? " (right)" : ""), off ? new SolidColorBrush(Colors.Gray, 0.6) : foreground);
+      var text = MakeText(s.Name + (s.SecondYAxis ? " (right)" : ""),
+        off ? new SolidColorBrush(Colors.Gray, 0.6) : s.LabelColor is { } ink ? new SolidColorBrush(ink) : foreground);
       context.DrawText(text, new Point(area.X + 20, area.Y + 9 - text.Height / 2));
       legendAreas.Add((area, s.Name));
     }
