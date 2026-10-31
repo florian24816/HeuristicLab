@@ -9,13 +9,17 @@
         <Style Selector="ItemsControl.cells > ContentPresenter" x:DataType="vm:GridCell">
             <Setter Property="ZIndex" Value="{Binding ZIndex}" />
         </Style>
+        <Style Selector="c|CellRow > c|Sticky" x:DataType="vm:GridCell">
+            <Setter Property="ZIndex" Value="{Binding ZIndex}" />
+        </Style>
         <Style Selector="c|Sticky.cell">
             <Setter Property="Padding" Value="6,4" />
         </Style>
-        <!-- the fixed columns' button: a small orange square - collapse (collapse_table), or back to regular (expand_table) -->
+        <!-- the fixed columns' button at the column's right edge, as tall as the title row: orange - collapse (collapse_table),
+             or back to regular (expand_table) -->
         <Style Selector="Button.colbtn">
-            <Setter Property="Width" Value="18" />
-            <Setter Property="Height" Value="18" />
+            <Setter Property="Width" Value="{x:Static vm:TableGridViewModel.ButtonWidth}" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="Padding" Value="0" />
@@ -24,11 +28,6 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
-            <Setter Property="Margin" Value="4,0,0,0" />
-        </Style>
-        <!-- collapsed: the column is as wide as the button -->
-        <Style Selector="Button.colbtn.collapsed">
-            <Setter Property="Margin" Value="0" />
         </Style>
         <Style Selector="Button.colbtn:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.colbtn:pressed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
@@ -52,7 +51,7 @@
         </Style>
         <!-- a column's right edge: the pointer shows what a click does - expand (<-|->) or regular again (->|<-) -->
         <Style Selector="Border.columnedge">
-            <Setter Property="Width" Value="6" />
+            <Setter Property="Width" Value="{x:Static vm:TableGridViewModel.EdgeWidth}" />
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Cursor" Value="{x:Static c:ColumnCursors.Expand}" />
@@ -76,10 +75,11 @@
             <Setter Property="IsVisible" Value="True" />
         </Style>
     </UserControl.Styles>
+    <Panel>
     <ScrollViewer x:Name="Scroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
         <!-- room at the bottom for the horizontal scroll bar, so it does not cover the last row -->
         <StackPanel HorizontalAlignment="Left" Margin="0,0,0,14">
-            <c:Sticky StickY="True" ZIndex="2">
+            <c:Sticky x:Name="HeaderRow" StickY="True" ZIndex="2">
                 <ItemsControl Classes="cells" ItemsSource="{Binding Header}">
                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
@@ -87,20 +87,16 @@
                             <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Column.Width}" Background="{Binding Background}"
                                       Padding="0" DoubleTapped="HeaderDoubleTapped">
                                 <Panel>
-                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="6,4,3,4">
-                                        <TextBlock Text="{Binding Text}" FontWeight="SemiBold" VerticalAlignment="Center" IsVisible="{Binding !Column.IsCollapsed}"
-                                                   ToolTip.Tip="{Binding Text}" />
-                                        <!-- fixed columns: collapse to this button / back to regular, right after the title (reachable also
-                                             in a column wider than the view) -->
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Text}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,4,3,4"
+                                                   IsVisible="{Binding !Column.IsCollapsed}" ToolTip.Tip="{Binding Text}" />
+                                        <!-- fixed columns: collapse to this button / back to regular, at the column's right edge -->
                                         <Button Grid.Column="1" Classes="colbtn" Classes.collapsed="{Binding Column.IsCollapsed}"
-                                                VerticalAlignment="Center" Command="{Binding Column.ToggleCollapseCommand}" IsVisible="{Binding Column.ShowsButton}"
+                                                Command="{Binding Column.ToggleCollapseCommand}" IsVisible="{Binding Column.ShowsButton}"
                                                 ToolTip.Tip="{Binding Column.ButtonTip}">
                                             <Border Classes="face"><c:Pictogram /></Border>
                                         </Button>
                                     </Grid>
-                                    <!-- the sorted column's frame -->
-                                    <Border Classes="sortframe" BorderBrush="{Binding FrameBrush}" BorderThickness="{Binding FrameThickness}"
-                                            IsVisible="{Binding FrameBrush, Converter={x:Static ObjectConverters.IsNotNull}}" IsHitTestVisible="False" />
                                     <Border Classes="columnedge" Classes.expanded="{Binding Column.IsExpanded}" IsVisible="{Binding Column.HasButtons}"
                                             PointerPressed="EdgePressed" />
                                 </Panel>
@@ -110,31 +106,27 @@
                 </ItemsControl>
             </c:Sticky>
             <!-- only the rows in view are drawn (an expanded table can hold thousands) -->
-            <ItemsControl ItemsSource="{Binding ShownRows}">
+            <ItemsControl x:Name="RowList" ItemsSource="{Binding ShownRows}">
                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:GridRow">
                         <Border Classes="row" Tapped="RowTapped" ContextRequested="RowMenu" Background="Transparent">
                             <Panel>
-                            <ItemsControl Classes="cells" ItemsSource="{Binding Cells}">
-                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:GridCell">
-                                        <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Column.Width}" Background="{Binding Background}" Padding="0">
-                                            <Panel>
-                                                <TextBlock Text="{Binding Text}" Margin="6,4" ToolTip.Tip="{Binding Text}" />
-                                                <Border BorderBrush="{Binding FrameBrush}" BorderThickness="{Binding FrameThickness}" IsHitTestVisible="False"
-                                                        IsVisible="{Binding FrameBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                                <Border Classes="columnedge" Classes.expanded="{Binding Column.IsExpanded}" IsVisible="{Binding Column.HasButtons}"
-                                                        PointerPressed="EdgePressed" />
-                                                <!-- the selected run -->
-                                                <Border Background="#401E78D4" BorderBrush="#1E78D4" BorderThickness="0,1.5"
-                                                        IsVisible="{Binding Row.IsSelected, FallbackValue=False}" />
-                                            </Panel>
-                                        </c:Sticky>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <!-- a row drawn again for another run keeps its cells (scrolling a wide table) -->
+                            <c:CellRow Items="{Binding Cells}">
+                                <DataTemplate x:DataType="vm:GridCell">
+                                    <c:Sticky Classes="cell" StickX="{Binding IsFixed}" Width="{Binding Column.Width}" Background="{Binding Background}" Padding="0">
+                                        <Panel>
+                                            <TextBlock Text="{Binding Text}" Margin="6,4" ToolTip.Tip="{Binding Text}" />
+                                            <Border Classes="columnedge" Classes.expanded="{Binding Column.IsExpanded}" IsVisible="{Binding Column.HasButtons}"
+                                                    PointerPressed="EdgePressed" />
+                                        </Panel>
+                                    </c:Sticky>
+                                </DataTemplate>
+                            </c:CellRow>
+                            <!-- the selected run -->
+                            <Border Background="#401E78D4" BorderBrush="#1E78D4" BorderThickness="0,1.5" IsHitTestVisible="False"
+                                    IsVisible="{Binding IsSelected}" />
                             <!-- under the rectangle being drawn (several rows): a blue frame, selected once let go -->
                             <Border Classes="bandframe" IsHitTestVisible="False" />
                             </Panel>
@@ -147,4 +139,12 @@
                     Content="{Binding ExpandText}" Command="{Binding ExpandCommand}" IsVisible="{Binding CanExpand}" />
         </StackPanel>
     </ScrollViewer>
+    <!-- the sorted column's frame over the part of it in view (placed by the view): its gradient from the title to the
+         window's lower edge, or to the last row once that is in view; columns scrolling under the fixed ones are cut -->
+    <Border x:Name="FrameClip" ClipToBounds="True" IsHitTestVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="False">
+        <Canvas>
+            <Border x:Name="SortFrame" Classes="sortframe" />
+        </Canvas>
+    </Border>
+    </Panel>
 </UserControl>

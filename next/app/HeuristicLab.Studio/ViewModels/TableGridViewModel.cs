@@ -63,9 +63,15 @@ public sealed partial class GridColumnView : ObservableObject {
 
   public double Width => Size switch {
     ColumnSize.Collapsed => TableGridViewModel.CollapsedWidth,
-    ColumnSize.Expanded => expanded ??= grid.ExpandedWidth(index),
+    // a fixed column does not scroll: never wider than the view leaves it, else its edge and button are out of reach
+    ColumnSize.Expanded => IsFixed ? Math.Min(expanded ??= grid.ExpandedWidth(index), grid.FixedRoom()) : expanded ??= grid.ExpandedWidth(index),
     _ => Column.Width
   };
+
+  /// <summary>The view's width or the other columns' sizes changed: a fixed expanded column fits again.</summary>
+  internal void Refit() {
+    if (IsFixed && IsExpanded) OnPropertyChanged(nameof(Width));
+  }
 
   /// <summary>A double-click on the title: none, ascending, descending, none.</summary>
   [RelayCommand]
@@ -89,9 +95,6 @@ public sealed partial class GridColumnView : ObservableObject {
 public sealed record GridCell(string Text, IBrush Background, GridColumnView Column, GridRow? Row) {
   public bool IsFixed => Column.IsFixed;
   public int ZIndex => IsFixed ? 1 : 0;
-  /// <summary>Part of the frame around the column the table is sorted by (null: none).</summary>
-  public IBrush? FrameBrush { get; init; }
-  public Avalonia.Thickness FrameThickness { get; init; }
 }
 
 public sealed partial class GridRow(object item, Func<GridRow, IReadOnlyList<GridCell>> cells) : ObservableObject, IPickable {
@@ -143,9 +146,8 @@ public partial class TableGridViewModel : ViewModelBase {
     var colors = new List<Color>();
     int plain = 0;
     foreach (var c in columns) colors.Add(c.Fixed ?? (plain++ % 2 == 0 ? Grey : LightGrey));
-    // the column sorted by is framed from its title to its last row shown: one end the logo orange, the other black
-    // (ascending: orange at the top), a gradient between them along its sides
-    framed = Views.FirstOrDefault(v => v.Sort != SortOrder.None);
+    // the column sorted by is framed (drawn by the view over the part in view)
+    Framed = Views.FirstOrDefault(v => v.Sort != SortOrder.None);
     var all = rows.ToList();
     texts = all.Select(r => r.Texts).ToList();
     Rows = all.Select((r, index) => {
@@ -155,21 +157,15 @@ public partial class TableGridViewModel : ViewModelBase {
         // a row may wear other colors in its fixed columns (a run open in a window), in their order
         var tint = FixedTint?.Invoke(row.Item);
         int fixedIndex = 0;
-        bool last = index == ShownRows.Count - 1;
         return columns.Select((c, i) => {
           var color = c.Fixed != null && tint != null && fixedIndex < tint.Count ? tint[fixedIndex++] : colors[i];
-          return new GridCell(i < texts.Count ? texts[i] : "", Brush(color, strength), Views[i], row) {
-            FrameBrush = Views[i] == framed && index < ShownRows.Count ? Frame(index + 1) : null,
-            FrameThickness = new(FrameWidth, 0, FrameWidth, last ? FrameWidth : 0)
-          };
+          return new GridCell(i < texts.Count ? texts[i] : "", Brush(color, strength), Views[i], row);
         }).ToList();
       });
     }).ToList();
     ShownRows = Rows.Count > Limit ? Rows.Take(Limit).ToList() : Rows;
     // the header row one shade darker than the rows below it
-    Header = columns.Select((c, i) => new GridCell(c.Header, Brush(Darker(colors[i]), 1), Views[i], null) {
-      FrameBrush = Views[i] == framed ? Frame(0) : null, FrameThickness = new(FrameWidth, FrameWidth, FrameWidth, 0)
-    }).ToList();
+    Header = columns.Select((c, i) => new GridCell(c.Header, Brush(Darker(colors[i]), 1), Views[i], null)).ToList();
   }
 
   /// <summary>The columns as shown (sizes, sorting), in order.</summary>
@@ -181,29 +177,36 @@ public partial class TableGridViewModel : ViewModelBase {
   /// <summary>Where the column sizes are kept for the next table (sorted, filtered); null: not kept.</summary>
   private IDictionary<string, ColumnSize>? Sizes { get; }
 
-  private readonly GridColumnView? framed;
+  /// <summary>The column the table is sorted by (null: not sorted).</summary>
+  public GridColumnView? Framed { get; }
 
   public const double FrameWidth = 3;
   public static readonly Color FrameOrange = Color.Parse("#F7931D"), FrameBlack = Color.Parse("#000000");
 
-  /// <summary>The frame's part along the header (0) or a shown row (1..): its share of the gradient from one end to the other.</summary>
-  private IBrush Frame(int part) {
-    int parts = ShownRows.Count + 1;
-    bool down = framed?.Sort == SortOrder.Descending;
-    Color At(double t) {
-      var (a, b) = down ? (FrameBlack, FrameOrange) : (FrameOrange, FrameBlack);
-      byte Mix(byte x, byte y) => (byte)Math.Round(x + (y - x) * t);
-      return Color.FromRgb(Mix(a.R, b.R), Mix(a.G, b.G), Mix(a.B, b.B));
-    }
-    return new ImmutableLinearGradientBrush([new ImmutableGradientStop(0, At((double)part / parts)), new ImmutableGradientStop(1, At((double)(part + 1) / parts))],
+  /// <summary>
+  /// The sorted column's frame, one gradient over the part of it in view: from its title to the window's lower edge
+  /// (or its last row, once in view), ascending the logo orange at the top to black at the bottom, descending the
+  /// other way.
+  /// </summary>
+  public IBrush? FrameBrush => Framed == null ? null : Framed.Sort == SortOrder.Descending ? FrameUp : FrameDown;
+
+  private static readonly IBrush FrameDown = Gradient(FrameOrange, FrameBlack), FrameUp = Gradient(FrameBlack, FrameOrange);
+
+  private static IBrush Gradient(Color top, Color bottom) =>
+    new ImmutableLinearGradientBrush([new ImmutableGradientStop(0, top), new ImmutableGradientStop(1, bottom)],
       startPoint: new Avalonia.RelativePoint(0, 0, Avalonia.RelativeUnit.Relative), endPoint: new Avalonia.RelativePoint(0, 1, Avalonia.RelativeUnit.Relative));
-  }
+
+  /// <summary>The fixed columns' button: as wide as this, as tall as the title row, at the column's right edge.</summary>
+  public const double ButtonWidth = 26;
+
+  /// <summary>A column's right edge (in every row) that a click expands or makes regular again.</summary>
+  public const double EdgeWidth = 8;
 
   /// <summary>A collapsed fixed column: as wide as its button.</summary>
-  public const double CollapsedWidth = 28;
+  public const double CollapsedWidth = ButtonWidth;
 
   /// <summary>An expanded column shows texts up to this many characters.</summary>
-  public const int ExpandChars = 120;
+  public const int ExpandChars = 200;
 
   /// <summary>As wide as the column's longest text (cut at <see cref="ExpandChars"/>) and its title with its buttons; at least regular.</summary>
   internal double ExpandedWidth(int index) {
@@ -215,14 +218,37 @@ public partial class TableGridViewModel : ViewModelBase {
     // the longest texts by characters are measured (thousands of rows: not every one)
     var longest = texts.Select(t => index < t.Count ? t[index] : "").Distinct().OrderByDescending(t => t.Length).Take(8);
     double cells = longest.Select(t => Measure(t)).DefaultIfEmpty(0).Max() + 12 + 4;
-    double buttons = Views[index].ShowsButton ? 18 + 4 : 0;
-    double header = Measure(Columns[index].Header, FontWeight.SemiBold) + 12 + 6 + buttons + 4;
+    double buttons = Views[index].ShowsButton ? ButtonWidth : EdgeWidth;
+    double header = Measure(Columns[index].Header, FontWeight.SemiBold) + 6 + 3 + buttons;
     return Math.Ceiling(Math.Max(Columns[index].Width, Math.Max(cells, header)));
   }
 
   internal void Resized(string key, ColumnSize size) {
     if (Sizes != null) Sizes[key] = size;
+    foreach (var view in Views) view.Refit();
   }
+
+  /// <summary>How wide the table's view is (set by the view; 0: not known yet).</summary>
+  public double ViewWidth {
+    get;
+    set {
+      if (field == value) return;
+      field = value;
+      foreach (var view in Views) view.Refit();
+    }
+  }
+
+  /// <summary>Room in the view for an expanded fixed column: what the other fixed columns leave, shared among the expanded ones.</summary>
+  internal double FixedRoom() {
+    if (ViewWidth <= 0) return double.PositiveInfinity;
+    var fixedViews = Views.Where(v => v.IsFixed).ToList();
+    double others = fixedViews.Where(v => !v.IsExpanded).Sum(v => v.Width);
+    int expanded = Math.Max(1, fixedViews.Count(v => v.IsExpanded));
+    return Math.Max(Columns[0].Width, (ViewWidth - others - FixedSpare) / expanded);
+  }
+
+  /// <summary>Left in view beside the fixed columns, however wide they are.</summary>
+  public const double FixedSpare = 60;
 
   /// <summary>A double-click on a title: the owner sorts again and makes a new table.</summary>
   internal void SortBy(string key) => sort?.Invoke(key);
@@ -274,8 +300,6 @@ public partial class TableGridViewModel : ViewModelBase {
   private void Expand() {
     ShownRows = IsExpanded ? Rows.Take(Limit).ToList() : Rows;
     OnPropertyChanged(nameof(IsExpanded));
-    // the sorted column's frame ends at the last row shown, its gradient spread over them
-    if (framed != null) Retint();
   }
 
   /// <summary>Marks the row of this item as selected (without telling the owner, who selected it).</summary>
