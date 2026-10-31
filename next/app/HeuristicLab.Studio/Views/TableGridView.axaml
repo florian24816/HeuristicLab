@@ -12,8 +12,7 @@
         <Style Selector="c|Sticky.cell">
             <Setter Property="Padding" Value="6,4" />
         </Style>
-        <!-- the title buttons: small squares; sort none / ascending (green) / descending (red), size regular / expanded
-             (dark); in fixed columns the logo orange (sorting: darker), greyed out when they cannot be used -->
+        <!-- the fixed columns' button: a small orange square - collapse (collapse_table), or back to regular (expand_table) -->
         <Style Selector="Button.colbtn">
             <Setter Property="Width" Value="18" />
             <Setter Property="Height" Value="18" />
@@ -25,39 +24,42 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="4,0,0,0" />
         </Style>
-        <Style Selector="Button.colbtn:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.colbtn:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.colbtn:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <!-- collapsed: the column is as wide as the button -->
+        <Style Selector="Button.colbtn.collapsed">
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="Button.colbtn:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.colbtn:pressed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Button.colbtn Border.face">
-            <Setter Property="Background" Value="#F2F2F2" />
+            <Setter Property="Background" Value="#F7931D" />
         </Style>
         <Style Selector="Button.colbtn:pointerover Border.face">
             <Setter Property="Opacity" Value="0.8" />
         </Style>
         <Style Selector="Button.colbtn c|Pictogram">
-            <Setter Property="Foreground" Value="#4A4A4A" />
+            <Setter Property="Foreground" Value="#1E1E1E" />
             <Setter Property="Width" Value="14" />
             <Setter Property="Height" Value="14" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Symbol" Value="collapse_table" />
         </Style>
-        <Style Selector="Button.sort c|Pictogram"><Setter Property="Symbol" Value="not_sorting_columne" /></Style>
-        <Style Selector="Button.sort.asc c|Pictogram"><Setter Property="Symbol" Value="sorting_ascending" /></Style>
-        <Style Selector="Button.sort.desc c|Pictogram"><Setter Property="Symbol" Value="sorting_descending" /></Style>
-        <Style Selector="Button.sort.asc Border.face"><Setter Property="Background" Value="#2EA043" /></Style>
-        <Style Selector="Button.sort.desc Border.face"><Setter Property="Background" Value="#D73A3A" /></Style>
-        <Style Selector="Button.sort.asc c|Pictogram, Button.sort.desc c|Pictogram"><Setter Property="Foreground" Value="White" /></Style>
-        <Style Selector="Button.widen c|Pictogram, Button.size c|Pictogram"><Setter Property="Symbol" Value="expand_table" /></Style>
-        <Style Selector="Button.narrow c|Pictogram, Button.size.on c|Pictogram"><Setter Property="Symbol" Value="collapse_table" /></Style>
-        <Style Selector="Button.size.on Border.face"><Setter Property="Background" Value="#4A4A4A" /></Style>
-        <Style Selector="Button.size.on c|Pictogram"><Setter Property="Foreground" Value="White" /></Style>
-        <Style Selector="Button.fixed Border.face"><Setter Property="Background" Value="#F7931D" /></Style>
-        <Style Selector="Button.fixed c|Pictogram"><Setter Property="Foreground" Value="#1E1E1E" /></Style>
-        <Style Selector="Button.fixed.sort.asc Border.face, Button.fixed.sort.desc Border.face"><Setter Property="Background" Value="#B85F00" /></Style>
-        <Style Selector="Button.fixed.sort.asc c|Pictogram, Button.fixed.sort.desc c|Pictogram"><Setter Property="Foreground" Value="White" /></Style>
-        <Style Selector="Button.colbtn:disabled Border.face"><Setter Property="Background" Value="#D0D0D0" /></Style>
-        <Style Selector="Button.colbtn:disabled c|Pictogram"><Setter Property="Foreground" Value="#9A9A9A" /></Style>
+        <Style Selector="Button.colbtn.collapsed c|Pictogram">
+            <Setter Property="Symbol" Value="expand_table" />
+        </Style>
+        <!-- a column's right edge: the pointer shows what a click does - expand (<-|->) or regular again (->|<-) -->
+        <Style Selector="Border.columnedge">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="{x:Static c:ColumnCursors.Expand}" />
+        </Style>
+        <Style Selector="Border.columnedge.expanded">
+            <Setter Property="Cursor" Value="{x:Static c:ColumnCursors.Shrink}" />
+        </Style>
         <Style Selector="c|Sticky.cell TextBlock">
             <Setter Property="Foreground" Value="#1E1E1E" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -88,29 +90,19 @@
                                     <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="6,4,3,4">
                                         <TextBlock Text="{Binding Text}" FontWeight="SemiBold" VerticalAlignment="Center" IsVisible="{Binding !Column.IsCollapsed}"
                                                    ToolTip.Tip="{Binding Text}" />
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="4,0,0,0" VerticalAlignment="Center"
-                                                    IsVisible="{Binding Column.HasButtons}">
-                                            <Button Classes="colbtn sort" Classes.asc="{Binding Column.IsAscending}" Classes.desc="{Binding Column.IsDescending}"
-                                                    Classes.fixed="{Binding IsFixed}" Command="{Binding Column.CycleSortCommand}" ToolTip.Tip="{Binding Column.SortTip}">
-                                                <Border Classes="face"><c:Pictogram /></Border>
-                                            </Button>
-                                            <Button Classes="colbtn narrow fixed" Command="{Binding Column.CollapseCommand}" IsVisible="{Binding Column.ShowsCollapse}"
-                                                    ToolTip.Tip="Narrower">
-                                                <Border Classes="face"><c:Pictogram /></Border>
-                                            </Button>
-                                            <Button Classes="colbtn widen fixed" Command="{Binding Column.ExpandCommand}" IsVisible="{Binding Column.ShowsExpand}"
-                                                    ToolTip.Tip="Wider (at most 120 characters)">
-                                                <Border Classes="face"><c:Pictogram /></Border>
-                                            </Button>
-                                            <Button Classes="colbtn size" Classes.on="{Binding Column.IsExpanded}" Command="{Binding Column.ToggleSizeCommand}"
-                                                    IsVisible="{Binding Column.ShowsToggle}" ToolTip.Tip="Wider (at most 120 characters) / as before">
-                                                <Border Classes="face"><c:Pictogram /></Border>
-                                            </Button>
-                                        </StackPanel>
+                                        <!-- fixed columns: collapse to this button / back to regular, right after the title (reachable also
+                                             in a column wider than the view) -->
+                                        <Button Grid.Column="1" Classes="colbtn" Classes.collapsed="{Binding Column.IsCollapsed}"
+                                                VerticalAlignment="Center" Command="{Binding Column.ToggleCollapseCommand}" IsVisible="{Binding Column.ShowsButton}"
+                                                ToolTip.Tip="{Binding Column.ButtonTip}">
+                                            <Border Classes="face"><c:Pictogram /></Border>
+                                        </Button>
                                     </Grid>
                                     <!-- the sorted column's frame -->
                                     <Border Classes="sortframe" BorderBrush="{Binding FrameBrush}" BorderThickness="{Binding FrameThickness}"
                                             IsVisible="{Binding FrameBrush, Converter={x:Static ObjectConverters.IsNotNull}}" IsHitTestVisible="False" />
+                                    <Border Classes="columnedge" Classes.expanded="{Binding Column.IsExpanded}" IsVisible="{Binding Column.HasButtons}"
+                                            PointerPressed="EdgePressed" />
                                 </Panel>
                             </c:Sticky>
                         </DataTemplate>
@@ -133,6 +125,8 @@
                                                 <TextBlock Text="{Binding Text}" Margin="6,4" ToolTip.Tip="{Binding Text}" />
                                                 <Border BorderBrush="{Binding FrameBrush}" BorderThickness="{Binding FrameThickness}" IsHitTestVisible="False"
                                                         IsVisible="{Binding FrameBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                <Border Classes="columnedge" Classes.expanded="{Binding Column.IsExpanded}" IsVisible="{Binding Column.HasButtons}"
+                                                        PointerPressed="EdgePressed" />
                                                 <!-- the selected run -->
                                                 <Border Background="#401E78D4" BorderBrush="#1E78D4" BorderThickness="0,1.5"
                                                         IsVisible="{Binding Row.IsSelected, FallbackValue=False}" />

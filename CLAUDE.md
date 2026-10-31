@@ -347,18 +347,20 @@
   parameters/results changed (Studio tags runs with "Resources: ..." after they were first read).
   Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
   it (blue overlay).
-  Results table titles (user's request 2026-10-30; TableGridViewModel with a TableLook - HeaderButtons): small square (18 px, the user's pictograms
-  not_sorting_columne / sorting_ascending / sorting_descending / expand_table / collapse_table at 14 px)
-  buttons right after the title (Views[i] = GridColumnView, shared by the column's cells, which bind its Width): a sort
-  button cycling none / ascending / descending (one column at a time: RunAnalysisViewModel.Sort; a double-click on
-  the title does the same, not one on its buttons) - plain columns #F2F2F2, ascending green #2EA043, descending red
-  #D73A3A; size: Source/Origin/Run (logo orange #F7931D, sorting darker #B85F00) collapse (CollapsedWidth 58: two
-  buttons, no title) / regular 150 / expanded with a collapse and an expand button (collapse hidden when collapsed,
-  expand greyed out #D0D0D0 when expanded), the others one switch regular / expanded (#4A4A4A). Expanded = the
-  longest text measured (Inter 14, cut at ExpandChars 120) and the title with its buttons, at least regular. Sizes
-  are kept in RunAnalysisViewModel.columnSizes over rebuilds. The sorted column (not a fixed one) is framed (cell
-  borders FrameBrush/FrameThickness, 3 px) from its title to the last shown row: ascending green at the top to red at
+  Results table columns (user's request 2026-10-30/31; the sort buttons and the plain columns' size switch were removed again; TableGridViewModel with a TableLook - HeaderButtons; Views[i] =
+  GridColumnView, shared by the column's cells, which bind its Width): a double-click on a title sorts - ascending,
+  descending, not sorted (= the order the runs were read in, as in the Run column; one column at a time:
+  RunAnalysisViewModel.Sort). A click on a column's right edge (Border.columnedge, 6 px, in the title and every row;
+  SweepSelection ignores it; ClickCount 1 only) switches regular 150 / expanded (the longest text measured, Inter 14,
+  cut at ExpandChars 120, and the title, at least regular); the pointer there is Controls/ColumnCursors' drawn
+  "<-|->" (Expand) or "->|<-" (Shrink, when expanded). Source/Origin/Run (only they) have one square orange button
+  (18 px, the user's collapse_table / expand_table pictograms at 14 px) right after the title: collapse to the
+  button's size (CollapsedWidth 28, no title) / back to regular; a collapsed column's edge expands it. An expanded
+  column wider than the view has its edge out of reach (its button still works for fixed columns). Sizes are kept in
+  RunAnalysisViewModel.columnSizes over rebuilds. The sorted column (also Source/Origin/Run) is framed (cell borders
+  FrameBrush/FrameThickness, 3 px) from its title to the last shown row: ascending logo orange at the top to black at
   the bottom, descending the other way, a gradient along the sides (each cell its share; Expand re-colors).
+  "Reload table" (Table tab): not sorted, sizes cleared, scrolled to the left, sources read again (RefreshSources).
   Long tables (user's request): the first 50 rows (TableGridViewModel.Limit, ShownRows), then a button as
   wide as the table ("Show all N rows" / "Show only the first 50"); rows are drawn only where in view
   (VirtualizingStackPanel) and their cells built when first drawn (GridRow.Cells lazy).

@@ -67,9 +67,9 @@ public sealed class SweepSelection {
 
   private void Pressed(object? sender, PointerPressedEventArgs e) {
     if (!e.GetCurrentPoint(root).Properties.IsLeftButtonPressed || !enabled()) return;
-    // a tick box, an expander arrow or a scroll bar does its own thing
+    // a tick box, an expander arrow, a scroll bar or a table column's right edge does its own thing
     for (var v = e.Source as Visual; v != null && v != root; v = v.GetVisualParent())
-      if (v is ToggleButton or ScrollBar or Button) return;
+      if (v is ToggleButton or ScrollBar or Button || v is StyledElement { Classes: var classes } && classes.Contains("columnedge")) return;
     start = e.GetPosition(root);
     pressed = ItemAt(start.Value);
     keys = e.KeyModifiers;

@@ -663,6 +663,16 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   /// <summary>The table's column sizes (collapsed / regular / expanded), kept while the table is made again.</summary>
   private readonly Dictionary<string, ColumnSize> columnSizes = [];
 
+  /// <summary>"Reload table": the runs read again, not sorted (in the order they were read), every column regular, at the left.</summary>
+  [RelayCommand]
+  private void ReloadTable() {
+    SortKey = null;
+    SortDescending = false;
+    columnSizes.Clear();
+    if (Grid != null) Grid.ScrollX = 0;
+    RefreshSources();
+  }
+
   private void RebuildRows() {
     var varying = Table.Columns.Where(c => c.Kind == "Parameter" && Table.Rows.Select(r => r.Text(c.Key)).Distinct().Skip(1).Any()).Select(c => c.Key).ToHashSet();
     TableColumns = Table.Columns.Where(c => c.Kind is "Run" or "Label" or "Result" || ShowAllParameters || varying.Contains(c.Key))

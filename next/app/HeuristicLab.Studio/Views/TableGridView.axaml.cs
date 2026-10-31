@@ -73,10 +73,17 @@ public partial class TableGridView : UserControl {
     Menu.Open(control);
   }
 
-  /// <summary>A double-click on a column's title sorts as its sort button does (not one on its buttons: each click counts there).</summary>
+  /// <summary>A double-click on a column's title sorts it (not one on its button or its right edge).</summary>
   private void HeaderDoubleTapped(object? sender, TappedEventArgs e) {
     for (var v = e.Source as Avalonia.Visual; v != null && !ReferenceEquals(v, sender); v = Avalonia.VisualTree.VisualExtensions.GetVisualParent(v))
-      if (v is Button) return;
+      if (v is Button || v is Avalonia.StyledElement { Classes: var classes } && classes.Contains("columnedge")) return;
     if (sender is Control { DataContext: GridCell cell } && DataContext is TableGridViewModel { HeaderButtons: true }) cell.Column.CycleSortCommand.Execute(null);
+  }
+
+  /// <summary>A click on a column's right edge (any row): expanded, or regular again.</summary>
+  private void EdgePressed(object? sender, PointerPressedEventArgs e) {
+    if (sender is not Control { DataContext: GridCell cell } edge || !e.GetCurrentPoint(edge).Properties.IsLeftButtonPressed) return;
+    e.Handled = true;
+    if (e.ClickCount == 1) cell.Column.ToggleExpandCommand.Execute(null);
   }
 }

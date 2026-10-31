@@ -24,9 +24,10 @@ public enum ColumnSize { Collapsed, Regular, Expanded }
 public enum SortOrder { None, Ascending, Descending }
 
 /// <summary>
-/// A shown column, shared by its cells (they bind its width): with header buttons (Results table) a button that sorts
-/// (none, ascending, descending) and its size - fixed columns collapse, are regular or expand, the others are regular
-/// or expanded (as wide as their longest text, at most <see cref="TableGridViewModel.ExpandChars"/> characters).
+/// A shown column, shared by its cells (they bind its width). In the Results table (header buttons): sorted by a
+/// double-click on its title (none, ascending, descending); a click on its right edge switches regular / expanded (as
+/// wide as its longest text, at most <see cref="TableGridViewModel.ExpandChars"/> characters); fixed columns also have
+/// a button collapsing them to its size and back to regular (their right edge expands a collapsed one).
 /// </summary>
 public sealed partial class GridColumnView : ObservableObject {
   private readonly TableGridViewModel grid;
@@ -45,30 +46,20 @@ public sealed partial class GridColumnView : ObservableObject {
   public string Key => Column.Key;
   public bool IsFixed => Column.Fixed != null;
   public bool HasButtons => grid.HeaderButtons;
+  /// <summary>Fixed columns: the collapse / back to regular button.</summary>
+  public bool ShowsButton => HasButtons && IsFixed;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(Width), nameof(IsCollapsed), nameof(IsExpanded), nameof(ShowsCollapse), nameof(ShowsToggle))]
-  [NotifyCanExecuteChangedFor(nameof(ExpandCommand), nameof(CollapseCommand))]
+  [NotifyPropertyChangedFor(nameof(Width), nameof(IsCollapsed), nameof(IsExpanded), nameof(ButtonTip))]
   public partial ColumnSize Size { get; set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsAscending), nameof(IsDescending), nameof(SortTip))]
   public partial SortOrder Sort { get; set; }
 
-  public bool IsAscending => Sort == SortOrder.Ascending;
-  public bool IsDescending => Sort == SortOrder.Descending;
   public bool IsCollapsed => Size == ColumnSize.Collapsed;
   public bool IsExpanded => Size == ColumnSize.Expanded;
-  /// <summary>Fixed columns: "collapse" while not collapsed. Other columns: one button switching the size.</summary>
-  public bool ShowsCollapse => HasButtons && IsFixed && !IsCollapsed;
-  public bool ShowsExpand => HasButtons && IsFixed;
-  public bool ShowsToggle => HasButtons && !IsFixed;
 
-  public string SortTip => Sort switch {
-    SortOrder.Ascending => "Sorted ascending: click for descending (or double-click the title)",
-    SortOrder.Descending => "Sorted descending: click to stop sorting (or double-click the title)",
-    _ => "Not sorted: click to sort ascending (or double-click the title)"
-  };
+  public string ButtonTip => IsCollapsed ? "Back to the regular width" : "Collapse to this button";
 
   public double Width => Size switch {
     ColumnSize.Collapsed => TableGridViewModel.CollapsedWidth,
@@ -76,23 +67,17 @@ public sealed partial class GridColumnView : ObservableObject {
     _ => Column.Width
   };
 
-  /// <summary>The sort button (or a double-click on the title): none, ascending, descending, none.</summary>
+  /// <summary>A double-click on the title: none, ascending, descending, none.</summary>
   [RelayCommand]
   private void CycleSort() => grid.SortBy(Key);
 
-  [RelayCommand(CanExecute = nameof(CanExpand))]
-  private void Expand() => Resize(Size == ColumnSize.Collapsed ? ColumnSize.Regular : ColumnSize.Expanded);
-
-  private bool CanExpand => Size != ColumnSize.Expanded;
-
-  [RelayCommand(CanExecute = nameof(CanCollapse))]
-  private void Collapse() => Resize(Size == ColumnSize.Expanded ? ColumnSize.Regular : ColumnSize.Collapsed);
-
-  private bool CanCollapse => IsFixed ? Size != ColumnSize.Collapsed : Size == ColumnSize.Expanded;
-
-  /// <summary>A column that is not fixed: regular or expanded.</summary>
+  /// <summary>The fixed column's button: collapsed, or regular again.</summary>
   [RelayCommand]
-  private void ToggleSize() => Resize(IsExpanded ? ColumnSize.Regular : ColumnSize.Expanded);
+  private void ToggleCollapse() => Resize(IsCollapsed ? ColumnSize.Regular : ColumnSize.Collapsed);
+
+  /// <summary>A click on the column's right edge: expanded, or regular again.</summary>
+  [RelayCommand]
+  private void ToggleExpand() => Resize(IsExpanded ? ColumnSize.Regular : ColumnSize.Expanded);
 
   private void Resize(ColumnSize size) {
     Size = size;
@@ -158,9 +143,9 @@ public partial class TableGridViewModel : ViewModelBase {
     var colors = new List<Color>();
     int plain = 0;
     foreach (var c in columns) colors.Add(c.Fixed ?? (plain++ % 2 == 0 ? Grey : LightGrey));
-    // the column sorted by (not a fixed one) is framed from its title to its last row shown: one end green, the
-    // other red (ascending: green at the top), a gradient between them along its sides
-    framed = Views.FirstOrDefault(v => v.Sort != SortOrder.None && !v.IsFixed);
+    // the column sorted by is framed from its title to its last row shown: one end the logo orange, the other black
+    // (ascending: orange at the top), a gradient between them along its sides
+    framed = Views.FirstOrDefault(v => v.Sort != SortOrder.None);
     var all = rows.ToList();
     texts = all.Select(r => r.Texts).ToList();
     Rows = all.Select((r, index) => {
@@ -199,14 +184,14 @@ public partial class TableGridViewModel : ViewModelBase {
   private readonly GridColumnView? framed;
 
   public const double FrameWidth = 3;
-  public static readonly Color FrameGreen = Color.Parse("#2EA043"), FrameRed = Color.Parse("#D73A3A");
+  public static readonly Color FrameOrange = Color.Parse("#F7931D"), FrameBlack = Color.Parse("#000000");
 
   /// <summary>The frame's part along the header (0) or a shown row (1..): its share of the gradient from one end to the other.</summary>
   private IBrush Frame(int part) {
     int parts = ShownRows.Count + 1;
     bool down = framed?.Sort == SortOrder.Descending;
     Color At(double t) {
-      var (a, b) = down ? (FrameRed, FrameGreen) : (FrameGreen, FrameRed);
+      var (a, b) = down ? (FrameBlack, FrameOrange) : (FrameOrange, FrameBlack);
       byte Mix(byte x, byte y) => (byte)Math.Round(x + (y - x) * t);
       return Color.FromRgb(Mix(a.R, b.R), Mix(a.G, b.G), Mix(a.B, b.B));
     }
@@ -214,8 +199,8 @@ public partial class TableGridViewModel : ViewModelBase {
       startPoint: new Avalonia.RelativePoint(0, 0, Avalonia.RelativeUnit.Relative), endPoint: new Avalonia.RelativePoint(0, 1, Avalonia.RelativeUnit.Relative));
   }
 
-  /// <summary>A collapsed fixed column: its two buttons and a few letters.</summary>
-  public const double CollapsedWidth = 58;
+  /// <summary>A collapsed fixed column: as wide as its button.</summary>
+  public const double CollapsedWidth = 28;
 
   /// <summary>An expanded column shows texts up to this many characters.</summary>
   public const int ExpandChars = 120;
@@ -230,7 +215,7 @@ public partial class TableGridViewModel : ViewModelBase {
     // the longest texts by characters are measured (thousands of rows: not every one)
     var longest = texts.Select(t => index < t.Count ? t[index] : "").Distinct().OrderByDescending(t => t.Length).Take(8);
     double cells = longest.Select(t => Measure(t)).DefaultIfEmpty(0).Max() + 12 + 4;
-    double buttons = Views[index].IsFixed ? 3 * 18 + 2 * 2 : 2 * 18 + 2;
+    double buttons = Views[index].ShowsButton ? 18 + 4 : 0;
     double header = Measure(Columns[index].Header, FontWeight.SemiBold) + 12 + 6 + buttons + 4;
     return Math.Ceiling(Math.Max(Columns[index].Width, Math.Max(cells, header)));
   }
@@ -239,7 +224,7 @@ public partial class TableGridViewModel : ViewModelBase {
     if (Sizes != null) Sizes[key] = size;
   }
 
-  /// <summary>The sort button: the owner sorts again and makes a new table.</summary>
+  /// <summary>A double-click on a title: the owner sorts again and makes a new table.</summary>
   internal void SortBy(string key) => sort?.Invoke(key);
 
   /// <summary>Other colors for a row's fixed columns (null: their own).</summary>

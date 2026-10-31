@@ -1,12 +1,12 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using HeuristicLab.Next.Runtime;
 using HeuristicLab.Optimization;
+using HeuristicLab.Studio.Controls;
 using HeuristicLab.Studio.ViewModels;
 using HeuristicLab.Studio.Views;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -14,9 +14,10 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace HeuristicLab.Studio.Tests;
 
 /// <summary>
-/// The Results table's column titles: a sort button (none, ascending, descending - one column at a time; a double-click
-/// on the title does the same) and size buttons (Source/Origin/Run: collapse and expand, three sizes, the logo orange;
-/// the others: one switch, regular or expanded up to 120 characters); the sorted column framed green to red.
+/// The Results table's columns: a double-click on a title sorts (ascending, descending, not sorted - one column at a
+/// time), a click on a column's right edge expands it (up to 120 characters) or makes it regular again,
+/// Source/Origin/Run have one orange button collapsing them to its size; the sorted column is framed orange to black;
+/// "Reload table" reads the runs again, not sorted, every column regular.
 /// </summary>
 [TestClass]
 public class StudioTableHeaderTests {
@@ -74,106 +75,148 @@ public class StudioTableHeaderTests {
         window.MouseUp(at, MouseButton.Left);
         Pump();
       }
-      Button SortButton(string key) => Buttons(key).Single(b => b.Classes.Contains("sort"));
-
-      // titles: Source/Origin/Run sort, collapse, expand - orange; the others sort and a size switch
-      Assert.IsTrue(analysis.Grid!.HeaderButtons);
-      CollectionAssert.AreEqual(new[] { "sort", "narrow", "widen" }, Buttons("run").Select(b => b.Classes.First(c => c is "sort" or "narrow" or "widen")).ToList());
-      Assert.IsTrue(Buttons("run").All(b => Face(b) == Color.Parse("#F7931D")));
+      int clicks = 0;
+      void DoubleClick(string key) {
+        var title = Title(key);
+        // somewhere else on the title each time: two double-clicks in one place would count as more clicks
+        var at = title.TranslatePoint(new Point(8 + 6 * (clicks++ % 4), title.Bounds.Height / 2), window)!.Value;
+        for (int i = 0; i < 2; i++) {
+          window.MouseDown(at, MouseButton.Left);
+          window.MouseUp(at, MouseButton.Left);
+        }
+        Pump();
+      }
+      List<Border> Edges(string key) {
+        int index = analysis.Grid!.Views.ToList().FindIndex(v => v.Key == key);
+        return View().GetVisualDescendants().OfType<Border>()
+          .Where(b => b.Classes.Contains("columnedge") && b.DataContext is GridCell cell && cell.Column == analysis.Grid.Views[index] && b.IsEffectivelyVisible).ToList();
+      }
+      int edgeClicks = 0;
+      void ClickEdge(string key) {
+        // the title's edge and the rows' edges in turn (all of them work; one place twice would be a double-click)
+        var edges = Edges(key).OrderBy(e => e.TranslatePoint(default, window)!.Value.Y).ToList();
+        var edge = edges[edgeClicks++ % edges.Count];
+        var at = edge.TranslatePoint(new Point(edge.Bounds.Width / 2, edge.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(at, MouseButton.Left);
+        window.MouseUp(at, MouseButton.Left);
+        Pump();
+      }
       const string quality = "result:BestQuality";
-      CollectionAssert.AreEqual(new[] { "sort", "size" }, Buttons(quality).Select(b => b.Classes.First(c => c is "sort" or "size")).ToList());
-      Assert.IsTrue(Buttons(quality).All(b => b.Bounds.Width == 18 && b.Bounds.Height == 18 && b.CornerRadius == default), "square");
-      Assert.AreEqual(Color.Parse("#F2F2F2"), Face(SortButton(quality)), "not sorted");
 
-      // sort button: ascending (green), framed green at the top to red at the bottom
-      Click(SortButton(quality));
+      // not sorted = the order the runs were read in: as in the Run column
+      CollectionAssert.AreEqual(new[] { "Run 2", "Run 3", new string('W', 150), "Run 5", "Run 6" }, order.Skip(1).Select(r => r.Name).ToList());
+
+      // titles: only Source/Origin/Run have a button (orange, collapse_table); the others none
+      Assert.IsTrue(analysis.Grid!.HeaderButtons);
+      foreach (var key in new[] { "source", "origin", "run" }) {
+        var button = Buttons(key).Single();
+        Assert.AreEqual(Color.Parse("#F7931D"), Face(button));
+        Assert.AreEqual("collapse_table", button.GetVisualDescendants().OfType<Pictogram>().Single().Symbol);
+        Assert.IsTrue(button.Bounds.Width == 18 && button.Bounds.Height == 18);
+      }
+      Assert.AreEqual(0, Buttons(quality).Count, "no buttons on the other columns");
+
+      // a double-click on a title: ascending (framed orange at the top to black at the bottom), descending, not sorted
+      DoubleClick(quality);
       Assert.AreEqual(SortOrder.Ascending, Column(quality).Sort);
       var best = analysis.Rows.Select(r => r.Row.Number(quality)!.Value).ToList();
       CollectionAssert.AreEqual(best.Order().ToList(), best);
-      Assert.AreEqual(TableGridViewModel.FrameGreen, Face(SortButton(quality)));
       var grid = analysis.Grid!;
       int q = grid.Views.ToList().FindIndex(v => v.Key == quality);
-      var top = (IGradientBrush)grid.Header[q].FrameBrush!;
-      Assert.AreEqual(TableGridViewModel.FrameGreen, top.GradientStops[0].Color, "green at the top");
+      Assert.AreEqual(TableGridViewModel.FrameOrange, ((IGradientBrush)grid.Header[q].FrameBrush!).GradientStops[0].Color, "orange at the top");
       Assert.AreEqual(new Thickness(3, 3, 3, 0), grid.Header[q].FrameThickness);
       var last = grid.ShownRows[^1].Cells[q];
       Assert.AreEqual(new Thickness(3, 0, 3, 3), last.FrameThickness, "the bottom line under the last row");
-      Assert.AreEqual(TableGridViewModel.FrameRed, ((IGradientBrush)last.FrameBrush!).GradientStops[1].Color, "red at the bottom");
-      Assert.IsTrue(grid.Views.Where(v => v.Key != quality).All(v => v.Sort == SortOrder.None));
+      Assert.AreEqual(TableGridViewModel.FrameBlack, ((IGradientBrush)last.FrameBrush!).GradientStops[1].Color, "black at the bottom");
       Assert.IsTrue(grid.Rows[0].Cells.Where((_, i) => i != q).All(c => c.FrameBrush == null), "only the sorted column");
-      Pump();
       window.CaptureRenderedFrame()!.Save(System.IO.Path.Combine(AppContext.BaseDirectory, "studio-table-sorted-ascending.png"));
-      // descending (red): red at the top
-      Click(SortButton(quality));
+      DoubleClick(quality);
       Assert.AreEqual(SortOrder.Descending, Column(quality).Sort);
-      Assert.AreEqual(TableGridViewModel.FrameRed, Face(SortButton(quality)));
-      Assert.AreEqual(TableGridViewModel.FrameRed, ((IGradientBrush)analysis.Grid!.Header[q].FrameBrush!).GradientStops[0].Color);
+      Assert.AreEqual(TableGridViewModel.FrameBlack, ((IGradientBrush)analysis.Grid!.Header[q].FrameBrush!).GradientStops[0].Color, "black at the top");
       best = analysis.Rows.Select(r => r.Row.Number(quality)!.Value).ToList();
       CollectionAssert.AreEqual(best.OrderDescending().ToList(), best);
       window.CaptureRenderedFrame()!.Save(System.IO.Path.Combine(AppContext.BaseDirectory, "studio-table-sorted-descending.png"));
-      // not sorted: the order before, no frame
-      Click(SortButton(quality));
+      DoubleClick(quality);
       Assert.AreEqual(SortOrder.None, Column(quality).Sort);
-      CollectionAssert.AreEqual(order, analysis.Rows.Select(r => r.Row.Run).ToList());
+      CollectionAssert.AreEqual(order, analysis.Rows.Select(r => r.Row.Run).ToList(), "the order the runs were read in again");
       Assert.IsTrue(analysis.Grid!.Header.All(c => c.FrameBrush == null));
 
-      // a double-click on the title sorts too; another column's sorting ends the first one's
-      var title = Title(quality);
-      var at = title.TranslatePoint(new Point(20, title.Bounds.Height / 2), window)!.Value;
-      window.MouseDown(at, MouseButton.Left);
-      window.MouseUp(at, MouseButton.Left);
-      window.MouseDown(at, MouseButton.Left);
-      window.MouseUp(at, MouseButton.Left);
-      Pump();
-      Assert.AreEqual(SortOrder.Ascending, Column(quality).Sort, "double-click on the title");
-      Click(SortButton("run"));
+      // a fixed column sorts and is framed too; one column at a time
+      DoubleClick(quality);
+      DoubleClick("run");
       Assert.AreEqual(SortOrder.Ascending, Column("run").Sort);
       Assert.AreEqual(SortOrder.None, Column(quality).Sort, "one column at a time");
-      Assert.IsTrue(analysis.Grid!.Header.All(c => c.FrameBrush == null), "a fixed column is not framed");
-      Assert.AreEqual(Color.Parse("#B85F00"), Face(SortButton("run")), "orange, darker while sorting");
-      Click(SortButton("run"));
-      Click(SortButton("run"));
+      int r = analysis.Grid!.Views.ToList().FindIndex(v => v.Key == "run");
+      Assert.IsNotNull(analysis.Grid.Header[r].FrameBrush, "Source/Origin/Run are framed too");
+      window.CaptureRenderedFrame()!.Save(System.IO.Path.Combine(AppContext.BaseDirectory, "studio-table-sorted-run.png"));
+      DoubleClick("run");
+      DoubleClick("run");
       Assert.AreEqual(SortOrder.None, Column("run").Sort);
 
-      // Run: collapse (two buttons, no title), expand (regular, three), expand (120 characters, expand greyed out)
+      // the right edge: the pointer <-|-> (expand), a click expands - on the title or any row; then ->|<- and back
+      Assert.IsTrue(Edges(quality).Count > 2, "the title's and every row's edge");
+      Assert.AreSame(ColumnCursors.Expand, Edges(quality)[0].Cursor);
+      ClickEdge(quality);
+      Assert.AreEqual(ColumnSize.Expanded, Column(quality).Size);
+      Assert.AreSame(ColumnCursors.Shrink, Edges(quality)[0].Cursor);
+      Assert.IsFalse(analysis.Grid!.Rows.Any(x => x.IsSelected), "a click on an edge selects no row");
+      ClickEdge(quality);
+      Assert.AreEqual(ColumnSize.Regular, Column(quality).Size);
+      Assert.AreEqual(150, Title(quality).Bounds.Width, 0.5);
+      ClickEdge(quality);
+      ClickEdge(quality);
+      Assert.AreEqual(ColumnSize.Regular, Column(quality).Size, "a row's edge works as the title's");
+
+      // Run: the button collapses it to the button's size (expand_table then), the button makes it regular again
       Assert.AreEqual(150, Title("run").Bounds.Width, 0.5);
-      Click(Buttons("run").Single(b => b.Classes.Contains("narrow")));
+      Click(Buttons("run").Single());
+      Assert.AreEqual(ColumnSize.Collapsed, Column("run").Size);
       Assert.AreEqual(TableGridViewModel.CollapsedWidth, Title("run").Bounds.Width, 0.5);
-      CollectionAssert.AreEqual(new[] { "sort", "widen" }, Buttons("run").Select(b => b.Classes.First(c => c is "sort" or "narrow" or "widen")).ToList());
-      Assert.IsFalse(Title("run").GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Run" && t.IsEffectivelyVisible), "no room for the title");
-      Assert.IsTrue(Buttons("run").All(b => b.TranslatePoint(new Point(b.Bounds.Width, 0), Title("run"))!.Value.X <= TableGridViewModel.CollapsedWidth), "the buttons fit");
+      var collapsedButton = Buttons("run").Single();
+      Assert.AreEqual("expand_table", collapsedButton.GetVisualDescendants().OfType<Pictogram>().Single().Symbol);
+      Assert.IsTrue(collapsedButton.TranslatePoint(new Point(18, 0), Title("run"))!.Value.X <= TableGridViewModel.CollapsedWidth, "the button fits");
+      Assert.IsFalse(Title("run").GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Run" && t.IsEffectivelyVisible), "no title");
       window.CaptureRenderedFrame()!.Save(System.IO.Path.Combine(AppContext.BaseDirectory, "studio-table-run-collapsed.png"));
-      Click(Buttons("run").Single(b => b.Classes.Contains("widen")));
-      Assert.AreEqual(150, Title("run").Bounds.Width, 0.5);
-      Assert.AreEqual(3, Buttons("run").Count);
-      Assert.IsTrue(Buttons("run").All(b => b.IsEffectivelyEnabled));
-      Click(Buttons("run").Single(b => b.Classes.Contains("widen")));
+      Click(collapsedButton);
+      Assert.AreEqual(ColumnSize.Regular, Column("run").Size);
+      Assert.AreEqual("collapse_table", Buttons("run").Single().GetVisualDescendants().OfType<Pictogram>().Single().Symbol);
+      // collapsed, then its edge: expanded (up to 120 characters); the edge again: regular
+      Click(Buttons("run").Single());
+      ClickEdge("run");
+      Assert.AreEqual(ColumnSize.Expanded, Column("run").Size);
       double wide = Title("run").Bounds.Width;
       double Natural(string text) {
         using var layout = new Avalonia.Media.TextFormatting.TextLayout(text, new Typeface(FontFamily.Default), 14, null);
         return layout.WidthIncludingTrailingWhitespace;
       }
       Assert.IsTrue(wide > Natural(new string('W', 118)) && wide < Natural(new string('W', 125)), $"as wide as 120 characters: {wide}");
-      var expand = Buttons("run").Single(b => b.Classes.Contains("widen"));
-      Assert.IsFalse(expand.IsEffectivelyEnabled);
-      Assert.AreEqual(Color.Parse("#D0D0D0"), Face(expand), "greyed out");
-      // the sizes stay when the table is made again (sorted)
-      Click(SortButton(quality));
+      Assert.AreEqual("collapse_table", Buttons("run").Single().GetVisualDescendants().OfType<Pictogram>().Single().Symbol);
+      window.CaptureRenderedFrame()!.Save(System.IO.Path.Combine(AppContext.BaseDirectory, "studio-table-run-expanded.png"));
+      // the sizes stay when the table is made again (sorted; the other titles are out of view now)
+      DoubleClick("source");
+      Assert.AreEqual(SortOrder.Ascending, Column("source").Sort);
       Assert.AreEqual(ColumnSize.Expanded, Column("run").Size);
       Assert.AreEqual(wide, Title("run").Bounds.Width, 0.5);
-      window.CaptureRenderedFrame()!.Save(System.IO.Path.Combine(AppContext.BaseDirectory, "studio-table-run-expanded.png"));
-      Click(Buttons("run").Single(b => b.Classes.Contains("narrow")));
-      Assert.AreEqual(150, Title("run").Bounds.Width, 0.5);
+      // wider than the view, its right edge is out of reach: the button collapses it, the button again makes it regular
+      Click(Buttons("run").Single());
+      Click(Buttons("run").Single());
+      Assert.AreEqual(ColumnSize.Regular, Column("run").Size);
+      // a fixed column that fits: its edge expands it and makes it regular again
+      ClickEdge("origin");
+      Assert.AreEqual(ColumnSize.Expanded, Column("origin").Size);
+      ClickEdge("origin");
+      Assert.AreEqual(ColumnSize.Regular, Column("origin").Size);
 
-      // a column that is not fixed: one switch, regular or expanded (dark while expanded)
-      var size = Buttons(quality).Single(b => b.Classes.Contains("size"));
-      Click(size);
+      // "Reload table": not sorted, every column regular, the runs in the order they were read
+      ClickEdge(quality);
+      Click(Buttons("origin").Single());
+      Assert.AreEqual(SortOrder.Ascending, Column("source").Sort);
       Assert.AreEqual(ColumnSize.Expanded, Column(quality).Size);
-      Assert.AreEqual(Color.Parse("#4A4A4A"), Face(Buttons(quality).Single(b => b.Classes.Contains("size"))));
-      Assert.IsTrue(Title(quality).Bounds.Width >= 150);
-      Click(Buttons(quality).Single(b => b.Classes.Contains("size")));
-      Assert.AreEqual(ColumnSize.Regular, Column(quality).Size);
-      Assert.AreEqual(150, Title(quality).Bounds.Width, 0.5);
+      Assert.AreEqual(ColumnSize.Collapsed, Column("origin").Size);
+      var reload = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Reload table" && b.IsEffectivelyVisible);
+      Click(reload);
+      Assert.IsTrue(analysis.Grid!.Views.All(v => v.Sort == SortOrder.None && v.Size == ColumnSize.Regular));
+      CollectionAssert.AreEqual(order, analysis.Rows.Select(x => x.Row.Run).ToList());
       window.Close();
       return true;
     }, CancellationToken.None);
