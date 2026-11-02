@@ -14,6 +14,8 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        // a press on empty space leaves a text field
+        Controls.FocusRelease.Register();
     }
 
     public override void OnFrameworkInitializationCompleted()

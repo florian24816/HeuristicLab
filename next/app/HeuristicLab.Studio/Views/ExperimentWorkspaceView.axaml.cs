@@ -147,7 +147,11 @@ public partial class ExperimentWorkspaceView : UserControl {
     band.IsVisible = false;
     workspace.CoverWithBand(null);
     if (rect.Width <= 3 && rect.Height <= 3) {
-      if (!bandAdds) workspace.ClearPicks();  // a click on empty space
+      // a click on empty space: nothing picked, nothing selected
+      if (!bandAdds) {
+        workspace.ClearPicks();
+        workspace.Selected = null;
+      }
       return;
     }
     workspace.Pick(Covered(rect), bandAdds, bandExperiment);

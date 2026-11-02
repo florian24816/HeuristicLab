@@ -48,6 +48,13 @@
   tick experiments ("Eject selected") or "Eject all", Autosave switch; ExperimentWorkspaceViewModel.EjectAsync:
   unsaved ones (!IsSaved) are saved first with autosave (never saved: "Save as..." file), else UnsavedWindow
   asks per experiment (Save / Eject without saving / Keep it open); one not saved stays. Files stay on disk.
+  Its boxes also tick by sweeping (Controls/TickSweep): right button held on a box switches it, every box passed gets
+  the same state (user's request 2026-11-02).
+  Empty clicks (user's request 2026-11-02): a press on anything that takes no focus leaves the text field being typed in
+  (Controls/FocusRelease, a tunnel class handler on every TopLevel registered in App.Initialize; Avalonia 12 has no
+  ClearFocus: FocusManager.Focus(null)); in the Experiments tab a click on empty space also unselects the selected block
+  (ExperimentWorkspaceView.EndBand: Selected = null). The containers' add buttons are low (Button.action.addblock,
+  padding 12,2,12,3, no MinHeight - as the Results tab's selection state buttons).
   The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
   logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
   TextBlock: a string's '_' would be an access key.

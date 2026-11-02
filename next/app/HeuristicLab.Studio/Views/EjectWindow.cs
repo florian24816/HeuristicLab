@@ -33,7 +33,7 @@ public sealed class EjectWindow : Window {
 
     var panel = new DockPanel { Margin = new(16) };
     var text = new TextBlock {
-      Text = "Eject all experiments, or tick the ones to eject. Their files stay on disk.",
+      Text = "Eject all experiments, or tick the ones to eject (or hold the right mouse button and move over them). Their files stay on disk.",
       TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new(0, 0, 0, 10)
     };
     var bottom = new StackPanel {
@@ -47,8 +47,11 @@ public sealed class EjectWindow : Window {
     DockPanel.SetDock(bottom, Dock.Bottom);
     panel.Children.Add(text);
     panel.Children.Add(bottom);
-    var list = new StackPanel { Spacing = 2 };
+    // a background, so the gaps between the boxes belong to the list (sweeping over them)
+    var list = new StackPanel { Spacing = 2, Background = Avalonia.Media.Brushes.Transparent };
     foreach (var box in boxes) list.Children.Add(box);
+    // hold the right mouse button and move over the boxes: all of them ticked (or unticked) like the first one
+    Controls.TickSweep.Attach(list);
     panel.Children.Add(new ScrollViewer { Content = list });
     Content = panel;
   }

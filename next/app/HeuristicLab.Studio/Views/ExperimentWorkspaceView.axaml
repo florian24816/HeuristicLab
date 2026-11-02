@@ -87,7 +87,7 @@
 
         <!-- add button of a container, with the building blocks it accepts -->
         <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
-            <Button Classes="action" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
+            <Button Classes="action addblock" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
                     IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}">
                 <Button.Flyout>
                     <MenuFlyout ItemsSource="{Binding AddChoices}">
@@ -109,6 +109,11 @@
             <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
             <Setter Property="CornerRadius" Value="0" />
             <Setter Property="Padding" Value="12,6" />
+        </Style>
+        <!-- the containers' add buttons: low, as the Results tab's selection state buttons -->
+        <Style Selector="Button.action.addblock">
+            <Setter Property="Padding" Value="12,2,12,3" />
+            <Setter Property="MinHeight" Value="0" />
         </Style>
         <Style Selector="Button.action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
