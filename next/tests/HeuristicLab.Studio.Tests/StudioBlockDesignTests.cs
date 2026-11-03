@@ -156,7 +156,7 @@ public class StudioBlockDesignTests {
       ws.Selected = first;
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       Avalonia.Controls.Border Layer(object block) => window.GetVisualDescendantsOf<Avalonia.Controls.Border>()
-        .Single(b => b.Classes.Contains("selection") && b.DataContext == block);
+        .Single(b => b.Classes.Contains("selection") && !b.Classes.Contains("rowselection") && b.DataContext == block);
       var layer = Layer(first);
       Assert.IsTrue(layer.IsEffectivelyVisible);
       Assert.AreEqual(Avalonia.Media.Color.Parse("#F7931D"), ((Avalonia.Media.ISolidColorBrush)layer.Background!).Color);
@@ -171,6 +171,34 @@ public class StudioBlockDesignTests {
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       Assert.IsFalse(Layer(first).IsEffectivelyVisible);
       Assert.IsTrue(Layer(second).IsEffectivelyVisible);
+
+      // no dark frame around the selected block's name: the orange layer is enough
+      var name = window.GetVisualDescendantsOf<Avalonia.Controls.Border>().First(b => b.Classes.Contains("name") && b.DataContext == second);
+      var plain = window.GetVisualDescendantsOf<Avalonia.Controls.Border>().First(b => b.Classes.Contains("name") && b.DataContext == first);
+      Assert.AreEqual(((Avalonia.Media.ISolidColorBrush)plain.BorderBrush!).Color, ((Avalonia.Media.ISolidColorBrush)name.BorderBrush!).Color);
+
+      // an algorithm with its problem: one layer over the algorithm, the line and the problem
+      ws.SetProblem(second, (HeuristicLab.Optimization.IProblem)Setups.Create(
+        new SetupRequest("TabuSearch") { Problem = "TravelingSalesmanProblem", Instance = "ch130" }).Algorithm.Problem!.Clone());
+      ws.Selected = second;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var row = window.GetVisualDescendantsOf<Avalonia.Controls.Border>().Single(b => b.Classes.Contains("rowselection") && b.DataContext == second);
+      Assert.IsTrue(row.IsEffectivelyVisible);
+      Assert.IsFalse(Layer(second).IsEffectivelyVisible, "not twice over the algorithm");
+      var algo = window.GetVisualDescendantsOf<Avalonia.Controls.Border>().First(b => b.Classes.Contains("block") && b.DataContext == second);
+      var problem = window.GetVisualDescendantsOf<Avalonia.Controls.Border>().First(b => b.Classes.Contains("block") && b.DataContext == second.Problem);
+      var left = algo.TranslatePoint(default, window)!.Value.X;
+      var right = problem.TranslatePoint(new Point(problem.Bounds.Width, 0), window)!.Value.X;
+      var rowLeft = row.TranslatePoint(default, window)!.Value.X;
+      Assert.AreEqual(left, rowLeft, 1);
+      Assert.AreEqual(right - left, row.Bounds.Width, 1, "from the algorithm's left to the problem's right edge");
+      Assert.AreEqual(algo.Bounds.Height, row.Bounds.Height, 1);
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selected-row.png"));
+      // the problem selected: only its own layer
+      ws.Selected = second.Problem;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsFalse(row.IsEffectivelyVisible);
+      Assert.IsTrue(Layer(second.Problem!).IsEffectivelyVisible);
       window.Close();
       return true;
     }, CancellationToken.None);

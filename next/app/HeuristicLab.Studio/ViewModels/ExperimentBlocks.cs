@@ -121,7 +121,15 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   public partial bool IsEditingName { get; set; }
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(ShowsSelection))]
   public partial bool IsSelected { get; set; }
+
+  /// <summary>The block's own orange layer; an algorithm with a problem has one over its whole row instead.</summary>
+  public virtual bool ShowsSelection => IsSelected;
+
+  partial void OnIsSelectedChanged(bool value) => SelectionChanged();
+
+  protected virtual void SelectionChanged() { }
 
   /// <summary>Parameters shown in the details panel (algorithms and problems).</summary>
   public IReadOnlyList<ParameterRowViewModel> Parameters =>
@@ -452,10 +460,17 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
   }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(HasProblem), nameof(Menu))]
+  [NotifyPropertyChangedFor(nameof(HasProblem), nameof(Menu), nameof(ShowsSelection), nameof(IsRowSelected))]
   public partial ProblemBlockViewModel? Problem { get; set; }
 
   public bool HasProblem => Problem != null;
+
+  /// <summary>Selected with a problem: the orange layer covers the algorithm, the line and the problem (user's request 2026-11-03).</summary>
+  public bool IsRowSelected => IsSelected && HasProblem;
+
+  public override bool ShowsSelection => IsSelected && !HasProblem;
+
+  protected override void SelectionChanged() => OnPropertyChanged(nameof(IsRowSelected));
 
   [RelayCommand]
   private Task ChooseProblemAsync() => Workspace.ChooseProblemAsync(this);
