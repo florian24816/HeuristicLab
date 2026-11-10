@@ -34,6 +34,8 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   private readonly Action recentFilesChanged;
   private const int MaxRecentFiles = 10;
   private CancellationTokenSource? stopSource;
+  /// <summary>Free places for experiments at the same time (Resources tab), shared by overlapping starts.</summary>
+  private SemaphoreSlim? slots;
   private int experimentCounter, batchCounter, timeLimitCounter;
 
   public ExperimentWorkspaceViewModel(IDialogService? dialogs = null, IFileDialogService? fileDialogs = null,
@@ -109,7 +111,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// purple field) stop. The algorithms taking part are tinted purple; clicking one shows the field.
   /// </summary>
   public bool ToggleMultiEdit(AlgorithmBlockViewModel block, string key) {
-    if (block.Root is not { } root || !IsEditable) return false;
+    if (block.Root is not { } root || !CanChange(block)) return false;
     bool stop = MultiEditing is { } m && m.Key == key && block.IsMultiMember;
     MultiEditing = stop ? null : new MultiEditState(root, block.Algorithm.GetType(), key);
     MultiVersion++;
@@ -158,10 +160,17 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   [ObservableProperty]
   public partial ViewModelBase? Detail { get; set; }
 
-  /// <summary>Experiments or a single algorithm are running (or paused): the tree cannot change.</summary>
+  /// <summary>How many runs Start on one algorithm makes: a quick batch run (the Options tab).</summary>
+  [ObservableProperty]
+  public partial int QuickBatchSize { get; set; } = QuickBatchRuns.DefaultSize;
+
+  /// <summary>
+  /// Anything runs (experiments, a quick batch run, a detailed analysis; also paused): live monitoring is on. Only the
+  /// experiments that run are locked (ExperimentBlockViewModel.IsLocked); the others and new ones can be worked on
+  /// (user's request 2026-11-10).
+  /// </summary>
   [ObservableProperty]
   [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StartSelectedCommand), nameof(StopCommand), nameof(EjectCommand))]
-  [NotifyPropertyChangedFor(nameof(IsEditable))]
   public partial bool IsRunning { get; set; }
 
   /// <summary>Experiments started with the start buttons are running.</summary>
@@ -169,12 +178,48 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   [NotifyCanExecuteChangedFor(nameof(StopCommand))]
   public partial bool IsRunningExperiments { get; set; }
 
-  private bool algorithmRunning;
+  /// <summary>What runs on one algorithm (its quick batch run, its detailed analysis), by who started it: locks its experiment.</summary>
+  private readonly Dictionary<object, AlgorithmBlockViewModel> algorithmsRunning = new(System.Collections.Generic.ReferenceEqualityComparer.Instance);
 
-  /// <summary>An algorithm started from its detail view runs or is paused.</summary>
-  public void SetAlgorithmRunning(bool running) {
-    algorithmRunning = running;
-    IsRunning = IsRunningExperiments || algorithmRunning;
+  /// <summary>Experiment runs started with the start buttons and not done yet (several starts may overlap).</summary>
+  private int experimentRuns;
+
+  /// <summary>An algorithm's quick batch run or detailed analysis (<paramref name="key"/>: who started it) runs, is paused, or ended.</summary>
+  public void SetAlgorithmRunning(AlgorithmBlockViewModel block, object key, bool running) {
+    var experiment = block.Root;
+    // told again (a paused algorithm refreshes): nothing changes - refreshing here would refresh it again, endlessly
+    if (running) {
+      if (algorithmsRunning.TryGetValue(key, out var known) && known == block) return;
+      algorithmsRunning[key] = block;
+    } else if (!algorithmsRunning.Remove(key)) return;
+    UpdateRunning();
+    if (experiment != null) LockChanged(experiment);
+    if (!running) RunsFinished?.Invoke();
+  }
+
+  /// <summary>Whether a quick batch run or detailed analysis runs in this experiment.</summary>
+  internal bool RunsAlgorithmIn(ExperimentBlockViewModel experiment) => algorithmsRunning.Values.Any(b => b.Root == experiment);
+
+  private void UpdateRunning() {
+    IsRunningExperiments = experimentRuns > 0;
+    IsRunning = experimentRuns > 0 || algorithmsRunning.Count > 0;
+  }
+
+  /// <summary>Raised when runs were made (an experiment run, a quick batch run or an analysis ended): the runs and results views read them again.</summary>
+  public event Action? RunsFinished;
+
+  /// <summary>Whether this block can be changed now: not while its experiment runs (other experiments can).</summary>
+  public bool CanChange(BlockViewModel? block) => block?.Root is not { } root || !root.IsLocked;
+
+  /// <summary>An experiment started or stopped running: its blocks offer changes or not, the buttons follow.</summary>
+  internal void LockChanged(ExperimentBlockViewModel experiment) {
+    experiment.RefreshLocked();
+    foreach (var block in AllBlocks([experiment])) {
+      block.RefreshEditable();
+      if (block is AlgorithmBlockViewModel { Problem: { } problem }) problem.RefreshEditable();
+    }
+    RefreshLive();
+    RefreshState();
   }
 
   /// <summary>Something started here finished (experiments, an algorithm, a detailed analysis run): title, message.</summary>
@@ -183,11 +228,6 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   public void NotifyFinished(string title, string message) => Finished?.Invoke(title, message);
 
   partial void OnIsRunningChanged(bool value) {
-    // blocks stay clickable while running, but their menus offer no changes
-    foreach (var block in AllBlocks(Experiments)) {
-      block.RefreshMenu();
-      if (block is AlgorithmBlockViewModel { Problem: { } problem }) problem.RefreshMenu();
-    }
     if (value) liveTimer.Start();
     RefreshLive();
     if (!value) liveTimer.Stop();
@@ -215,9 +255,6 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       }
     }
   }
-
-  /// <summary>Building blocks cannot change while experiments run.</summary>
-  public bool IsEditable => !IsRunning;
 
   [ObservableProperty]
   public partial string Status { get; set; } = "";
@@ -334,9 +371,9 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     var block = new ExperimentBlockViewModel(this, experiment, path);
     if (path != null) {
       try {
-        block.SingleRuns.Load(path);
+        block.QuickBatchRuns.Load(path);
       } catch (Exception e) when (e is IOException or InvalidOperationException or UnauthorizedAccessException) {
-        Status = $"Its single runs ({Path.GetFileName(SingleRuns.FileFor(path))}) could not be read: {e.Message}";
+        Status = $"Its quick batch runs ({Path.GetFileName(QuickBatchRuns.FileFor(path))}) could not be read: {e.Message}";
       }
     }
     Experiments.Add(block);
@@ -348,13 +385,13 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   internal async Task SaveAsync(ExperimentBlockViewModel block) {
     if (fileDialogs == null) return;
-    if (!IsEditable) {
-      Status = "An experiment can be saved when nothing runs.";
+    if (!CanChange(block)) {
+      Status = $"{block.Name} can be saved when it does not run.";
       return;
     }
     var path = await fileDialogs.SaveHlFileAsync(Path.GetFileName(block.FilePath) ?? block.Name + ".hl");
     if (path == null) return;
-    await Task.Run(() => { Documents.Save(block.Experiment, path); block.SingleRuns.Save(path); });
+    await Task.Run(() => { Documents.Save(block.Experiment, path); block.QuickBatchRuns.Save(path); });
     block.FilePath = path;
     block.IsModified = false;
     Remember(path);
@@ -370,12 +407,12 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       await SaveAsync(block);
       return;
     }
-    if (!IsEditable) {
-      Status = "An experiment can be saved when nothing runs.";
+    if (!CanChange(block)) {
+      Status = $"{block.Name} can be saved when it does not run.";
       return;
     }
     try {
-      await Task.Run(() => { Documents.Save(block.Experiment, block.FilePath); block.SingleRuns.Save(block.FilePath); });
+      await Task.Run(() => { Documents.Save(block.Experiment, block.FilePath); block.QuickBatchRuns.Save(block.FilePath); });
       block.IsModified = false;
       Remember(block.FilePath);
       Status = $"Saved {block.Name} to {Path.GetFileName(block.FilePath)}";
@@ -390,8 +427,8 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// </summary>
   internal async Task RenameFileAsync(ExperimentBlockViewModel block) {
     if (block.FilePath is not { } path || dialogs == null) return;
-    if (!IsEditable) {
-      Status = "A file can be renamed when nothing runs.";
+    if (!CanChange(block)) {
+      Status = $"The file of {block.Name} can be renamed when it does not run.";
       return;
     }
     var answer = await dialogs.AskTextAsync("Rename file", $"New name of {Path.GetFileName(path)} (in {Path.GetDirectoryName(path)}):", Path.GetFileName(path));
@@ -415,7 +452,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
     try {
       File.Move(path, target);
-      SingleRuns.Move(path, target);
+      QuickBatchRuns.Move(path, target);
     } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
       Status = $"Could not rename {Path.GetFileName(path)}: {e.Message}";
       return false;
@@ -430,30 +467,31 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>
   /// Runs tab's "Delete runs...": the user picks an experiment, then confirms; all its runs (also those
-  /// of its batch runs, time-limit runs and algorithms) are deleted. Never single runs, never while running.
+  /// of its batch runs, time-limit runs and algorithms) are deleted. Never quick batch runs, never while running.
   /// </summary>
   public async Task DeleteRunsAsync() {
-    if (!IsEditable) {
-      Status = "Runs can be deleted when nothing runs.";
+    var idle = Experiments.Where(e => !e.IsLocked).ToList();
+    if (dialogs == null || Experiments.Count == 0) return;
+    if (idle.Count == 0) {
+      Status = "Runs can be deleted of experiments that do not run.";
       return;
     }
-    if (dialogs == null || Experiments.Count == 0) return;
-    // per experiment: its runs, or only its single runs (Start on one algorithm); all single runs at once
+    // per experiment: its runs, or only its quick batch runs (Start on one algorithm); all quick batch runs at once
     var choices = new List<(string Text, Action Delete)>();
     static string Runs(int n) => $"{n} run{(n == 1 ? "" : "s")}";
-    foreach (var e in Experiments.ToList()) {
+    foreach (var e in idle) {
       choices.Add(($"{e.Name}: the experiment's runs  ({Runs(e.Experiment.Runs.Count)})", () => DeleteRuns(e)));
-      if (e.SingleRuns.Count > 0) choices.Add(($"{e.Name}: only its single runs  ({Runs(e.SingleRuns.Count)})", () => DeleteSingleRuns(e)));
+      if (e.QuickBatchRuns.Count > 0) choices.Add(($"{e.Name}: only its quick batch runs  ({Runs(e.QuickBatchRuns.Count)})", () => DeleteQuickBatchRuns(e)));
     }
-    var withSingle = Experiments.Where(e => e.SingleRuns.Count > 0).ToList();
-    if (withSingle.Count > 1)
-      choices.Add(($"All single runs of all experiments  ({Runs(withSingle.Sum(e => e.SingleRuns.Count))})", () => {
-        int n = withSingle.Sum(DeleteSingleRuns);
-        Status = $"Deleted all {Runs(n)} single runs";
+    var withQbrs = idle.Where(e => e.QuickBatchRuns.Count > 0).ToList();
+    if (withQbrs.Count > 1)
+      choices.Add(($"All quick batch runs of all experiments  ({Runs(withQbrs.Sum(e => e.QuickBatchRuns.Count))})", () => {
+        int n = withQbrs.Sum(DeleteQuickBatchRuns);
+        Status = $"Deleted all {Runs(n)} of the quick batch runs";
       }));
     var picked = await dialogs.ChooseAsync("Delete runs",
-      "Choose what to delete, then press \"Delete runs\": an experiment's runs (of everything inside it; its single runs stay), " +
-      "or only single runs (made by Start on one algorithm). The experiments themselves stay.",
+      "Choose what to delete, then press \"Delete runs\": an experiment's runs (of everything inside it; its quick batch runs stay), " +
+      "or only quick batch runs (QBRs, made by Start on one algorithm). The experiments themselves stay.",
       choices.Select(c => c.Text).ToList(), "Delete runs");
     if (picked == null) return;
     var statuses = new List<string>();
@@ -464,20 +502,20 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     if (statuses.Count > 1) Status = string.Join("; ", statuses);
   }
 
-  /// <summary>Deletes the single runs of this experiment (Start on one algorithm); returns how many there were.</summary>
-  public int DeleteSingleRuns(ExperimentBlockViewModel experiment) {
-    if (!IsEditable) return 0;
-    int count = experiment.SingleRuns.Count;
-    experiment.SingleRuns.Runs.Clear();
+  /// <summary>Deletes the quick batch runs of this experiment (Start on one algorithm); returns how many runs there were.</summary>
+  public int DeleteQuickBatchRuns(ExperimentBlockViewModel experiment) {
+    if (!CanChange(experiment)) return 0;
+    int count = experiment.QuickBatchRuns.Count;
+    experiment.QuickBatchRuns.Runs.Clear();
     if (count > 0) experiment.MarkModified();
     RefreshLive();
-    Status = $"Deleted {count} single run{(count == 1 ? "" : "s")} of {experiment.Name}";
+    Status = $"Deleted {count} quick batch run{(count == 1 ? "" : "s")} of {experiment.Name}";
     return count;
   }
 
   /// <summary>Deletes all runs of this experiment; returns how many there were.</summary>
   public int DeleteRuns(ExperimentBlockViewModel experiment) {
-    if (!IsEditable) return 0;
+    if (!CanChange(experiment)) return 0;
     int count = ExperimentTree.DeleteRuns(experiment.Experiment);
     if (count > 0) experiment.MarkModified();
     RefreshLive();
@@ -503,11 +541,13 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       : new ContainerBlockViewModel(this, parent, optimizer);
 
   internal async Task AddAlgorithmAsync(ContainerBlockViewModel container) {
+    if (!CanChange(container)) return;
     if (dialogs != null && await dialogs.PickAlgorithmAsync() is CatalogEntry entry) AddAlgorithm(container, entry);
   }
 
   /// <summary>Adds a new algorithm (without problem) at the end of this container.</summary>
   public AlgorithmBlockViewModel AddAlgorithm(ContainerBlockViewModel container, CatalogEntry entry) {
+    if (!CanChange(container)) throw new InvalidOperationException($"{container.Root?.Name} runs: nothing can be added now.");
     var algorithm = (IAlgorithm)entry.CreateInstance();
     ExperimentTree.Add(container.Optimizer, algorithm);
     var block = new AlgorithmBlockViewModel(this, container, algorithm);
@@ -517,6 +557,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>Adds a new batch run or time-limit run at the end of this container.</summary>
   public ContainerBlockViewModel AddContainer(ContainerBlockViewModel container, CatalogEntry entry) {
+    if (!CanChange(container)) throw new InvalidOperationException($"{container.Root?.Name} runs: nothing can be added now.");
     var optimizer = (IOptimizer)entry.CreateInstance();
     optimizer.Name = optimizer switch {
       BatchRun => $"Batch run {++batchCounter}",
@@ -538,12 +579,12 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   }
 
   internal async Task ChooseProblemAsync(AlgorithmBlockViewModel block) {
-    if (!IsEditable) return;
+    if (!CanChange(block)) return;
     if (dialogs != null && await dialogs.PickProblemAsync(block.Algorithm) is IProblem problem) SetProblem(block, problem);
   }
 
   public void SetProblem(AlgorithmBlockViewModel block, IProblem? problem) {
-    if (IsRunning) return;
+    if (!CanChange(block)) return;
     block.SetProblem(problem);
     if (block.Problem != null) Selected = block.Problem;
     RefreshState();
@@ -551,13 +592,15 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   // ---- ejecting experiments
 
-  private bool CanEject() => !IsRunning && Experiments.Count > 0;
+  /// <summary>Experiments that do not run can be ejected (the dialog offers only those).</summary>
+  private bool CanEject() => Experiments.Any(e => !e.IsLocked);
 
   /// <summary>Asks which experiments to eject (all or ticked) and whether to autosave, then ejects them.</summary>
   [RelayCommand(CanExecute = nameof(CanEject))]
   private async Task EjectAsync() {
     if (dialogs == null || !CanEject()) return;
-    var all = Experiments.ToList();
+    // only experiments that do not run can be ejected
+    var all = Experiments.Where(e => !e.IsLocked).ToList();
     var choice = await dialogs.ChooseEjectAsync(all.Select(e => e.Name).ToList(), all.Select(e => !e.IsSaved).ToList());
     if (choice == null) return;
     await EjectAsync(choice.Experiments.Where(i => i >= 0 && i < all.Count).Select(i => all[i]).ToList(), choice.Autosave);
@@ -570,8 +613,10 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// </summary>
   public async Task<IReadOnlyList<ExperimentBlockViewModel>> EjectAsync(IReadOnlyList<ExperimentBlockViewModel> experiments, bool autosave) {
     var ejected = new List<ExperimentBlockViewModel>();
-    if (IsRunning) { Status = "Experiments can be ejected when nothing runs."; return ejected; }
     var kept = new List<string>();
+    var running = experiments.Where(e => e.IsLocked).ToList();
+    experiments = experiments.Where(e => !e.IsLocked).ToList();
+    if (running.Count > 0) kept.AddRange(running.Select(e => $"{e.Name} (runs)"));
     foreach (var experiment in experiments) {
       if (!experiment.IsSaved) {
         var answer = autosave ? UnsavedChoice.Save : dialogs == null ? UnsavedChoice.Keep : await dialogs.AskUnsavedAsync(experiment.Name);
@@ -595,11 +640,17 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// (its file stays on disk).
   /// </summary>
   public async Task DeleteAsync(BlockViewModel block) {
-    if (IsRunning) return;
+    if (!CanChange(block)) return;
     if (block is ContainerBlockViewModel { Children.Count: > 0 } container && dialogs != null) {
       var what = block is ExperimentBlockViewModel ? "Remove the experiment" : $"Delete {block.Name}";
       if (!await dialogs.ConfirmAsync("Delete", $"{what} and its {container.Children.Count} building block(s)?")) return;
     }
+    DeleteNow(block);
+  }
+
+  private void DeleteNow(BlockViewModel block) {
+    if (!CanChange(block)) return;
+    block.IsPicked = false;
     if (Selected != null && IsWithin(Selected, block)) Selected = null;
     switch (block) {
       case ProblemBlockViewModel problem:
@@ -633,7 +684,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// <summary>Whether the block may go into this container: not into itself or its own content; a
   /// time-limit run holds one algorithm.</summary>
   public bool CanDrop(BlockViewModel block, ContainerBlockViewModel container) {
-    if (!IsEditable || Movable(block) is not { } moving) return false;
+    if (!CanChange(block) || !CanChange(container) || Movable(block) is not { } moving) return false;
     if (moving is ContainerBlockViewModel c && ExperimentTree.Contains(c.Optimizer, container.Optimizer)) return false;
     return container.Optimizer is not TimeLimitRun
       || moving is AlgorithmBlockViewModel && (container.Children.Count == 0 || container.Children[0] == moving);
@@ -695,19 +746,129 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     return picked.Where(b => !picked.Any(other => other != b && other is ContainerBlockViewModel c && IsWithin(b, c))).ToList();
   }
 
-  /// <summary>Adds a block to the picked ones or takes it out (Ctrl+click); a problem stands for its algorithm, experiments are not picked.</summary>
+  /// <summary>What picking this block picks: a problem itself (its algorithm stays as it is), experiments nothing.</summary>
+  public static BlockViewModel? Pickable(BlockViewModel block) => block is ProblemBlockViewModel ? block : Movable(block);
+
+  /// <summary>
+  /// Adds a block to the picked ones or takes it out (Ctrl+click); an algorithm takes its problem along, a problem alone
+  /// is picked without its algorithm (a problem picked with its algorithm goes with it); experiments are not picked.
+  /// Picked blocks belong to one experiment: a block of another one starts anew there.
+  /// </summary>
   public void TogglePick(BlockViewModel block) {
-    if (Movable(block) is not { } movable) return;
-    movable.IsPicked = !movable.IsPicked;
+    if (Pickable(block) is not { } pickable) return;
+    if (pickable is ProblemBlockViewModel { Owner.IsPicked: true } problem) pickable = problem.Owner;
+    if (!pickable.IsPicked) foreach (var other in AllBlocks().Where(b => b.IsPicked && b.Root != pickable.Root)) other.IsPicked = false;
+    pickable.IsPicked = !pickable.IsPicked;
   }
 
-  /// <summary>Picks these blocks (a rectangle); <paramref name="add"/> keeps the ones picked before.</summary>
-  public void Pick(IEnumerable<BlockViewModel> blocks, bool add) {
-    var chosen = blocks.Select(Movable).OfType<BlockViewModel>().ToHashSet();
+  /// <summary>
+  /// Picks these blocks (a rectangle), only those of one experiment (<paramref name="within"/>, else the first
+  /// one's); <paramref name="add"/> keeps the ones picked before in that experiment.
+  /// </summary>
+  public void Pick(IEnumerable<BlockViewModel> blocks, bool add, ExperimentBlockViewModel? within = null) {
+    var chosen = InOneExperiment(blocks, within);
+    var experiment = chosen.FirstOrDefault()?.Root ?? within;
     foreach (var block in AllBlocks()) {
-      bool on = chosen.Contains(block) || add && block.IsPicked;
+      bool on = chosen.Contains(block) || block is ProblemBlockViewModel p && chosen.Contains(p.Owner)
+        || add && block.IsPicked && block.Root == experiment;
       if (block.IsPicked != on) block.IsPicked = on;
     }
+  }
+
+  /// <summary>
+  /// The pickable blocks among these that belong to one experiment (the given one, else the first block's); a problem
+  /// whose algorithm is among them goes with it, a problem alone stays alone.
+  /// </summary>
+  public HashSet<BlockViewModel> InOneExperiment(IEnumerable<BlockViewModel> blocks, ExperimentBlockViewModel? within) {
+    var pickable = blocks.Select(Pickable).OfType<BlockViewModel>().Distinct().ToList();
+    var experiment = within ?? pickable.FirstOrDefault()?.Root;
+    var chosen = pickable.Where(b => b.Root == experiment).ToHashSet();
+    chosen.RemoveWhere(b => b is ProblemBlockViewModel p && chosen.Contains(p.Owner));
+    return chosen;
+  }
+
+  /// <summary>The blocks the rectangle being drawn covers (a blue frame on them, on an algorithm's problem too; null: none).</summary>
+  public void CoverWithBand(IEnumerable<BlockViewModel>? blocks) {
+    var covered = blocks == null ? [] : blocks.ToHashSet();
+    foreach (var algorithm in covered.OfType<AlgorithmBlockViewModel>().ToList()) if (algorithm.Problem != null) covered.Add(algorithm.Problem);
+    foreach (var block in AllBlocks()) if (block.IsBandCovered != covered.Contains(block)) block.IsBandCovered = covered.Contains(block);
+  }
+
+  /// <summary>The picked blocks changed: the menus offer the actions for all of them, or for one block again.</summary>
+  internal void PicksChanged() {
+    foreach (var block in AllBlocks()) block.RefreshMenu();
+  }
+
+  // ---- the menu of a picked block: delete or copy all picked ones
+
+  /// <summary>Problems picked without their algorithms, in tree order.</summary>
+  public IReadOnlyList<ProblemBlockViewModel> PickedProblems() =>
+    AllBlocks().OfType<ProblemBlockViewModel>().Where(p => p.IsPicked && !p.Owner.IsPicked).ToList();
+
+  /// <summary>Only problems are picked (no algorithm or run): their menu changes or removes all of them.</summary>
+  public bool OnlyProblemsPicked() => PickedGroup().Count == 0 && PickedProblems().Count > 0;
+
+  /// <summary>
+  /// "Change selected problem blocks to...": one problem chosen in the problem dialog (offered for the first one's
+  /// algorithm) goes to every picked problem's algorithm, a copy each; algorithms that cannot take it keep theirs.
+  /// </summary>
+  public async Task ChangeSelectedProblemsAsync() {
+    var problems = PickedProblems();
+    if (problems.Count == 0 || !CanChange(problems[0]) || dialogs == null) return;
+    if (await dialogs.PickProblemAsync(problems[0].Owner.Algorithm) is not IProblem problem) return;
+    ChangeProblems(problems.Select(p => p.Owner).ToList(), problem);
+  }
+
+  /// <summary>Gives every one of these algorithms a copy of the problem (those that take its type); returns how many took it.</summary>
+  public int ChangeProblems(IReadOnlyList<AlgorithmBlockViewModel> algorithms, IProblem problem) {
+    if (algorithms.Any(a => !CanChange(a))) return 0;
+    ClearPicks();
+    var refused = new List<string>();
+    foreach (var algorithm in algorithms) {
+      if (!algorithm.Algorithm.ProblemType.IsInstanceOfType(problem)) { refused.Add(algorithm.Name); continue; }
+      algorithm.SetProblem((IProblem)problem.Clone());
+    }
+    RefreshState();
+    int changed = algorithms.Count - refused.Count;
+    Status = $"Changed {changed} problem(s) to {problem.Name}."
+      + (refused.Count > 0 ? $" Not for {string.Join(", ", refused)}: the algorithm cannot take a {problem.ItemName}." : "");
+    return changed;
+  }
+
+  /// <summary>Deletes all picked blocks (asked once); only problems picked: removes those problems.</summary>
+  public async Task DeleteSelectedAsync() {
+    if (OnlyProblemsPicked()) {
+      var problems = PickedProblems();
+      if (!CanChange(problems[0])) return;
+      if (dialogs != null && !await dialogs.ConfirmAsync("Remove problems", $"Remove the {problems.Count} selected problems from their algorithms?")) return;
+      foreach (var problem in problems) DeleteNow(problem);
+      Status = $"Removed {problems.Count} problems.";
+      return;
+    }
+    var group = PickedGroup();
+    if (group.Count == 0 || !CanChange(group[0])) return;
+    if (dialogs != null && !await dialogs.ConfirmAsync("Delete", $"Delete the {group.Count} selected building blocks (with what is inside them)?")) return;
+    foreach (var block in group) DeleteNow(block);
+    Status = $"Deleted {group.Count} building blocks.";
+  }
+
+  /// <summary>Each picked block can be copied (none inside a time-limit run).</summary>
+  public bool CanCopySelected() => PickedGroup() is { Count: > 0 } group && group.All(CanCopy);
+
+  /// <summary>Copies every picked block <paramref name="count"/> times, the copies right after each one.</summary>
+  public void CopySelected(int count) {
+    var group = PickedGroup();
+    if (count < 1 || !CanCopySelected() || !CanChange(group[0])) return;
+    ClearPicks();
+    foreach (var block in group) Copy(block, count);
+    Status = count == 1 ? $"Copied {group.Count} building blocks." : $"Made {count} copies each of {group.Count} building blocks.";
+  }
+
+  internal async Task CopySelectedManyAsync() {
+    var group = PickedGroup();
+    if (dialogs != null && CanCopySelected()
+        && await dialogs.AskNumberAsync("Copy n times", $"How many copies of each of the {group.Count} selected building blocks?", 2, 1, MaxCopies) is int n)
+      CopySelected(n);
   }
 
   public void ClearPicks() {
@@ -721,7 +882,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// <summary>Moves several blocks to a position, one after the other, in their tree order.</summary>
   public bool MoveGroup(IReadOnlyList<BlockViewModel> group, ContainerBlockViewModel container, int index) {
     if (group.Count == 1) return Move(group[0], container, index);
-    if (!IsEditable || group.Any(b => !CanDrop(b, container)) || container.Optimizer is TimeLimitRun) return false;
+    if (group.Any(b => !CanDrop(b, container)) || container.Optimizer is TimeLimitRun) return false;
     int at = Math.Clamp(index, 0, container.Children.Count);
     foreach (var block in group) {
       if (block.Parent == container && container.Children.IndexOf(block) < at) at--;
@@ -741,7 +902,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   public bool BeginDrag(BlockViewModel block) {
     EndDrag(false);
-    Dragged = IsEditable ? Movable(block) : null;
+    Dragged = CanChange(block) ? Movable(block) : null;
     return Dragged != null;
   }
 
@@ -792,7 +953,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// named "Name (copy k)".
   /// </summary>
   public System.Collections.Generic.IReadOnlyList<BlockViewModel> Copy(BlockViewModel block, int count) {
-    if (!IsEditable || count < 1 || !CanCopy(block) || Movable(block) is not { Parent: { } parent } original) return [];
+    if (!CanChange(block) || count < 1 || !CanCopy(block) || Movable(block) is not { Parent: { } parent } original) return [];
     int index = parent.Children.IndexOf(original);
     string baseName = Regex.Replace(original.Name, @" \(copy \d+\)$", "");
     var names = parent.Children.Select(c => c.Name).ToHashSet();
@@ -840,16 +1001,18 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     EjectCommand.NotifyCanExecuteChanged();
   }
 
+  /// <summary>"Start all experiments": every experiment that does not run yet (the running ones go on).</summary>
   [RelayCommand(CanExecute = nameof(CanStartAll))]
-  private Task StartAllAsync() => StartAsync(Experiments.ToList());
-  private bool CanStartAll() => CanStart(Experiments.ToList());
+  private Task StartAllAsync() => StartAsync(Experiments.Where(e => !e.IsLocked).ToList());
+  private bool CanStartAll() => CanStart(Experiments.Where(e => !e.IsLocked).ToList());
 
+  /// <summary>"Start selected experiments": the ticked ones that do not run yet.</summary>
   [RelayCommand(CanExecute = nameof(CanStartSelected))]
-  private Task StartSelectedAsync() => StartAsync(Experiments.Where(e => e.IsChecked).ToList());
-  private bool CanStartSelected() => CanStart(Experiments.Where(e => e.IsChecked).ToList());
+  private Task StartSelectedAsync() => StartAsync(Experiments.Where(e => e.IsChecked && !e.IsLocked).ToList());
+  private bool CanStartSelected() => CanStart(Experiments.Where(e => e.IsChecked && !e.IsLocked).ToList());
 
-  private bool CanStart(System.Collections.Generic.IReadOnlyList<ExperimentBlockViewModel> experiments) =>
-    !IsRunning && experiments.Count > 0 && experiments.All(e => e.IsReady);
+  private static bool CanStart(System.Collections.Generic.IReadOnlyList<ExperimentBlockViewModel> experiments) =>
+    experiments.Count > 0 && experiments.All(e => e.IsReady);
 
   [RelayCommand(CanExecute = nameof(IsRunningExperiments))]
   private void Stop() {
@@ -864,25 +1027,35 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// its own seed setting (random by default).
   /// </summary>
   private async Task StartAsync(System.Collections.Generic.IReadOnlyList<ExperimentBlockViewModel> experiments) {
+    experiments = experiments.Where(e => !e.IsLocked).ToList();
     if (experiments.Count == 0) return;
-    IsRunningExperiments = true;
-    IsRunning = true;
-    stopSource = new CancellationTokenSource();
+    // runs started while others run share their Stop and the Resources tab's limit of experiments at the same time
+    if (experimentRuns == 0 || stopSource is not { IsCancellationRequested: false }) {
+      stopSource?.Dispose();
+      stopSource = new CancellationTokenSource();
+    }
+    if (experimentRuns == 0 || slots == null) {
+      int concurrent = Resources.Current.ConcurrentExperiments;
+      slots = new SemaphoreSlim(concurrent > 0 ? concurrent : 4096);
+    }
+    var slotGate = slots;
+    var token = stopSource.Token;
+    experimentRuns++;
+    UpdateRunning();
     Status = experiments.Count == 1 ? $"Running {experiments[0].Name} ..." : $"Running {experiments.Count} experiments ...";
     try {
-      // the Resources tab may limit how many experiments run at the same time
-      int concurrent = Resources.Current.ConcurrentExperiments;
-      using var slots = new SemaphoreSlim(concurrent > 0 ? concurrent : Math.Max(1, experiments.Count));
-      var token = stopSource.Token;
-      foreach (var e in experiments) e.IsRunning = true;
-      RefreshLive();
+      foreach (var e in experiments) {
+        e.IsRunning = true;
+        LockChanged(e);
+      }
       var started = await Task.WhenAll(experiments.Select(async e => {
         e.RunStatus = "Waiting for a free slot ...";
         try {
-          await slots.WaitAsync(token);
+          await slotGate.WaitAsync(token);
         } catch (OperationCanceledException) {
           e.RunStatus = "Not started (stopped)";
           e.IsRunning = false;
+          LockChanged(e);
           return null;
         }
         try {
@@ -903,7 +1076,8 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
           return report;
         } finally {
           e.IsRunning = false;
-          slots.Release();
+          slotGate.Release();
+          LockChanged(e);
         }
       }));
       var reports = started.OfType<RunReport>().ToArray();
@@ -912,12 +1086,11 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       NotifyFinished(experiments.Count == 1 ? $"{experiments[0].Name} finished" : $"{experiments.Count} experiments finished",
         experiments.Count == 1 ? experiments[0].RunStatus : Status);
     } finally {
-      IsRunningExperiments = false;
-      IsRunning = algorithmRunning;
+      experimentRuns--;
+      UpdateRunning();
       RefreshLive();
-      stopSource.Dispose();
-      stopSource = null;
       RefreshState();
+      RunsFinished?.Invoke();
     }
   }
 

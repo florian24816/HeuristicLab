@@ -31,7 +31,7 @@ public partial class RunSourceViewModel(RunAnalysisViewModel owner, string name,
   public ObservableCollection<RunSourceViewModel> Children { get; } = [];
   public RunSourceViewModel? Parent { get; init; }
 
-  /// <summary>A part of the "Single runs" folder: what it stands for (kept ticked over a refresh) and its runs.</summary>
+  /// <summary>A part of the "Quick batch runs" folder: what it stands for (kept ticked over a refresh) and its runs.</summary>
   public object? Group { get; init; }
   public Func<IReadOnlyList<IRun>>? RunList { get; init; }
 
@@ -151,11 +151,12 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   public RunAnalysisViewModel(ExperimentWorkspaceViewModel workspace, IFileDialogService? fileDialogs = null) {
     this.workspace = workspace;
     this.fileDialogs = fileDialogs;
+    runWindows.Changed += RunWindowsChanged;
   }
 
   public ObservableCollection<RunSourceViewModel> Sources { get; } = [];
 
-  public const int TableView = 0, ChartsView = 1, StatisticsView = 2, RunView = 3;
+  public const int TableView = 0, ChartsView = 1, StatisticsView = 2;
 
   /// <summary>Table, Charts, Statistics or Run.</summary>
   [ObservableProperty]
@@ -197,7 +198,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     rebuilding = true;
     Sources.Clear();
     foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment, null, before));
-    if (workspace.Experiments.Count > 0) Sources.Add(SingleRunsNode(before));
+    if (workspace.Experiments.Count > 0) Sources.Add(QuickBatchRunsNode(before));
     foreach (var folder in folders) {
       var node = new RunSourceViewModel(this, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), "Results folder", null, folder) {
         Own = before.GetValueOrDefault(folder)
@@ -211,24 +212,30 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   private static object? Key(RunSourceViewModel s) => (object?)s.Optimizer ?? s.Group ?? s.Folder;
 
   /// <summary>
-  /// "Single runs" (made by Start on one algorithm, kept apart from the experiments): per experiment and
-  /// algorithm, not ticked at first - ticked, they are compared like any other runs.
+  /// "Quick batch runs" (made by Start on one algorithm, kept apart from the experiments): per experiment,
+  /// algorithm and QBR, not ticked at first - ticked, they are compared like any other runs.
   /// </summary>
-  private RunSourceViewModel SingleRunsNode(IReadOnlyDictionary<object, bool> before) {
+  private RunSourceViewModel QuickBatchRunsNode(IReadOnlyDictionary<object, bool> before) {
     var experiments = workspace.Experiments.ToList();
-    var folder = new RunSourceViewModel(this, "Single runs", "Started on one algorithm", null, null) {
-      Group = RunsBrowserViewModel.SingleRunsKey, RunList = () => experiments.SelectMany(e => e.SingleRuns.Runs).ToList(),
-      Own = before.GetValueOrDefault(RunsBrowserViewModel.SingleRunsKey)
+    var folder = new RunSourceViewModel(this, RunsBrowserViewModel.QuickBatchRunsName, "Started on one algorithm", null, null) {
+      Group = RunsBrowserViewModel.QuickBatchRunsKey, RunList = () => experiments.SelectMany(e => e.QuickBatchRuns.Runs).ToList(),
+      Own = before.GetValueOrDefault(RunsBrowserViewModel.QuickBatchRunsKey)
     };
-    foreach (var experiment in experiments.Where(e => e.SingleRuns.Count > 0)) {
-      var single = experiment.SingleRuns;
+    foreach (var experiment in experiments.Where(e => e.QuickBatchRuns.Count > 0)) {
+      var qbrs = experiment.QuickBatchRuns;
       var node = new RunSourceViewModel(this, experiment.Name, "Experiment", null, null) {
-        Parent = folder, Group = single, RunList = () => single.Runs.ToArray(), Own = before.GetValueOrDefault(single)
+        Parent = folder, Group = qbrs, RunList = () => qbrs.Runs.ToArray(), Own = before.GetValueOrDefault(qbrs)
       };
-      foreach (var group in single.Groups)
-        node.Children.Add(new RunSourceViewModel(this, group.Algorithm, "Algorithm", null, null) {
+      foreach (var group in qbrs.Groups) {
+        var algorithm = new RunSourceViewModel(this, group.Algorithm, "Algorithm", null, null) {
           Parent = node, Group = group, RunList = () => group.Runs, Own = before.GetValueOrDefault(group)
-        });
+        };
+        foreach (var batch in group.Batches)
+          algorithm.Children.Add(new RunSourceViewModel(this, batch.Name, "Quick batch run", null, null) {
+            Parent = algorithm, Group = batch, RunList = () => batch.Runs, Own = before.GetValueOrDefault(batch)
+          });
+        node.Children.Add(algorithm);
+      }
       folder.Children.Add(node);
     }
     return folder;
@@ -288,9 +295,10 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     Rebuild();
   }
 
-  // ---- ticking all, all but the single runs, none; a results window copies the main tab's ticks
+  // ---- the selection state: all, all without the quick batch runs, only the quick batch runs, none; a results window can
+  // match the main tab's ticks; anything else is "Custom" 
 
-  /// <summary>The main Results tab, for a results window (its "Copy selection from main results tab"); null for the main tab.</summary>
+  /// <summary>The main Results tab, for a results window (its "Same as main results"); null for the main tab.</summary>
   public RunAnalysisViewModel? Main {
     get => main;
     init {
@@ -302,12 +310,20 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   private readonly RunAnalysisViewModel? main;
   public bool IsWindow => Main != null;
 
-  /// <summary>The main Results tab's "Close windows" (closes all results windows, after asking).</summary>
+  /// <summary>The further results tab this is (its name is edited next to Refresh); null for the main tab.</summary>
+  public ResultsWindowViewModel? ResultsTab { get; set; }
+
+  /// <summary>The main Results tab's "Close all result windows" (closes all results windows, after asking).</summary>
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(ClosesWindows))]
   public partial System.Windows.Input.ICommand? CloseWindowsCommand { get; set; }
 
-  public bool ClosesWindows => !IsWindow && CloseWindowsCommand != null;
+  partial void OnCloseWindowsCommandChanged(System.Windows.Input.ICommand? value) {
+    if (value != null) value.CanExecuteChanged += (_, _) => OnPropertyChanged(nameof(ClosesWindows));
+  }
+
+  /// <summary>"Close all result windows" is shown in the main tab only, and only while further results tabs exist.</summary>
+  public bool ClosesWindows => !IsWindow && CloseWindowsCommand?.CanExecute(null) == true;
 
   /// <summary>Raised when the ticks change (a results window compares its own with them).</summary>
   public event Action? TicksAltered;
@@ -323,35 +339,49 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     }
   }
 
-  /// <summary>Whether the box is the "Single runs" folder or below it.</summary>
-  private static bool IsSingle(RunSourceViewModel node) {
-    for (var n = node; n != null; n = n.Parent) if (ReferenceEquals(n.Group, RunsBrowserViewModel.SingleRunsKey)) return true;
+  /// <summary>Whether the box is the "Quick batch runs" folder or below it.</summary>
+  private static bool IsQbr(RunSourceViewModel node) {
+    for (var n = node; n != null; n = n.Parent) if (ReferenceEquals(n.Group, RunsBrowserViewModel.QuickBatchRunsKey)) return true;
     return false;
   }
 
   /// <summary>The boxes whose own tick counts (no children).</summary>
   private List<RunSourceViewModel> Leaves() => AllSources(Sources).Where(s => s.Counts).ToList();
 
-  /// <summary>Everything ticked (the button "Select all" shows it in full orange).</summary>
+  /// <summary>Everything ticked, the quick batch runs too (the button "All" shows it in full orange).</summary>
   public bool AllTicked => Leaves() is { Count: > 0 } leaves && leaves.All(s => s.Own);
 
-  /// <summary>Everything but the single runs ticked.</summary>
-  public bool AllButSingleTicked {
+  /// <summary>Everything but the quick batch runs ticked ("All w/o QBRs").</summary>
+  public bool AllButQbrsTicked {
     get {
       var leaves = Leaves();
-      var experiments = leaves.Where(s => !IsSingle(s)).ToList();
-      return experiments.Count > 0 && experiments.All(s => s.Own) && leaves.Where(IsSingle).All(s => !s.Own);
+      var experiments = leaves.Where(s => !IsQbr(s)).ToList();
+      return experiments.Count > 0 && experiments.All(s => s.Own) && leaves.Where(IsQbr).All(s => !s.Own);
+    }
+  }
+
+  /// <summary>The quick batch runs ticked and nothing else ("Only QBRs").</summary>
+  public bool OnlyQbrsTicked {
+    get {
+      var leaves = Leaves();
+      var qbrs = leaves.Where(IsQbr).ToList();
+      return qbrs.Count > 0 && qbrs.All(s => s.Own) && leaves.Where(s => !IsQbr(s)).All(s => !s.Own);
     }
   }
 
   /// <summary>Nothing ticked.</summary>
   public bool NoneTicked => Leaves().All(s => !s.Own);
 
+  /// <summary>None of the states above: "Custom" is full orange (also when it is the main tab's ticks - both are then).</summary>
+  public bool IsCustom => !(AllTicked || AllButQbrsTicked || OnlyQbrsTicked || NoneTicked);
+
   private void NotifyTickStates() {
     OnPropertyChanged(nameof(AllTicked));
-    OnPropertyChanged(nameof(AllButSingleTicked));
+    OnPropertyChanged(nameof(AllButQbrsTicked));
+    OnPropertyChanged(nameof(OnlyQbrsTicked));
     OnPropertyChanged(nameof(NoneTicked));
     OnPropertyChanged(nameof(MatchesMain));
+    OnPropertyChanged(nameof(IsCustom));
     TicksAltered?.Invoke();
   }
 
@@ -364,7 +394,10 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   private void SelectAll() => TickWhere(_ => true);
 
   [RelayCommand]
-  private void SelectAllWithoutSingle() => TickWhere(n => !IsSingle(n));
+  private void SelectAllWithoutQbrs() => TickWhere(n => !IsQbr(n));
+
+  [RelayCommand]
+  private void SelectOnlyQbrs() => TickWhere(IsQbr);
 
   [RelayCommand]
   private void UnselectAll() => TickWhere(_ => false);
@@ -424,6 +457,84 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   }
 
   partial void OnBinsChanged(decimal value) => Rebuild();
+
+  // ---- "Mark best/worst": the first places by a numeric column, colored in the table and the charts
+
+  /// <summary>The marking in use (null: none).</summary>
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsMarked), nameof(MarkingText), nameof(ShowsMarkButton))]
+  public partial RunMarking? Marking { get; set; }
+
+  /// <summary>The marking's fields are shown instead of the button.</summary>
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(ShowsMarkButton))]
+  public partial bool IsMarking { get; set; }
+
+  public bool IsMarked => Marking != null;
+  public bool ShowsMarkButton => !IsMarking;
+
+  public static IReadOnlyList<string> MarkOrders { get; } = ["Ascending (smallest first)", "Descending (largest first)"];
+
+  [ObservableProperty]
+  public partial ColumnChoice? MarkColumn { get; set; }
+
+  [ObservableProperty]
+  public partial string MarkOrder { get; set; } = MarkOrders[0];
+
+  /// <summary>How many places are marked (6 to 100).</summary>
+  [ObservableProperty]
+  public partial decimal? MarkTop { get; set; } = 10;
+
+  /// <summary>Values within this of a place's first value share the place (0: only equal values).</summary>
+  [ObservableProperty]
+  public partial decimal? MarkTolerance { get; set; } = 0;
+
+  public decimal MinMarkTop => RunMarking.MinTop;
+  public decimal MaxMarkTop => RunMarking.MaxTop;
+
+  public string MarkingText => Marking is not { } m ? "" :
+    $"{(m.Descending ? "Largest" : "Smallest")} {m.Top} of {NumericColumns.FirstOrDefault(c => c.Key == m.Key)?.Display ?? m.Key}" +
+    (m.Tolerance > 0 ? $" (± {m.Tolerance.ToString("G6", Invariant)})" : "");
+
+  /// <summary>"Mark best/worst": its fields instead of the button, filled with the marking in use (else the chart's value).</summary>
+  [RelayCommand]
+  private void StartMarking() {
+    var m = Marking;
+    MarkColumn = NumericColumns.FirstOrDefault(c => c.Key == m?.Key) ?? ChartValue ?? NumericColumns.FirstOrDefault();
+    MarkOrder = MarkOrders[m?.Descending == true ? 1 : 0];
+    MarkTop = m?.Top ?? 10;
+    MarkTolerance = (decimal)(m?.Tolerance ?? 0);
+    IsMarking = true;
+  }
+
+  /// <summary>The tick: marks the runs.</summary>
+  [RelayCommand]
+  private void ApplyMarking() {
+    if (MarkColumn == null) return;
+    int top = (int)Math.Clamp(MarkTop ?? 10, RunMarking.MinTop, RunMarking.MaxTop);
+    Marking = new RunMarking(MarkColumn.Key, MarkOrder == MarkOrders[1], top, (double)Math.Max(0, MarkTolerance ?? 0));
+    IsMarking = false;
+    RebuildRows();
+    RebuildChart();
+  }
+
+  /// <summary>The cross: the fields go, the marking in use stays.</summary>
+  [RelayCommand]
+  private void CancelMarking() => IsMarking = false;
+
+  /// <summary>The marking's ✕: nothing marked any more.</summary>
+  [RelayCommand]
+  private void RemoveMarking() {
+    Marking = null;
+    RebuildRows();
+    RebuildChart();
+  }
+
+  /// <summary>The shown runs ranked by the marking (null: none, or its column is gone).</summary>
+  public MarkedRuns? Marks => Marking is { } m && Table.Column(m.Key) is { IsNumeric: true } ? MarkedRuns.Rank(Table.Rows, m) : null;
+
+  /// <summary>A marked row's layer: its place's color, light.</summary>
+  public const byte MarkAlpha = 0x55;
 
   // ---- building the table: small ones at once, large ones in the background with a progress bar
 
@@ -624,11 +735,26 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   partial void OnShowAllParametersChanged(bool value) => RebuildRows();
 
+  /// <summary>Sorts by a column: ascending, then descending, then not sorted (one column at a time).</summary>
   [RelayCommand]
   private void Sort(string key) {
-    if (SortKey == key) SortDescending = !SortDescending;
-    else { SortKey = key; SortDescending = false; }
+    if (SortKey != key) { SortKey = key; SortDescending = false; }
+    else if (!SortDescending) SortDescending = true;
+    else { SortKey = null; SortDescending = false; }
     RebuildRows();
+  }
+
+  /// <summary>The table's column sizes (collapsed / regular / expanded), kept while the table is made again.</summary>
+  private readonly Dictionary<string, ColumnSize> columnSizes = [];
+
+  /// <summary>"Reload table": the runs read again, not sorted (in the order they were read), every column regular, at the left.</summary>
+  [RelayCommand]
+  private void ReloadTable() {
+    SortKey = null;
+    SortDescending = false;
+    columnSizes.Clear();
+    if (Grid != null) Grid.ScrollX = 0;
+    RefreshSources();
   }
 
   private void RebuildRows() {
@@ -642,14 +768,25 @@ public partial class RunAnalysisViewModel : ViewModelBase {
         ? (SortDescending ? rows.OrderByDescending(r => r.Number(SortKey) ?? double.MinValue) : rows.OrderBy(r => r.Number(SortKey) ?? double.MaxValue))
         : (SortDescending ? rows.OrderByDescending(r => r.Text(SortKey), StringComparer.OrdinalIgnoreCase) : rows.OrderBy(r => r.Text(SortKey), StringComparer.OrdinalIgnoreCase));
     }
-    var selected = SelectedRow?.Row;
+    // the rows selected now stay selected (sorted, filtered: those still shown)
+    var selected = (Grid?.SelectedItems ?? []).OfType<AnalysisRow>().Select(r => r.Row).ToHashSet();
     Rows = rows.Select(r => new AnalysisRow(r, TableColumns.Select(c => r.Text(c.Key)).ToList())).ToList();
+    double scrollX = Grid?.ScrollX ?? 0;  // sorted or filtered: still scrolled sideways as before
     Grid = new TableGridViewModel(TableColumns.Select(c => new GridColumn(c.Key, c.Display, 150, c.Key switch {
         "source" => TableGridViewModel.SourceShade, "origin" => TableGridViewModel.OriginShade, "run" => TableGridViewModel.RunShade, _ => (Avalonia.Media.Color?)null
       })).ToList(),
-      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort);
-    SelectedRow = Rows.FirstOrDefault(r => ReferenceEquals(r.Row, selected));
-    Grid.Mark(SelectedRow);
+      Rows.Select(r => ((object)r, r.Cells)), item => SelectedRow = item as AnalysisRow, Sort,
+      new TableLook(SortKey, SortKey == null ? SortOrder.None : SortDescending ? SortOrder.Descending : SortOrder.Ascending, columnSizes)) { FixedTint = TintOf, RowMenu = MenuOf, MultiSelect = true, ScrollX = scrollX };
+    foreach (var row in Grid.Rows) row.IsSelected = selected.Contains(((AnalysisRow)row.Item).Row);
+    // marked places: a light layer of their color over the row, the first three bold
+    if (Marks is { } marks)
+      foreach (var row in Grid.Rows)
+        if (marks.PlaceOf(((AnalysisRow)row.Item).Row) is int place) {
+          var c = marks.Color(place);
+          row.MarkBrush = new Avalonia.Media.Immutable.ImmutableSolidColorBrush(Avalonia.Media.Color.FromArgb(MarkAlpha, c.R, c.G, c.B));
+          row.IsBold = place <= 3;
+        }
+    SelectedRow = null;
   }
 
   /// <summary>The table as shown: where a run comes from and which run it is stay in view.</summary>
@@ -714,32 +851,86 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     Status = $"Exported {Rows.Count} runs to {path}";
   }
 
-  // ---- selected run
-
-  [ObservableProperty]
-  public partial IReadOnlyList<NameValue> RunDetails { get; set; } = [];
-
-  [ObservableProperty]
-  public partial IReadOnlyList<ResultEntryViewModel> RunResults { get; set; } = [];
-
-  [ObservableProperty]
-  public partial ResultEntryViewModel? SelectedRunResult { get; set; }
-
-  [ObservableProperty]
-  public partial ResultDetailViewModel? RunResultDetail { get; set; }
+  // ---- the selected run (blue in the table); runs open in windows of their own, each in its own color
 
   partial void OnSelectedRowChanged(AnalysisRow? value) {
-    Grid?.Mark(value);
-    RunDetails = value == null ? [] : TableColumns.Select(c => new NameValue(c.Display, value.Row.Text(c.Key))).ToList();
-    RunResults = value?.Row.Run is { } run
-      ? run.Results.Select(r => new ResultEntryViewModel(r.Key, r.Value, ItemInspector.Summary(r.Value))).ToList()
-      : [];
-    SelectedRunResult = RunResults.FirstOrDefault(r => HeuristicLab.Next.Runtime.Visuals.Visualizations.For(r.Value, r.Name).Count > 0 && r.Name.StartsWith("Best", StringComparison.Ordinal))
-                        ?? RunResults.FirstOrDefault();
+    if (value != null) Grid?.Mark(value);
   }
 
-  partial void OnSelectedRunResultChanged(ResultEntryViewModel? value) =>
-    RunResultDetail = value == null ? null : new ResultDetailViewModel(value.Name, value.Value, new EditContext(_ => { }, () => false));
+  /// <summary>The open run windows, shared by all Results tabs (a further tab gets the main tab's).</summary>
+  public RunWindowSet RunWindows {
+    get => runWindows;
+    init {
+      runWindows.Changed -= RunWindowsChanged;
+      runWindows = value;
+      runWindows.Changed += RunWindowsChanged;
+    }
+  }
+
+  private RunWindowSet runWindows = new();
+
+  /// <summary>This tab is gone (a further tab closed): it no longer follows the run windows.</summary>
+  public void Forget() => runWindows.Changed -= RunWindowsChanged;
+
+  public bool HasRunWindows => runWindows.Open.Count > 0;
+
+  /// <summary>
+  /// "Open run in window" / "Open runs in windows": a window for each of these runs (one open already comes to the
+  /// front); nothing when that would make more than <see cref="RunWindowSet.Max"/>. The rows are unselected.
+  /// </summary>
+  public IReadOnlyList<RunWindowViewModel> OpenRunWindows(IReadOnlyList<AnalysisRow> rows) {
+    if (Missing(rows) > runWindows.Free) return [];
+    var opened = rows.Select(r => runWindows.Show(r, TableColumns)).OfType<RunWindowViewModel>().ToList();
+    SelectedRow = null;
+    Grid?.Mark(null);
+    return opened;
+  }
+
+  public RunWindowViewModel? OpenRunWindow(AnalysisRow row) => OpenRunWindows([row]).SingleOrDefault();
+
+  /// <summary>How many of these runs have no window yet.</summary>
+  private int Missing(IReadOnlyList<AnalysisRow> rows) => rows.Count(r => runWindows.WindowOf(r.Row) == null);
+
+  /// <summary>"Close all run view windows" (also when the main window closes).</summary>
+  [RelayCommand(CanExecute = nameof(HasRunWindows))]
+  public void CloseRunWindows() => runWindows.CloseAll();
+
+  private void RunWindowsChanged() {
+    OnPropertyChanged(nameof(HasRunWindows));
+    CloseRunWindowsCommand.NotifyCanExecuteChanged();
+    Grid?.Retint();
+  }
+
+  private IReadOnlyList<Avalonia.Media.Color>? TintOf(object item) => item is AnalysisRow row ? runWindows.WindowOf(row.Row)?.Palette.Shades : null;
+
+  /// <summary>
+  /// The table's right-click menu for the selected rows: runs without a window - open them (not past six windows:
+  /// then the entry says so and cannot be clicked); runs that all have one - go to their windows or close them.
+  /// </summary>
+  private IReadOnlyList<MenuChoice> MenuOf(IReadOnlyList<object> items) {
+    var rows = items.OfType<AnalysisRow>().ToList();
+    if (rows.Count == 0) return [];
+    int missing = Missing(rows);
+    bool one = rows.Count == 1;
+    if (missing == 0) {
+      var windows = rows.Select(r => runWindows.WindowOf(r.Row)!).ToList();
+      return [
+        new MenuChoice(one ? "Go to view window" : "Go to view windows", new RelayCommand(() => {
+          foreach (var w in windows) w.RequestActivate();
+          Grid?.Mark(null);
+        }), "Bring the run's window to the front"),
+        new MenuChoice(one ? "Close run view window" : "Close run view windows", new RelayCommand(() => {
+          foreach (var w in windows) runWindows.Close(w);
+          Grid?.Mark(null);
+        }), "Close the run's window: its row is orange again")
+      ];
+    }
+    if (missing > runWindows.Free)
+      return [new MenuChoice($"{RunWindowSet.Max}/{RunWindowSet.Max} run windows can not be exceeded", new RelayCommand(() => { }, () => false),
+        $"{runWindows.Open.Count} run windows are open, {missing} more would be too many: close some first")];
+    return [new MenuChoice(one ? "Open run in window" : "Open runs in windows", new RelayCommand(() => OpenRunWindows(rows)),
+      "Parameters and results in a window of their own; a run's row wears its window's color while it is open")];
+  }
 
   // ---- charts
 
@@ -801,14 +992,15 @@ public partial class RunAnalysisViewModel : ViewModelBase {
 
   private void RebuildChart() {
     if (Groups.Count == 0) { Chart.Show([]); return; }
+    var marks = Marks;
     HeuristicLab.Next.Runtime.Visuals.Visual? visual = ChartKind switch {
-      "Curves" when CurveTable != null && CurveRow != null => RunCharts.Curves(Groups, CurveTable, CurveRow, CurveRuns, CurveMean),
+      "Curves" when CurveTable != null && CurveRow != null => RunCharts.Curves(Groups, CurveTable, CurveRow, CurveRuns, CurveMean, marks),
       "Curves" => new HeuristicLab.Next.Runtime.Visuals.TextVisual("Curves", "The ticked runs have no tables (results folders keep only numbers)."),
       _ when ChartValue == null => null,
-      "Scatter" when ChartX != null => RunCharts.Scatter(Table, Groups, ChartX.Key, ChartValue.Key),
+      "Scatter" when ChartX != null => RunCharts.Scatter(Table, Groups, ChartX.Key, ChartValue.Key, marks),
       "Histogram" => RunCharts.Histogram(Table, Groups, ChartValue.Key),
-      "Cumulative distribution" => RunCharts.Cumulative(Table, Groups, ChartValue.Key),
-      _ => RunCharts.BoxPlot(Table, Groups, ChartValue.Key)
+      "Cumulative distribution" => RunCharts.Cumulative(Table, Groups, ChartValue.Key, marks),
+      _ => RunCharts.BoxPlot(Table, Groups, ChartValue.Key, marks)
     };
     Chart.Show(visual == null ? [] : [visual]);
     BoxTable = IsBoxPlot && ChartValue != null ? BoxGrid(RunCharts.BoxStatistics(Groups, ChartValue.Key)) : null;

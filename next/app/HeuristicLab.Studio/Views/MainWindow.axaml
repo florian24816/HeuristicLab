@@ -85,15 +85,10 @@
                                 ToolTip.Tip="Another Results tab in its own window (named in its title bar), to compare selections side by side" />
                     </StackPanel>
                 </TabItem.Header>
-                <!-- more Results tabs: a second tab bar ("Main results", then one tab per further results tab or window),
-                     the name of a selected docked one, and what is selected -->
+                <!-- more Results tabs: a second tab bar ("Main results", then one tab per further results tab or window)
+                     and what is selected (a further tab's name is edited in it, next to Refresh) -->
                 <DockPanel>
                     <views:ResultsTabBar x:Name="ResultsBar" DockPanel.Dock="Top" IsVisible="{Binding HasResultsWindows}" />
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="14,8,14,0"
-                                IsVisible="{Binding SelectedDocked, Converter={x:Static ObjectConverters.IsNotNull}}">
-                        <TextBlock Text="Window name" VerticalAlignment="Center" FontWeight="SemiBold" />
-                        <TextBox Classes="windowname" Width="320" Text="{Binding SelectedDocked.Name, FallbackValue=''}" />
-                    </StackPanel>
                     <ContentControl Content="{Binding ShownAnalysis}" />
                 </DockPanel>
             </TabItem>
@@ -102,6 +97,9 @@
             </TabItem>
             <TabItem Header="Resources">
                 <ContentControl Content="{Binding Resources}" />
+            </TabItem>
+            <TabItem Header="Options">
+                <ContentControl Content="{Binding Options}" />
             </TabItem>
         </TabControl>
         <Button Classes="theme" Classes.dark="{Binding IsDarkMode}" Command="{Binding ToggleThemeCommand}"

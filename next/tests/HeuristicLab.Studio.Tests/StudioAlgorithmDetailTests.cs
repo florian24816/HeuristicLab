@@ -234,6 +234,7 @@ public class StudioAlgorithmDetailTests {
       var collector = graph.Nodes.Single(n => n.Name == "ResultsCollector").Operator;
       collector.Breakpoint = true;
       detail.SelectedEngine = detail.Engines.Single(e => e.Name == "Debug Engine");
+      ws.QuickBatchSize = 2;  // Start: a quick batch run of two runs
       Assert.AreEqual("DebugEngine", ((EngineAlgorithm)block.Algorithm).Engine.GetType().Name);
       detail.StartCommand.Execute(null);
       await detail.WaitAsync();
@@ -246,8 +247,8 @@ public class StudioAlgorithmDetailTests {
       Assert.AreEqual("Stopped", detail.State);
       Assert.IsFalse(ws.IsRunning);
       Assert.IsTrue(detail.Results.Entries.Any(e => e.Name == "BestQuality"), string.Join(", ", detail.Results.Entries.Select(e => e.Name)));
-      Assert.AreEqual(1, detail.Runs.Rows.Count);
-      Assert.AreEqual("Runs (0, 1 single)", block.RunsText, "tree counters follow the run: a single run (Start on the algorithm)");
+      Assert.AreEqual(2, detail.Runs.Rows.Count, "resumed after the pause, the quick batch run made both its runs");
+      Assert.AreEqual("Runs (0, 2 in QBRs)", block.RunsText, "tree counters follow the runs: a quick batch run (Start on the algorithm)");
       Assert.IsTrue(detail.Log.Count > 0, "engine log");
       detail.SelectedTab = AlgorithmDetailViewModel.ResultsTab;
       detail.Results.Selected = detail.Results.Entries.First(e => e.Name == "Qualities");

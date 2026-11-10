@@ -14,8 +14,9 @@ namespace HeuristicLab.Studio.Tests;
 
 /// <summary>
 /// "Add results window" (next to the Results tab's header): another Results tab in its own window, named in its title
-/// bar ("HL-Results: n", changed live), ticked as the main tab; "Select all", "Select all (without single runs)",
-/// "Unselect all" (full orange when that is the state), and in a window "Copy selection from main results tab".
+/// bar ("HL-Results: n", changed live), ticked as the main tab; the selection state box: "All", "All w/o QBRs",
+/// "Only QBRs", "None" (full orange when that is the state), "Custom" when none of them is, in a further tab
+/// "Same as main results"; Refresh in a cut-out of the box, level with a further tab's name; rows reaching edge to edge.
 /// </summary>
 [TestClass]
 public class StudioResultsWindowTests {
@@ -58,7 +59,7 @@ public class StudioResultsWindowTests {
       ws.SetProblem(ga, (IProblem)Setups.Create(new SetupRequest("GeneticAlgorithm") { Problem = "TravelingSalesmanProblem", Instance = "ch130" }).Algorithm.Problem!.Clone());
       ParameterEditor.Apply(ga.Algorithm, ["PopulationSize=10", "MaximumGenerations=2"]);
       await ws.StartAllCommand.ExecuteAsync(null);
-      experiment.SingleRuns.Add([(IRun)experiment.Experiment.Runs.Single().Clone()]);
+      experiment.QuickBatchRuns.Add([(IRun)experiment.Experiment.Runs.Single().Clone()]);
 
       // "Add window" only while the Results tab is shown, in its header
       Pump();
@@ -72,13 +73,83 @@ public class StudioResultsWindowTests {
       var bar = main.GetVisualDescendants().OfType<ResultsTabBar>().Single();
       Assert.IsFalse(bar.IsEffectivelyVisible, "no second tab bar before a further results tab exists");
 
-      // the main tab: the experiment ticked, not the single runs - "Select all (without single runs)" is full orange
+      // the main tab: the experiment ticked, not the quick batch runs - "All w/o QBRs" is full orange, in a box of its own
       var analysis = vm.RunAnalysis;
       analysis.Sources.First().IsChecked = true;
       Pump();
-      Assert.IsTrue(analysis.AllButSingleTicked);
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "Select all (without single runs)")));
-      Assert.AreEqual(Pale, Fill(Shortcut(main, "Select all")));
+      Assert.IsTrue(analysis.AllButQbrsTicked);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/o QBRs")));
+      Assert.AreEqual(Pale, Fill(Shortcut(main, "All")));
+      Assert.AreEqual(new CornerRadius(0), Shortcut(main, "All").CornerRadius, "square corners");
+      var box = main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("selectionstate") && b.Child is HeuristicLab.Studio.Controls.JustifiedWrapPanel && b.IsEffectivelyVisible);
+      Assert.AreEqual(Color.Parse("#D5CFC6"), ((ISolidColorBrush)box.Background!).Color);
+      // Refresh in a cut-out at the box's top left, "Selection state" beside it on the box's color
+      var header = main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("selectionstate") && b.Child is TextBlock { Text: "Selection state" } && b.IsEffectivelyVisible);
+      var refresh = Shortcut(main, "Refresh");
+      double Left(Visual v) => v.TranslatePoint(default, main)!.Value.X;
+      double Top(Visual v) => v.TranslatePoint(default, main)!.Value.Y;
+      Assert.AreEqual(Top(refresh), Top(header), 1, "level with Refresh");
+      Assert.IsTrue(Left(header) > Left(refresh) + refresh.Bounds.Width, "right of Refresh");
+      Assert.AreEqual(Top(header) + header.Bounds.Height, Top(box), 1, "one piece with the box below");
+      Assert.AreEqual(Left(refresh), Left(box), 1, "the box reaches under Refresh");
+      Assert.AreEqual(Left(header) + header.Bounds.Width, Left(box) + box.Bounds.Width, 1);
+      // its rows of buttons reach from edge to edge, at any width of the source list
+      void RowsJustified() {
+        var cells = box.GetVisualDescendants().OfType<Control>().Where(c => (c.Classes.Contains("ticks") || c.Classes.Contains("tickstate")) && c.IsEffectivelyVisible).ToList();
+        double right = cells.Max(c => Left(c) + c.Bounds.Width);
+        foreach (var line in cells.GroupBy(c => Math.Round(Top(c))))
+          Assert.AreEqual(right, line.Max(c => Left(c) + c.Bounds.Width), 1, $"a row ends at the right edge (row at {line.Key})");
+        Assert.AreEqual(Left(box) + box.Bounds.Width - right, cells.Min(Left) - Left(box), 1, "as far from the right edge as from the left");
+      }
+      RowsJustified();
+      var split = main.GetVisualDescendants().OfType<Grid>().First(g => g.ColumnDefinitions.Count == 3 && g.ColumnDefinitions[0].Width.Value == 280 && g.IsEffectivelyVisible);
+      foreach (var width in new[] { 140, 420, 900 }) {
+        split.ColumnDefinitions[0].Width = new GridLength(width);
+        Pump();
+        RowsJustified();
+        main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, $"studio-selection-state-{width}.png"));
+      }
+      split.ColumnDefinitions[0].Width = new GridLength(280);
+      Pump();
+      Assert.IsFalse(main.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Same as main results" && b.IsEffectivelyVisible),
+        "only in further tabs");
+      Border Custom() => box.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate"));
+      Assert.AreEqual(Color.Parse("#E3E3E3"), ((ISolidColorBrush)Custom().Background!).Color, "grey: not the state, cannot be pressed");
+      // low buttons: the text close to the edge, not touching it; Custom as high as the buttons
+      var allButton = Shortcut(main, "All");
+      var allText = allButton.GetVisualDescendants().OfType<TextBlock>().Single();
+      double textTop = allText.TranslatePoint(default, allButton)!.Value.Y;
+      Assert.IsTrue(textTop >= 1 && textTop <= 4, $"text {textTop:0.#} below the top edge");
+      double textBelow = allButton.Bounds.Height - textTop - allText.Bounds.Height;
+      Assert.IsTrue(textBelow >= 1 && textBelow <= 5, $"text {textBelow:0.#} above the bottom edge");
+      Assert.AreEqual(allButton.Bounds.Height, Custom().Bounds.Height, 1);
+      // only the quick batch runs, then one of two experiment sources by hand: "Custom"
+      Shortcut(main, "Only QBRs").Command!.Execute(null);
+      Pump();
+      Assert.IsTrue(analysis.OnlyQbrsTicked);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Only QBRs")));
+      Assert.AreEqual(1, analysis.Table.Rows.Count, "the quick batch run's run");
+      analysis.Sources.First().IsChecked = true;
+      Pump();
+      Assert.IsTrue(analysis.AllTicked);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All")));
+      analysis.Sources.Single(s => s.Name == "Quick batch runs").IsChecked = false;
+      analysis.Sources.First().IsChecked = false;
+      Pump();
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "None")));
+      Assert.IsFalse(analysis.IsCustom);
+      // a second algorithm (no runs yet): only the first one ticked is none of the states
+      ws.AddAlgorithm(experiment, Catalog.Find(Catalog.Algorithms(), "TabuSearch")!);
+      analysis.RefreshSources();
+      analysis.Sources.First().Children.First().IsChecked = true;
+      Pump();
+      Assert.IsTrue(analysis.IsCustom);
+      Assert.AreEqual(Orange, ((ISolidColorBrush)Custom().Background!).Color);
+      Assert.IsFalse(new[] { "All", "All w/o QBRs", "Only QBRs", "None" }.Any(t => Fill(Shortcut(main, t)) == Orange));
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selection-state.png"));
+      Shortcut(main, "All w/o QBRs").Command!.Execute(null);
+      Pump();
+      Assert.IsTrue(analysis.AllButQbrsTicked);
 
       // "Add window": a tab in the second bar (spanning the window), selected and shown, ticked as the main tab
       add.Command!.Execute(null);
@@ -91,7 +162,26 @@ public class StudioResultsWindowTests {
       Assert.AreEqual(main.Bounds.Width, bar.Bounds.Width, 1, "across the whole window");
       Assert.AreEqual(0, main.OpenResultsWindows.Count, "in the main window, not a window yet");
       Assert.IsTrue(first.Analysis.MatchesMain);
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "Copy selection from main results tab")));
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Same as main results")));
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/o QBRs")), "both: the main tab's ticks are All w/o QBRs");
+      // the window's name, level with Refresh
+      Assert.AreEqual(Top(Shortcut(main, "Refresh")), Top(main.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname") && t.IsEffectivelyVisible)), 1);
+      // the main tab ticked by hand, the further tab the same: "Custom" and "Same as main results" both full orange
+      analysis.Sources.First().Children.First().IsChecked = false;
+      first.Analysis.CopySelectionFromMain();
+      Pump();
+      Assert.IsTrue(analysis.IsCustom);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Same as main results")));
+      Assert.AreEqual(Orange, ((ISolidColorBrush)main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate") && b.IsEffectivelyVisible).Background!).Color);
+      Assert.IsTrue(Left(Shortcut(main, "Same as main results")) > Left(main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate") && b.IsEffectivelyVisible))
+                    || Top(Shortcut(main, "Same as main results")) > Top(main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tickstate") && b.IsEffectivelyVisible)), "last");
+      main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selection-state-window.png"));
+      vm.SelectResults(null);
+      Pump();
+      Shortcut(main, "All w/o QBRs").Command!.Execute(null);
+      vm.SelectResults(first);
+      first.Analysis.CopySelectionFromMain();
+      Pump();
       // "Main results" is a rectangle (first), further tabs parallelograms with italic names and a small cross
       var mainTab = main.GetVisualDescendants().OfType<Panel>().Single(p => p.Classes.Contains("resultstab") && p.Classes.Contains("main"));
       Assert.IsFalse(Skewed(Shape(mainTab)));
@@ -101,7 +191,7 @@ public class StudioResultsWindowTests {
       Assert.IsTrue(tab.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "✕"));
       Assert.IsTrue(mainTab.TranslatePoint(default, main)!.Value.X < tab.TranslatePoint(default, main)!.Value.X, "Main results first");
       Assert.AreEqual(Orange, ((ISolidColorBrush)Shape(tab).Background!).Color, "the selected tab");
-      // its name, under the bar, live in the tab
+      // its name, live in the tab
       var name = main.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname") && t.IsEffectivelyVisible);
       name.Text = "GA only";
       Pump();
@@ -111,13 +201,13 @@ public class StudioResultsWindowTests {
 
       // its own selection: select all / unselect all / copy from the main tab
       var other = first.Analysis;
-      Shortcut(main, "Select all").Command!.Execute(null);
+      Shortcut(main, "All").Command!.Execute(null);
       Pump();
       Assert.IsTrue(other.AllTicked);
-      Assert.AreEqual(analysis.Table.Rows.Count + 1, other.Table.Rows.Count, "with the single run");
+      Assert.AreEqual(analysis.Table.Rows.Count + 1, other.Table.Rows.Count, "with the quick batch run's run");
       Assert.AreEqual(1, analysis.Table.Rows.Count, "the main tab keeps its own selection");
-      Assert.AreEqual(Pale, Fill(Shortcut(main, "Copy selection from main results tab")));
-      Shortcut(main, "Copy selection from main results tab").Command!.Execute(null);
+      Assert.AreEqual(Pale, Fill(Shortcut(main, "Same as main results")));
+      Shortcut(main, "Same as main results").Command!.Execute(null);
       Assert.IsTrue(other.MatchesMain);
 
       // "Main results" shows the main tab again
@@ -308,19 +398,19 @@ public class StudioResultsWindowTests {
       vm.Workspace.NewExperiment();
       vm.SelectedTab = MainViewModel.ResultsTab;
       Pump();
-      // in the main Results tab only, pale red, usable while results windows are open
-      var close = Shortcut(main, "Close windows");
-      Assert.AreEqual(Color.Parse("#F6CACA"), Fill(close));
-      Assert.IsFalse(close.Command!.CanExecute(null), "no windows yet");
+      // in the main Results tab only, pale red, square, shown only while results windows are open
+      Assert.IsFalse(main.GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Close all result windows" && b.IsEffectivelyVisible), "no windows yet");
       vm.AddResultsWindowCommand.Execute(null);
       vm.AddResultsWindowCommand.Execute(null);
       vm.Undock(vm.ResultsWindows[1]);
       vm.SelectResults(null);
       Pump();
-      close = Shortcut(main, "Close windows");  // the main tab's view is built again when it is shown again
+      var close = Shortcut(main, "Close all result windows");  // the main tab's view is built again when it is shown again
+      Assert.AreEqual(Color.Parse("#F6CACA"), Fill(close));
+      Assert.AreEqual(new CornerRadius(0), close.CornerRadius);
       Assert.IsTrue(close.Command!.CanExecute(null));
       Assert.AreEqual(1, main.OpenResultsWindows.Count, "one docked tab, one window");
-      Assert.IsFalse(main.OpenResultsWindows[0].GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Close windows" && b.IsEffectivelyVisible),
+      Assert.IsFalse(main.OpenResultsWindows[0].GetVisualDescendants().OfType<Button>().Any(b => b.Content as string == "Close all result windows" && b.IsEffectivelyVisible),
         "results windows copy from the main tab instead");
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-results-closewindows.png"));
 
@@ -337,6 +427,7 @@ public class StudioResultsWindowTests {
       Assert.AreEqual(0, main.OpenResultsWindows.Count);
       Assert.AreEqual(0, vm.ResultsWindows.Count);
       Assert.IsFalse(close.Command.CanExecute(null));
+      Assert.IsFalse(close.IsEffectivelyVisible, "gone with the last window");
 
       // closing the main window while a results window is open: the same question first
       vm.AddResultsWindowCommand.Execute(null);
@@ -352,7 +443,7 @@ public class StudioResultsWindowTests {
       Assert.IsTrue(main.IsVisible, "the dialog closed: the main window stays");
       Assert.AreEqual(1, main.OpenResultsWindows.Count);
       // the dialog itself: only "OK" (closing it is the way back)
-      var ask = new ConfirmWindow("Close windows", "2 result windows are about to be closed", yes: "OK", cancel: false);
+      var ask = new ConfirmWindow("Close all result windows", "2 result windows are about to be closed", yes: "OK", cancel: false);
       ask.Show(main);
       Pump();
       var buttons = ask.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible).Select(b => b.Content as string).ToList();

@@ -7,34 +7,40 @@
     <Grid ColumnDefinitions="280,4,*">
         <!-- where the runs come from -->
         <DockPanel Margin="10">
-            <WrapPanel DockPanel.Dock="Top" ItemSpacing="6" LineSpacing="4" Margin="0,0,0,6">
-                <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
-                <Button Classes="ticks" Classes.on="{Binding MatchesMain}" Content="Copy selection from main results tab" Command="{Binding CopySelectionFromMainCommand}"
-                        IsVisible="{Binding IsWindow}" ToolTip.Tip="Tick what the main window's Results tab has ticked" />
-                <Button Classes="closewindows" Content="Close windows" Command="{Binding CloseWindowsCommand}"
-                        IsVisible="{Binding ClosesWindows}" ToolTip.Tip="Close all results windows (asks first)" />
-            </WrapPanel>
-            <!-- tick all / all but the single runs / nothing; the button of the state there is now is full orange -->
-            <WrapPanel DockPanel.Dock="Top" ItemSpacing="4" LineSpacing="4" Margin="0,0,0,6">
-                <Button Classes="ticks" Classes.on="{Binding AllTicked}" Content="Select all" Command="{Binding SelectAllCommand}" />
-                <Button Classes="ticks" Classes.on="{Binding AllButSingleTicked}" Content="Select all (without single runs)"
-                        Command="{Binding SelectAllWithoutSingleCommand}" />
-                <Button Classes="ticks" Classes.on="{Binding NoneTicked}" Content="Unselect all" Command="{Binding UnselectAllCommand}" />
-            </WrapPanel>
-            <!-- several sources at once: select them (shown inverted), then tick / untick them, or tick only them -->
-            <WrapPanel DockPanel.Dock="Top" ItemSpacing="4" LineSpacing="4" Margin="0,0,0,6">
-                <Button Content="Tick selected" Command="{Binding TickSelectedCommand}" ToolTip.Tip="Tick the selected sources (and everything below them)" />
-                <Button Content="Untick selected" Command="{Binding UntickSelectedCommand}" ToolTip.Tip="Untick the selected sources" />
-                <Button Content="Only selected" Command="{Binding OnlySelectedCommand}" ToolTip.Tip="Tick the selected sources, untick all others" />
-            </WrapPanel>
+            <!-- the selection state box with Refresh in a cut-out at its top left; a button ticks that state, the one there
+                 is now is full orange ("Custom" only shows it); rows of buttons reach from edge to edge -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" Margin="0,0,0,6">
+                <Button Content="Refresh" Command="{Binding RefreshSourcesCommand}" Margin="0,0,6,6"
+                        ToolTip.Tip="Read the workspace again (new experiments, finished runs)" />
+                <Border Grid.Column="1" Classes="selectionstate">
+                    <TextBlock Text="Selection state" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </Border>
+                <Border Grid.Row="1" Grid.ColumnSpan="2" Classes="selectionstate" Padding="8,2,8,8">
+                    <c:JustifiedWrapPanel ItemSpacing="4" LineSpacing="4">
+                        <Button Classes="ticks" Classes.on="{Binding AllTicked}" Content="All" Command="{Binding SelectAllCommand}"
+                                ToolTip.Tip="Tick everything, the quick batch runs (QBRs) too" />
+                        <Button Classes="ticks" Classes.on="{Binding AllButQbrsTicked}" Content="All w/o QBRs" Command="{Binding SelectAllWithoutQbrsCommand}"
+                                ToolTip.Tip="Tick every experiment, not the quick batch runs (QBRs)" />
+                        <Button Classes="ticks" Classes.on="{Binding OnlyQbrsTicked}" Content="Only QBRs" Command="{Binding SelectOnlyQbrsCommand}"
+                                ToolTip.Tip="Tick only the quick batch runs (QBRs)" />
+                        <Button Classes="ticks" Classes.on="{Binding NoneTicked}" Content="None" Command="{Binding UnselectAllCommand}"
+                                ToolTip.Tip="Untick everything" />
+                        <Border Classes="tickstate" Classes.on="{Binding IsCustom}" ToolTip.Tip="Ticked by hand: none of All, All w/o QBRs, Only QBRs, None">
+                            <TextBlock Text="Custom" />
+                        </Border>
+                        <Button Classes="ticks" Classes.on="{Binding MatchesMain}" Content="Same as main results" Command="{Binding CopySelectionFromMainCommand}"
+                                IsVisible="{Binding IsWindow}" ToolTip.Tip="Tick what the main Results tab has ticked" />
+                    </c:JustifiedWrapPanel>
+                </Border>
+            </Grid>
             <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" FontSize="11" Opacity="0.6" Margin="0,6,0,0"
-                       Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked). Select several sources (click a name, Ctrl+click, Shift+click, or press and sweep) to tick or untick them together." />
+                       Text="Tick one source to look at its runs, several to compare them. A tick applies to everything below it; untick a part to leave its runs out (the box above is then partly ticked). Select several sources (click a name, Ctrl+click, Shift+click, or press and drag a rectangle), then right-click one of them to tick or untick them together." />
             <TreeView x:Name="SourceTree" Classes="sources" ItemsSource="{Binding Sources}">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate DataType="vm:RunSourceViewModel" ItemsSource="{Binding Children}">
                         <StackPanel Orientation="Horizontal" Spacing="2">
                             <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" MinWidth="0" />
-                            <Border Classes="selectrow" Classes.selected="{Binding IsSelected}">
+                            <Border Classes="selectrow" Classes.selected="{Binding IsSelected}" ContextRequested="SourceMenu">
                                 <StackPanel>
                                     <TextBlock Text="{Binding Label}" />
                                     <TextBlock Text="{Binding Kind}" FontSize="11" Opacity="0.6" />
@@ -49,6 +55,13 @@
 
         <DockPanel Grid.Column="2" Margin="10">
             <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,6">
+                <!-- level with Refresh: a further tab's name (title of its tab and window), or the main tab's "Close all result windows" -->
+                <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsWindow}">
+                    <TextBlock Text="Window name" VerticalAlignment="Center" FontWeight="SemiBold" />
+                    <TextBox Classes="windowname" Width="320" Text="{Binding ResultsTab.Name, FallbackValue=''}" />
+                </StackPanel>
+                <Button Classes="closewindows" Content="Close all result windows" Command="{Binding CloseWindowsCommand}"
+                        IsVisible="{Binding ClosesWindows}" ToolTip.Tip="Close all further results tabs and windows (asks first)" />
                 <TextBlock Text="{Binding Status}" Opacity="0.8" />
                 <!-- filters: any number of conditions, all must hold -->
                 <WrapPanel ItemSpacing="6" LineSpacing="4">
@@ -67,6 +80,31 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <Button Content="+ Filter" Command="{Binding AddFilterCommand}" />
+                    <!-- "Mark best/worst": the first places by a number, colored in the table and the charts -->
+                    <Button Content="Mark best/worst" Command="{Binding StartMarkingCommand}" IsVisible="{Binding ShowsMarkButton}" Margin="10,0,0,0"
+                            ToolTip.Tip="Rank the runs by a number and color the first places: gold, silver, bronze, then green over yellow to red" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsMarking}" Margin="10,0,0,0">
+                        <ComboBox ItemsSource="{Binding NumericColumns}" SelectedItem="{Binding MarkColumn}" Width="220" PlaceholderText="Number to rank by"
+                                  ToolTip.Tip="The runs are ranked by this column" />
+                        <ComboBox ItemsSource="{Binding MarkOrders}" SelectedItem="{Binding MarkOrder}" Width="235"
+                                  ToolTip.Tip="Ascending: the smallest value is 1st; descending: the largest" />
+                        <TextBlock Text="top" VerticalAlignment="Center" Margin="4,0,0,0" />
+                        <NumericUpDown Value="{Binding MarkTop}" Minimum="{Binding MinMarkTop}" Maximum="{Binding MaxMarkTop}" Increment="1" FormatString="0" Width="110"
+                                       ToolTip.Tip="How many places are marked (6 to 100)" />
+                        <TextBlock Text="±" VerticalAlignment="Center" Margin="4,0,0,0" />
+                        <NumericUpDown Value="{Binding MarkTolerance}" Minimum="0" Increment="1" FormatString="0.####" Width="120"
+                                       ToolTip.Tip="Values this close to a place's first value share its place and color (0: only equal values)" />
+                        <Button Classes="markapply" Content="✓" Command="{Binding ApplyMarkingCommand}" ToolTip.Tip="Mark the runs" />
+                        <Button Content="✕" Command="{Binding CancelMarkingCommand}" ToolTip.Tip="Close without changing the marking" />
+                    </StackPanel>
+                    <!-- the marking in use -->
+                    <Border Background="#F3E2A9" CornerRadius="10" Padding="10,3" IsVisible="{Binding IsMarked}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding MarkingText}" Foreground="#3A2E05" VerticalAlignment="Center" />
+                            <Button Content="✕" Padding="4,0" Background="Transparent" Foreground="#3A2E05" ToolTip.Tip="Mark nothing"
+                                    Command="{Binding RemoveMarkingCommand}" />
+                        </StackPanel>
+                    </Border>
                 </WrapPanel>
                 <!-- grouping: any combination of columns; numbers in bins -->
                 <WrapPanel ItemSpacing="6" LineSpacing="4">
@@ -96,15 +134,19 @@
 
             <!-- while a large table is built in the background: a bright layer over the views, an orange progress bar -->
             <Panel>
-            <TabControl Padding="0,6,0,0" SelectedIndex="{Binding SelectedView}">
+            <TabControl x:Name="Views" Padding="0,6,0,0" SelectedIndex="{Binding SelectedView}">
                 <TabItem Header="Table">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
+                            <Button Content="Reload table" Command="{Binding ReloadTableCommand}"
+                                    ToolTip.Tip="Read the runs again: not sorted (in the order they were read), every column at its regular width" />
                             <CheckBox Content="All parameters" IsChecked="{Binding ShowAllParameters}" ToolTip.Tip="Else only the parameters that differ between the runs" />
                             <Button Content="Export CSV..." Command="{Binding ExportCommand}" ToolTip.Tip="The table as shown: filtered, sorted, these columns" />
                             <Button Content="Export to Python..." Command="{Binding ExportPythonCommand}"
                                     ToolTip.Tip="The shown runs as a Python module named after the experiment: its blocks as attributes (exp.batch_run_1.ga), typed parameters, results and curves, pandas tables via .df and compare(...)" />
-                            <TextBlock Text="Click a column title to sort; select a run to see it under Run." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
+                            <Button Classes="closewindows" Content="Close all run view windows" Command="{Binding CloseRunWindowsCommand}" IsVisible="{Binding HasRunWindows}"
+                                    ToolTip.Tip="Close the windows of runs opened from this table" />
+                            <TextBlock Text="Double-click a column title to sort; click a column's right edge to widen it; right-click a run to open it in a window." VerticalAlignment="Center" FontSize="11" Opacity="0.6" />
                         </StackPanel>
                         <ContentControl Content="{Binding Grid}" HorizontalAlignment="Left" VerticalAlignment="Top" />
                     </DockPanel>
@@ -157,42 +199,6 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Run">
-                    <Grid ColumnDefinitions="360,4,*">
-                        <Panel>
-                            <TextBlock Text="Select a run in the table." Opacity="0.6" IsVisible="{Binding SelectedRow, Converter={x:Static ObjectConverters.IsNull}}" />
-                            <Grid RowDefinitions="*,Auto,*" IsVisible="{Binding SelectedRow, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                <ScrollViewer>
-                                    <ItemsControl ItemsSource="{Binding RunDetails}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:NameValue">
-                                                <Grid ColumnDefinitions="170,*" Margin="0,1">
-                                                    <TextBlock Text="{Binding Name}" Opacity="0.7" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding Value}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Value}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-                                <TextBlock Grid.Row="1" Text="Results of this run" FontWeight="SemiBold" Margin="0,8,0,4" />
-                                <ListBox Grid.Row="2" ItemsSource="{Binding RunResults}" SelectedItem="{Binding SelectedRunResult}">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ResultEntryViewModel">
-                                            <Grid ColumnDefinitions="Auto,*,Auto">
-                                                <c:Pictogram Symbol="{Binding KindPictogram}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
-                                                 ToolTip.Tip="{Binding KindTip}" Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}" />
-                                                <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                                                <TextBlock Grid.Column="2" Text="{Binding Summary}" FontFamily="monospace" Opacity="0.75" Margin="8,0,0,0" VerticalAlignment="Center" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </Grid>
-                        </Panel>
-                        <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
-                        <ContentControl Grid.Column="2" Margin="8,0,0,0" Content="{Binding RunResultDetail}" />
-                    </Grid>
-                </TabItem>
             </TabControl>
             <Border Classes="busy" IsVisible="{Binding IsBusy}">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" Width="380">

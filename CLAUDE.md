@@ -31,9 +31,17 @@
   named "Batch content"; a time-limit run is HeuristicLab's TimeLimitRun and takes one algorithm -
   kept that way on purpose so .hl files stay compatible with HeuristicLab 3.3 (user's decision
   2026-10-11; a multi-block time-limit container was built and reverted).
-  While anything runs, blocks stay clickable (details shown) but nothing changes: menus offer no
-  edits, names/limits/repetitions are ignored, add buttons disabled, no saving, dragging, copying
-  or editing across algorithms; value and choice parameters show parameter_currently_not_editable. Block design (user's request,
+  Only the experiments that run are locked (user's request 2026-11-10; ExperimentBlockViewModel.IsLocked = started with
+  the start buttons (IsRunning) or a quick batch run / detailed analysis of one of its algorithms runs or is paused -
+  ExperimentWorkspaceViewModel.SetAlgorithmRunning(block, key, running)); BlockViewModel.IsEditable = Workspace.
+  CanChange(block), refreshed per experiment (LockChanged). A locked experiment's blocks stay clickable (details shown)
+  but nothing in it changes: menus offer no edits, names/limits/repetitions are ignored, its add buttons disabled, no
+  saving, dragging into or out of it, copying or editing across algorithms; value and choice parameters show
+  parameter_currently_not_editable while the experiment itself runs. Other experiments and new ones (new, open, samples)
+  are worked on meanwhile and can be started too: "Start all" / "Start selected" start the ones that do not run yet
+  (overlapping starts share Stop's token and the Resources tab's experiments-at-once slots); Stop stops every
+  experiment run. Eject and "Delete runs..." offer only experiments that do not run. Workspace.IsRunning = anything
+  runs (live monitoring); RunsFinished (each experiment run / QBR end) makes the Runs and Results tabs read again. Block design (user's request,
   no rounded corners, no green/yellow): orange (#F7931D) square with the kind's pictogram, a dark
   square with the state (experiment: saved/unsaved; algorithm: status), the name; batch/time-limit
   runs end in an orange field (repetitions / time limit; while running "3 / 10" or "01:23 / 05:00").
@@ -48,26 +56,51 @@
   tick experiments ("Eject selected") or "Eject all", Autosave switch; ExperimentWorkspaceViewModel.EjectAsync:
   unsaved ones (!IsSaved) are saved first with autosave (never saved: "Save as..." file), else UnsavedWindow
   asks per experiment (Save / Eject without saving / Keep it open); one not saved stays. Files stay on disk.
+  Its boxes also tick by sweeping (Controls/TickSweep): right button held on a box switches it, every box passed gets
+  the same state (user's request 2026-11-02).
+  Empty clicks (user's request 2026-11-02): a press on anything that takes no focus leaves the text field being typed in
+  (Controls/FocusRelease, a tunnel class handler on every TopLevel registered in App.Initialize; Avalonia 12 has no
+  ClearFocus: FocusManager.Focus(null)); in the Experiments tab a click on empty space also unselects the selected block
+  (ExperimentWorkspaceView.EndBand: Selected = null). The containers' add buttons are low (Button.action.addblock,
+  padding 12,2,12,3, no MinHeight - as the Results tab's selection state buttons).
   The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
   logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
   TextBlock: a string's '_' would be an access key.
   Runs tab: "Delete runs..." next to Refresh (ChooseWindow: pick an entry, the delete button is disabled
   until then): per experiment "the experiment's runs" (ExperimentTree.DeleteRuns clears every optimizer's
-  runs without Prepare; its single runs stay) or "only its single runs" (DeleteSingleRuns), and "All single
-  runs of all experiments" when several have some; never while running; marks it unsaved. Several entries
+  runs without Prepare; its quick batch runs stay) or "only its quick batch runs" (DeleteQuickBatchRuns), and "All quick
+  batch runs of all experiments" when several have some; never while running; marks it unsaved. Several entries
   at once (IDialogService.ChooseAsync returns the picked indices).
   Selecting several (user's request): Controls/SweepSelection - click = one, Ctrl+click toggles, Shift+click
-  a range from the last clicked, press and sweep = the rows passed over; rows are visible "selectrow" Borders
-  whose DataContext is ViewModels.IPickable (tick boxes / expanders keep their own clicks). Selected rows
+  a range from the last clicked, press and drag (on a row or empty space) = a rectangle as in the Experiments
+  tab (see-through #2E6FD8 in the list's adorner layer, placed by its margin): rows whose height it reaches get
+  a blue frame meanwhile (class "bandcovered"), selected only when let go (Ctrl: added); a click on empty space
+  clears. Rows are visible "selectrow" Borders whose DataContext is ViewModels.IPickable (tick boxes / expanders
+  / scroll bars keep their own clicks; only the list's own capture loss cancels - a row's TreeViewItem loses
+  its capture to the list). Selected rows
   inverted by theme (App.axaml InvertBrush/InvertInkBrush: light mode #1E1E1E/white, dark #F2F2F2/#1E1E1E).
   Used by ChooseWindow (ChoiceRow) and the Results tab's source tree (RunSourceViewModel.IsSelected; the
-  TreeView's own selection highlight is turned off; buttons "Tick selected" / "Untick selected" / "Only
-  selected" - tick them and untick all others). Experiments tab: Ctrl+click picks blocks (BlockViewModel.
+  TreeView's own selection highlight is turned off; right-click on a source - RunAnalysisView.SourceMenu, a
+  source not selected is selected alone first - offers "Tick selected" / "Untick selected" / "Only selected" (tick
+  them and untick all others; one source: "Tick" / "Untick" / "Only this"); the buttons for it were removed). Experiments tab: Ctrl+click picks blocks (BlockViewModel.
   IsPicked, name field inverted to #1E1E1E/white in both modes - blocks keep fixed light fields), pressing on
-  empty space draws a rectangle (BandLayer) that picks the blocks it covers (Ctrl: adds); a plain click on a
-  block or on empty space clears them; dragging a picked block moves all picked ones (PickedGroup: tree
+  empty space draws a rectangle (BandLayer) that picks the blocks it covers (Ctrl: adds); a plain click on any
+  block (also a picked one; a drag is no click) or on empty space clears them; dragging a picked block moves all picked ones (PickedGroup: tree
   order, a block inside a picked container goes with it) one after the other to the target (MoveGroup;
-  not into a time-limit run).
+  not into a time-limit run). Picked blocks belong to one experiment: the rectangle picks only in the experiment it
+  started in (else the first touched block's), Ctrl+click in another experiment starts anew there. While the
+  rectangle is drawn, what it would pick gets a blue frame (BlockViewModel.IsBandCovered, the rectangle's #2E6FD8;
+  inverted only once let go). A picked block's menu acts on all picked ones: "Delete selected items" (asked once),
+  "Copy selected items", "Copy selected items n times..." (each block's copies after it; menus refresh on
+  PicksChanged).
+  Problem blocks (user's request 2026-11-10): an algorithm picked takes its problem along (AlgorithmBlockViewModel.PickChanged:
+  shown picked, blue under the rectangle too - CoverWithBand adds the problems); a problem picked alone (rectangle over
+  it only, Ctrl+click; ExperimentWorkspaceViewModel.Pickable) leaves its algorithm unpicked; Ctrl+click on a problem picked
+  with its algorithm unpicks both. Only problems picked (OnlyProblemsPicked / PickedProblems): their menu is "Change
+  selected problem blocks to..." (the problem dialog for the first one's algorithm; ChangeProblems gives every picked
+  problem's algorithm a copy, whatever the algorithms; one that cannot take the problem type keeps its own, said in the
+  status) and "Remove selected problems" - no copy entries. A problem picked with its algorithm among several shows the
+  picked blocks' menu.
   Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
   warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
   HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once
@@ -80,7 +113,10 @@
   top right of the tab row in MainWindow).
   Click: details/parameters, double-click: rename, right-click: menu.
   The selected block is covered by a see-through orange layer (Border.selection, #F7931D at 0.38, not
-  hit-testable, under the purple multi-edit layer), besides the name's dark frame.
+  hit-testable, under the purple multi-edit layer); no dark frame around the name any more (user's request 2026-11-03).
+  A selected algorithm with a problem gets one such layer over the algorithm, the line and the problem (Border.rowselection
+  in the algorithm row, AlgorithmBlockViewModel.IsRowSelected; its own layer off: ShowsSelection); a selected problem shows
+  the same layer (user's request 2026-11-11; ProblemBlockViewModel.ShowsSelection is always false).
   Drag and drop (own pointer handling in ExperimentWorkspaceView, logic in the workspace VM:
   BeginDrag/TargetAt/PreviewDrop/EndDrag/Move): algorithms (also dragged by their problem), batch
   runs and time-limit runs (with their content) move anywhere, also into other experiments; upper
@@ -237,9 +273,16 @@
   and replaces AllColumns/NumericColumns/XChoices/CurveTables only when they change - a new list under a
   filter's ComboBox reset its selection, which rebuilt and replaced the list again: endless recursion, a
   stack overflow that closed Studio without a message (test StudioFilterTests types filters key by key).
-  Tick shortcuts (Button.ticks: pale logo orange #FDE5C8, full #F7931D when it is the state now - AllTicked /
-  AllButSingleTicked / NoneTicked): "Select all", "Select all (without single runs)", "Unselect all" between
-  Refresh and the multi-select buttons. Results tabs and windows (user's request 2026-10-28): "Add window" (Button.addwindow:
+  Selection state (user's request 2026-10-30): a box (Border.selectionstate, ExperimentBrush) with Refresh in a cut-out
+  at its top left, "Selection state" beside it; square buttons (Button.ticks: pale logo orange #FDE5C8, full #F7931D
+  when it is the state now): "All" (AllTicked, quick batch runs too), "All w/o QBRs" (AllButQbrsTicked), "Only QBRs"
+  (OnlyQbrsTicked), "None" (NoneTicked) - low buttons (padding 6,2,6,3, no MinHeight), "Custom" (Border.tickstate, cannot be pressed: grey #E3E3E3 with grey writing unless it is the state; IsCustom = none of those
+  four, so it can be full orange together with "Same as main results"), last in further tabs "Same as main results"
+  (MatchesMain). Controls/JustifiedWrapPanel: as many per row as fit, every row stretched from edge to edge (a child
+  alone takes the row). Level with Refresh in the right column: a further tab's "Window name" (RunAnalysisViewModel.
+  ResultsTab.Name), the main tab's "Close all result windows" (only while further results tabs exist: ClosesWindows
+  follows the command's CanExecute).
+  Results tabs and windows (user's request 2026-10-28): "Add window" (Button.addwindow:
   square rectangle, tab font at 17 px, AddWindowBrush grey - darker than the window in light mode #D4D4D4, lighter
   in dark mode #3A3A3A) in the Results tab's header while it is shown (MainViewModel.IsResultsTab) adds a further
   results tab (ResultsWindowViewModel "HL-Results: n", ticked as the main tab at first - RunAnalysisViewModel.Main /
@@ -247,14 +290,14 @@
   in the Results tab, while there are further tabs, across the whole window) and selected: "Main results" first
   (rectangle), then one tab per further results tab (italic name, a small ✕; a parallelogram - skewed shape -
   while docked, a rectangle while it is a window; the shown one in the logo orange). A click shows a docked tab in
-  the main window (MainViewModel.SelectedResults / ShownAnalysis; its "Window name" field under the bar) or brings
+  the main window (MainViewModel.SelectedResults / ShownAnalysis; its "Window name" field in the tab, level with Refresh) or brings
   its window to the front; "Main results" shows the main tab and brings the main window to the front. A dragged
   tab disappears and one see-through copy (the ghost, ResultsTabBar.Ghost in the adorner layer, placed by its margin
   - the adorner layer sets RenderTransform itself; clipping off) shows instead: along the bar in the gap where it
   lands (the other tabs drawn shifted by RenderTransform; ResultsTabBar.Landing; released there: MoveResults -
   "Main results" stays first), off the bar following the pointer (released well above/below: MainViewModel.Undock,
   a window of its own at the pointer - Views/ResultsWindow with the same bar at its top, its own tab highlighted
-  there, the name field below, title bound live; anywhere else: back where it was). The tab list is never changed
+  there, title bound live to the name; anywhere else: back where it was). The tab list is never changed
   while dragging and every change is posted after the pointer event (changing it inside the tab's pointer event
   mixed up names, showed several ghosts and crashed); a stress test shuffles three tabs. A window moved over the
   main window's bar shows its tab's gap and ghost (ShowArriving) and docks back there only when the mouse button is
@@ -262,14 +305,45 @@
   it is over the bar; unknown elsewhere: resting MainWindow.DockAfter counts as let go) - the window manager moves
   windows without telling when the button is released (PositionChanged -> MainWindow.WindowOver / CheckLetGo ->
   MainViewModel.Dock). Closing the
-  main window while results windows are open asks the same as "Close windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
-  "Copy selection from main results tab" next to Refresh in further tabs (IsWindow; full orange while MatchesMain
-  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close windows" there
-  instead (Button.closewindows, pale red #F6CACA; enabled while further tabs exist): IDialogService.
+  main window while results windows are open asks the same as "Close all result windows" (OnClosing; dialog closed: it stays). Closing a window (title bar X) or a tab's ✕ removes the tab.
+  "Same as main results" in further tabs' selection state box (IsWindow; full orange while MatchesMain
+  - the main tab raises TicksAltered when its ticks change); the main Results tab has "Close all result windows" (Button.closewindows, pale red #F6CACA, square; shown while further tabs exist): IDialogService.
   AcknowledgeAsync - "n result windows are about to be closed" with only "OK" (closing the dialog aborts) - then
   all of them (docked and windows) go.
+  Mark best/worst (user's request 2026-11-01): a button right after "+ Filter"; pressed, its fields instead of it -
+  numeric column (NumericColumns), Ascending (smallest first) / Descending, top n (6..100), ± tolerance, ✓ applies,
+  ✕ closes (the marking in use stays); the marking in use shows as a chip ("Smallest 10 of BestQuality (result)" ✕
+  removes it). Runtime Runs/RunMarks: MarkedRuns.Rank over the filtered runs (RunAnalysisViewModel.Marks) - sorted,
+  a new place when a value is further than ± from the place's first value (0: only equal values share), places
+  dense (1, 1, 2, ...), the first n places marked; colors RunMarks.PlaceColor: gold, silver, bronze, then green over
+  yellow to red at the n-th place. Table: GridRow.MarkBrush (the place color at alpha MarkAlpha 0x55 over the row),
+  the first three bold (GridRow.IsBold). Charts (RunCharts ... marks): one legend entry per place ("1st: Copy 1, Copy
+  2 (1100)"), its text in the place's color (PlotSeries/ChartSeries.LabelColor, LegendEntry.LabelColor, LegendItem.Ink
+  in the fullscreen legend); scatter and cumulative distribution: a large dot of the place's color behind the run's
+  point (Size 8, Layer -1; LineChart draws by Layer); box plot: a large dot with the group's color in front, spread
+  over the box's width by place; curves: the marked runs' curves thick (Size 4) in the place's color, the 1st on top.
+  Not in histograms (bins hold many runs). Kept over filters/grouping/sorting (ranked again each rebuild).
   Statistics (HeuristicLab.Analysis.Statistics: Kruskal-Wallis, Mann-Whitney U with
-  Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05), Run (one run's results with visualizations).
+  Bonferroni-Holm, t-test, Cohen's d, Hedges' g; SummaryGrid / PairsGrid in the table design, "*" = adjusted p < 0.05).
+  No Run view any more (removed 2026-10-29, user's request): runs open in windows of their own from the Results
+  table. The table selects several rows (TableGridViewModel.MultiSelect: GridRow is IPickable, SweepSelection with
+  row class "row" - click, Ctrl+click, Shift+click, a rectangle with a blue frame on the rows, Border.bandframe);
+  right-click (TableGridViewModel.RowMenu over the selected items; a row not selected is selected alone first):
+  "Open run in window" / "Open runs in windows" (then the rows are unselected), "6/6 run windows can not be
+  exceeded" (disabled) when that would make more than six, and for runs that all have a window "Go to view
+  window(s)" / "Close run view window(s)". Views/RunWindow (not owned) with RunWindowView over RunWindowViewModel:
+  the run's columns as a table (names on two shades of the window's color alternating per row, values on Grey /
+  LightGrey), its results and the selected result's picture. The open run windows are one RunWindowSet shared by
+  every Results tab (main and further ones; at most six, one RunPalette each - cyan, green, purple, pink, blue,
+  teal, three shades like Source/Origin/Run's orange); every table colors their runs' Source/Origin/Run cells
+  (FixedTint, Retint on RunWindowSet.Changed; rows found by their IRun), orange again when closed. MainWindow opens
+  them (RunWindowSet.Requested) and closes them in OnClosed; a further tab closing leaves them open.
+  "Close all run view windows" (Button.closewindows, square) next to "Export to Python...", shown only while run windows are open.
+  A press anywhere in the window outside the source list (empty space, another tab, the table; not in menus -
+  handler on the TopLevel, RunAnalysisView.ElsewherePressed) ends the selection of sources. The table's selected rows
+  end the same way (TableGridView.ElsewherePressed, multi-select tables); sorting / filtering keeps the selected
+  runs selected and the sideways scroll position (TableGridViewModel.ScrollX, restored by the view after layout;
+  vertically at the top again).
   Resources tab (runtime Resources/ResourceMonitor, remembered in settings.json): CPU cores =
   process affinity (hard limit, Linux/Windows), threads per algorithm (1 = HeuristicLab's default
   SequentialEngine; more = ParallelEngine with that DegreeOfParallelism, set by Resources.Configure
@@ -300,18 +374,51 @@
   RunsView: Runs tab (ShowsDetails false) the table at the top (max 300 px); Experiments tab (experiment,
   batch/time-limit run, algorithm Runs tab) the table fills the height down to the window's edge, the selected
   run's details below it (max 240 px; RunsView.axaml.cs sets the rows).
-  Single runs (user's decision 2026-10-15): Start on one algorithm (its detail) makes single runs - when it
-  ends (not paused) the runs it made leave the algorithm (HeuristicLab removes them from its batch run,
-  time-limit run and experiment too) and go to ExperimentBlockViewModel.SingleRuns (ViewModels/SingleRuns.cs),
-  named "Single run k" per algorithm (grouped by the runs' "Algorithm Name"). The algorithm's Runs tab lists
-  its runs and its single runs (RunsViewModel takes a run list). Runs and Results tabs: a "Single runs"
-  folder > experiment > algorithm after the experiments (RunsSourceViewModel/RunSourceViewModel Key/Group +
-  run list); in the Results tab not ticked at first. Saved with the experiment as a run collection
-  "<name>.single-runs.hl" next to its .hl (HeuristicLab opens it; written also when emptied), loaded when the
-  experiment is opened, renamed with "Rename file...". RunValueCache reads a run again when its numbers of
+  Quick batch runs ("QBRs"; user's decisions 2026-10-15 single runs, replaced 2026-11-10 everywhere): Start on one
+  algorithm (its detail) runs it the Options tab's QBR size times (10 at first; AlgorithmDetailViewModel.RunBatch on the
+  thread: Start, then Prepare(clearRuns: false) and Start again until that many runs; SetSeedRandomly gives each its own
+  seed; a pause leaves the loop and Start resumes it, Stop / a failure end it with the runs made; "Quick batch run: run 3
+  of 10" beside the time, BatchProgress). Its controls (user's request 2026-11-10; AlgorithmDetailView): one row of square
+  fields and buttons 32 px high, all text of the title bold - "Quick batch" #FBCD96 | "of <size>" in one box in the
+  grey of what cannot be pressed (ExecOffBrush/ExecOffInkBrush; BatchSizeText: the Options tab's size, the one in use
+  while a QBR runs) | "run" #FBCD96 (Border.qbr, StackPanel QbrTitle), then Button.exec Start #F7931D, Pause / Stop #F9B462, Prepare #FDE5C8 (hover a
+  shade darker; disabled ExecOffBrush/ExecOffInkBrush: light #E3E3E3/#8C8C8C, dark #3A3A3A/#8A8A8A), then the status.
+  The detail follows the algorithm's Prepared/Started/Paused/Stopped events (AlgorithmBlockViewModel.StatusChanged ->
+  AlgorithmDetailViewModel.ExecutionStateChanged): only its own timer read the state before, so a new algorithm could
+  show "Stopped" without Start after it had been prepared - when it ends (not paused) the runs it made leave the algorithm (HeuristicLab
+  removes them from its batch run, time-limit run and experiment too) and become one QBR of
+  ExperimentBlockViewModel.QuickBatchRuns (ViewModels/QuickBatchRuns.cs), runs named "QBR k, run j" (k per algorithm,
+  grouped by the runs' "Algorithm Name"; QbrAlgorithmGroup.Batches / QuickBatch by the number in the name). The
+  algorithm's Runs tab lists its runs and its QBRs' (RunsViewModel takes a run list; tree counter "Runs (2, 10 in
+  QBRs)"). Runs and Results tabs: a "Quick batch runs" folder > experiment > algorithm > "QBR k" after the experiments
+  (RunsSourceViewModel/RunSourceViewModel Key/Group + run list); in the Results tab not ticked at first. Saved with the
+  experiment as a run collection "<name>.quick-batch-runs.hl" next to its .hl (HeuristicLab opens it; written also when
+  emptied), loaded when the experiment is opened (without one, an older "<name>.single-runs.hl" is read: "Single run k"
+  becomes "QBR k, run 1"), renamed with "Rename file..." (both files). RunValueCache reads a run again when its numbers of
   parameters/results changed (Studio tags runs with "Resources: ..." after they were first read).
   Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
-  it (blue overlay); Results header click sorts.
+  it (blue overlay).
+  Results table columns (user's request 2026-10-30/31; the sort buttons and the plain columns' size switch were removed again; TableGridViewModel with a TableLook - HeaderButtons; Views[i] =
+  GridColumnView, shared by the column's cells, which bind its Width): a double-click on a title sorts - ascending,
+  descending, not sorted (= the order the runs were read in, as in the Run column; one column at a time:
+  RunAnalysisViewModel.Sort). A click on a column's right edge (Border.columnedge, EdgeWidth 8 px, in the title and
+  every row; SweepSelection ignores it; ClickCount 1 only) switches regular 150 / expanded (the longest text measured,
+  Inter 14, cut at ExpandChars 200, and the title, at least regular); the pointer there is Controls/ColumnCursors'
+  drawn "<-|->" (Expand) or "->|<-" (Shrink, when expanded), 48 px (32 was hard to see on GNOME). Source/Origin/Run
+  (only they) have one orange button (ButtonWidth 26, as tall as the title row, at the column's right edge; the user's
+  collapse_table / expand_table pictograms at 14 px): collapse to the button's size (CollapsedWidth = ButtonWidth, no
+  title) / back to regular; a collapsed column's edge expands it. Fixed columns do not scroll, so an expanded one is
+  never wider than the view leaves it (TableGridViewModel.ViewWidth set by the view, FixedRoom, FixedSpare 60 px; the
+  text cut with "…"); a plain expanded column scrolls to its edge. Sizes are kept in RunAnalysisViewModel.columnSizes
+  over rebuilds. The sorted column (TableGridViewModel.Framed, also Source/Origin/Run) is framed 3 px by one Border
+  over the view (TableGridView.PlaceFrame on scroll and layout; FrameClip cuts a plain column scrolled under the fixed
+  ones): from its title (always in view) to the view's lower edge, or to the last shown row with a bottom line once that
+  is in view; one gradient (FrameBrush) over that visible height: ascending logo orange at the top to black at the
+  bottom, descending the other way - costs the same for any number of rows (user's request 2026-10-31).
+  Scrolling: a row's cells are a Controls/CellRow (keeps its cell controls and only swaps their DataContext when the
+  recycled row shows another run - an ItemsControl built every cell again); the selected run's blue layer is one per
+  row; Sticky cells that stick to nothing skip scroll updates.
+  "Reload table" (Table tab): not sorted, sizes cleared, scrolled to the left, sources read again (RefreshSources).
   Long tables (user's request): the first 50 rows (TableGridViewModel.Limit, ShownRows), then a button as
   wide as the table ("Show all N rows" / "Show only the first 50"); rows are drawn only where in view
   (VirtualizingStackPanel) and their cells built when first drawn (GridRow.Cells lazy).
@@ -346,7 +453,12 @@
   -> Services.DesktopNotifications: Linux notify-send (else gdbus to org.freedesktop.Notifications),
   Windows a toast via Windows PowerShell's WinRT (PowerShell's AppId, text in env variables), macOS
   osascript. A failure shows in the status bar. Tests use a fake IDesktopNotifications.
-  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits, dark mode, notifications.
+  Options tab (after Resources; user's request 2026-11-10; OptionsViewModel / OptionsView): the QBR size (1..1000,
+  "Back to 10"; ExperimentWorkspaceViewModel.QuickBatchSize) and a working directory ("Choose..." / "No working
+  directory"; a missing folder is said in yellow): IFileDialogService.WorkingDirectory - FileDialogService gives every
+  picker (open, save, export, data, folder) SuggestedStartLocation there.
+  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits, dark mode, notifications,
+  QBR size, working directory.
   Own LineChart control. Chart text (LineChart, SceneView legend/scales/titles): 13 px in the full text color
   (SystemControlForegroundBaseHigh), axis titles semi-bold, y titles vertical beside their scales, margins
   from the labels' sizes; SceneVisual.XCategories names a category axis under the drawing (wrapped to

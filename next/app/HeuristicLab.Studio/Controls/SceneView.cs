@@ -343,7 +343,7 @@ public class SceneView : Control {
       var box = new Rect(area.X, area.Y + 4, 12, 12);
       // a filled box: shown; an empty one: hidden (click toggles)
       context.DrawRectangle(off ? null : new SolidColorBrush(ColorOf(entry.Color)), new Pen(new SolidColorBrush(ColorOf(entry.Color)), 1.5), box);
-      var text = Text(entry.Label, off ? new SolidColorBrush(Colors.Gray, 0.6) : foreground, UiSize);
+      var text = Text(entry.Label, off ? new SolidColorBrush(Colors.Gray, 0.6) : entry.LabelColor is { } ink ? new SolidColorBrush(ColorOf(ink)) : foreground, UiSize);
       context.DrawText(text, new Point(area.X + 18, area.Y + 10 - text.Height / 2));
       legendAreas.Add((area, entry.Label));
     }

@@ -9,9 +9,11 @@ using HeuristicLab.Studio.Controls;
 namespace HeuristicLab.Studio.ViewModels;
 
 /// <summary>A legend entry: its name, color and whether it is hidden.</summary>
-public sealed record LegendItem(string Name, IBrush Color, bool IsHidden) {
+/// <param name="Ink">The text's own color (a marked place), else the theme's.</param>
+public sealed record LegendItem(string Name, IBrush Color, bool IsHidden, IBrush? Ink = null) {
   public double Opacity => IsHidden ? 0.45 : 1;
   public IBrush? Fill => IsHidden ? null : Color;
+  public bool HasInk => Ink != null;
 }
 
 /// <summary>A chart ready for <see cref="LineChart"/>.</summary>
@@ -19,7 +21,7 @@ public sealed record ChartPanel(string Title, IReadOnlyList<ChartSeries> Series,
                                 string SecondYAxisTitle, IReadOnlyList<ChartMarker> Markers) {
   public static ChartPanel From(ChartVisual chart) => new(chart.Title,
     chart.Series.Select((s, i) => new ChartSeries(s.Name, ToColor(s.Color ?? Rgb.Palette(i)), s.Points.Select(p => new ChartPoint(p.X, p.Y)).ToList(),
-      Kind: s.Kind, SecondYAxis: s.SecondYAxis, Width: s.Width)).ToList(),
+      Kind: s.Kind, SecondYAxis: s.SecondYAxis, Width: s.Width, Size: s.Size, LabelColor: s.LabelColor is { } ink ? ToColor(ink) : null, Layer: s.Layer)).ToList(),
     chart.XAxisTitle, chart.YAxisTitle, chart.SecondYAxisTitle, chart.Markers.Select(m => new ChartMarker(m.X, m.Label)).ToList());
 
   private static Color ToColor(Rgb c) => Color.FromArgb(c.A, c.R, c.G, c.B);
@@ -77,8 +79,10 @@ public partial class VisualsViewModel : ViewModelBase {
 
   /// <summary>The shown picture's legend: a chart's series, a picture's groups.</summary>
   public IReadOnlyList<LegendItem> LegendItems => Current switch {
-    ChartPanel chart => chart.Series.Where(s => s.Points.Count > 0).Select(s => new LegendItem(s.Name, new SolidColorBrush(s.Color), Hidden.Contains(s.Name))).ToList(),
-    SceneVisual scene => SceneView.Entries(scene).Select(e => new LegendItem(e.Label, new SolidColorBrush(Color.FromArgb(e.Color.A, e.Color.R, e.Color.G, e.Color.B)), Hidden.Contains(e.Label))).ToList(),
+    ChartPanel chart => chart.Series.Where(s => s.Points.Count > 0).Select(s => new LegendItem(s.Name, new SolidColorBrush(s.Color), Hidden.Contains(s.Name),
+      s.LabelColor is { } ink ? new SolidColorBrush(ink) : null)).ToList(),
+    SceneVisual scene => SceneView.Entries(scene).Select(e => new LegendItem(e.Label, new SolidColorBrush(Color.FromArgb(e.Color.A, e.Color.R, e.Color.G, e.Color.B)), Hidden.Contains(e.Label),
+      e.LabelColor is { } ink ? new SolidColorBrush(Color.FromArgb(ink.A, ink.R, ink.G, ink.B)) : null)).ToList(),
     _ => []
   };
 

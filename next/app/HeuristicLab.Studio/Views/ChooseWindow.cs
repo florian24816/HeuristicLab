@@ -52,7 +52,7 @@ public sealed class ChooseWindow : Window {
     var panel = new DockPanel { Margin = new(16) };
     var text = new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new(0, 0, 0, 6) };
     var hint = new TextBlock {
-      Text = "Several: Ctrl+click, Shift+click, or press and sweep over them.", FontSize = 11, Opacity = 0.65, Margin = new(0, 0, 0, 8)
+      Text = "Several: Ctrl+click, Shift+click, or press and drag a rectangle over them.", FontSize = 11, Opacity = 0.65, Margin = new(0, 0, 0, 8)
     };
     var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 8, Margin = new(0, 10, 0, 0), Children = { cancel, ok } };
     DockPanel.SetDock(text, Dock.Top);

@@ -19,7 +19,7 @@ public sealed record NameValue(string Name, string Value);
 public partial class MainViewModel : ViewModelBase {
   private readonly ISettingsStore? settingsStore;
 
-  public const int ExperimentsTab = 0, RunsTab = 1, ResultsTab = 2, ScriptsTab = 3, ResourcesTab = 4;
+  public const int ExperimentsTab = 0, RunsTab = 1, ResultsTab = 2, ScriptsTab = 3, ResourcesTab = 4, OptionsTab = 5;
 
   public MainViewModel() : this(null) { }
 
@@ -41,13 +41,11 @@ public partial class MainViewModel : ViewModelBase {
     }, loaded?.RecentFiles, SaveSettings);
     Runs = new RunsBrowserViewModel(Workspace);
     RunAnalysis = new RunAnalysisViewModel(Workspace, fileDialogs);
-    Workspace.PropertyChanged += (_, e) => {
-      // finished experiments bring new runs
-      if (e.PropertyName == nameof(ExperimentWorkspaceViewModel.IsRunning) && !Workspace.IsRunning) {
-        RunAnalysis.RefreshSources();
-        foreach (var window in ResultsWindows) window.Analysis.RefreshSources();
-        Runs.Refresh();
-      }
+    // finished experiments and quick batch runs bring new runs (also while others still run)
+    Workspace.RunsFinished += () => {
+      RunAnalysis.RefreshSources();
+      foreach (var window in ResultsWindows) window.Analysis.RefreshSources();
+      Runs.Refresh();
     };
     Workspace.Finished += SendNotification;
     // before Resources: loading the settings saves nothing
@@ -61,7 +59,13 @@ public partial class MainViewModel : ViewModelBase {
       Priority = Enum.TryParse<ResourcePriority>(loaded.ResourcePriority, out var priority) ? priority : ResourcePriority.Normal
     };
     Resources = new ResourcesViewModel(limits, _ => { if (Resources != null) SaveSettings(); }, StopEverything);
-    // the main Results tab closes the results windows ("Close windows", enabled while there are some)
+    Options = new OptionsViewModel(loaded?.QuickBatchSize ?? QuickBatchRuns.DefaultSize, loaded?.WorkingDirectory, fileDialogs, () => {
+      Workspace.QuickBatchSize = Options!.BatchSize;
+      SaveSettings();
+    });
+    Workspace.QuickBatchSize = Options.BatchSize;
+    if (fileDialogs != null) fileDialogs.WorkingDirectory = Options.WorkingDirectory;
+    // the main Results tab closes the results windows ("Close all result windows", shown while there are some)
     RunAnalysis.CloseWindowsCommand = CloseResultsWindowsCommand;
     ResultsWindows.CollectionChanged += (_, _) => {
       OnPropertyChanged(nameof(HasResultsWindows));
@@ -109,9 +113,13 @@ public partial class MainViewModel : ViewModelBase {
       RecentFiles = Workspace.RecentFiles.ToList(),
       ResourceCores = limits.Cores, ResourceThreads = limits.ThreadsPerAlgorithm, ResourceConcurrentExperiments = limits.ConcurrentExperiments,
       ResourceMemoryGB = limits.MemoryLimitGB, ResourcePriority = limits.Priority.ToString(), DarkMode = IsDarkMode,
-      Notifications = IsNotifying
+      Notifications = IsNotifying, QuickBatchSize = Options?.BatchSize ?? QuickBatchRuns.DefaultSize,
+      WorkingDirectory = Options?.WorkingDirectory
     });
   }
+
+  /// <summary>Options tab: quick batch run size, working directory.</summary>
+  public OptionsViewModel Options { get; }
 
   /// <summary>Experiments tab: building blocks of several experiments.</summary>
   public ExperimentWorkspaceViewModel Workspace { get; }
@@ -167,9 +175,10 @@ public partial class MainViewModel : ViewModelBase {
 
   /// <summary>A new results tab ("HL-Results: n"), docked in the second bar and selected, ticked as the main Results tab is now.</summary>
   public ResultsWindowViewModel OpenResultsWindow() {
-    var analysis = new RunAnalysisViewModel(Workspace, fileDialogs) { Main = RunAnalysis };
+    var analysis = new RunAnalysisViewModel(Workspace, fileDialogs) { Main = RunAnalysis, RunWindows = RunAnalysis.RunWindows };
     analysis.CopySelectionFromMain();
     var results = new ResultsWindowViewModel(++resultsWindowsMade, analysis);
+    analysis.ResultsTab = results;
     ResultsWindows.Add(results);
     SelectResults(results);
     return results;
@@ -210,9 +219,13 @@ public partial class MainViewModel : ViewModelBase {
     ActivateRequested?.Invoke(null);
   }
 
+  /// <summary>The main window closes: every run window goes (they are shared by all Results tabs).</summary>
+  public void CloseAllRunWindows() => RunAnalysis.RunWindows.CloseAll();
+
   /// <summary>The small cross of a tab: the results tab goes (its window too).</summary>
   public void CloseResults(ResultsWindowViewModel results) {
     if (!ResultsWindows.Remove(results)) return;
+    results.Analysis.Forget();  // run windows are shared: they stay
     if (ReferenceEquals(SelectedResults, results)) SelectedResults = null;
     RefreshShown();
     if (!results.IsDocked) {
@@ -226,13 +239,13 @@ public partial class MainViewModel : ViewModelBase {
     OnPropertyChanged(nameof(SelectedDocked));
   }
 
-  /// <summary>"Close windows" (main Results tab): after "OK" in "n result windows are about to be closed", all of them.</summary>
+  /// <summary>"Close all result windows" (main Results tab): after "OK" in "n result windows are about to be closed", all of them.</summary>
   [RelayCommand(CanExecute = nameof(HasResultsWindows))]
   private async System.Threading.Tasks.Task CloseResultsWindowsAsync() {
     int count = ResultsWindows.Count;
     if (count == 0) return;
     var message = count == 1 ? "1 result window is about to be closed" : $"{count} result windows are about to be closed";
-    if (dialogs != null && !await dialogs.AcknowledgeAsync("Close windows", message)) return;
+    if (dialogs != null && !await dialogs.AcknowledgeAsync("Close all result windows", message)) return;
     foreach (var results in ResultsWindows.ToList()) CloseResults(results);
   }
 
@@ -247,7 +260,7 @@ public partial class MainViewModel : ViewModelBase {
   /// <summary>Asked before the main window closes while results windows are open (closing the dialog keeps it open).</summary>
   public async System.Threading.Tasks.Task<bool> ConfirmCloseResultsWindowsAsync(int count) {
     var message = count == 1 ? "1 result window is about to be closed" : $"{count} result windows are about to be closed";
-    return dialogs == null || await dialogs.AcknowledgeAsync("Close windows", message);
+    return dialogs == null || await dialogs.AcknowledgeAsync("Close all result windows", message);
   }
 
   /// <summary>A results window was closed by the user (its title bar's X): the tab goes too.</summary>

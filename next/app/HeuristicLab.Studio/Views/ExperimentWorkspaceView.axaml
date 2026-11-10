@@ -11,7 +11,6 @@
         <SolidColorBrush x:Key="LogoBrush" Color="#F7931D" />
         <SolidColorBrush x:Key="StateBrush" Color="#3A3A3A" />
         <SolidColorBrush x:Key="NameBrush" Color="#EDEDED" />
-        <SolidColorBrush x:Key="SelectedBrush" Color="#1E1E1E" />
         <SolidColorBrush x:Key="ButtonBrush" Color="#E0E0E0" />
         <SolidColorBrush x:Key="ButtonHoverBrush" Color="#CDCDCD" />
         <SolidColorBrush x:Key="DisabledBrush" Color="#F0F0F0" />
@@ -21,7 +20,7 @@
 
         <!-- one building block: squares, name (inline rename), last field; context menu (rename/delete/...) -->
         <DataTemplate x:Key="Block" x:DataType="vm:BlockViewModel">
-            <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.picked="{Binding IsPicked}" Classes.fixed="{Binding FixedWidth}"
+            <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.picked="{Binding IsPicked}" Classes.bandcovered="{Binding IsBandCovered}" Classes.fixed="{Binding FixedWidth}"
                     Tapped="BlockTapped" DoubleTapped="BlockDoubleTapped" PointerPressed="BlockPressed">
                 <Border.ContextMenu>
                     <ContextMenu ItemsSource="{Binding Menu}">
@@ -56,7 +55,7 @@
                     </Border>
                 </StackPanel>
                 <!-- the selected block: an orange layer over all of it (the logo orange, see-through) -->
-                <Border Classes="selection" Background="#F7931D" Opacity="0.38" IsVisible="{Binding IsSelected}"
+                <Border Classes="selection" Background="#F7931D" Opacity="0.38" IsVisible="{Binding ShowsSelection}"
                         IsHitTestVisible="False" />
                 <!-- editing a field across algorithms: purple over the algorithms taking part (stronger: the shown one) -->
                 <Border Classes="multi" Background="#8E44AD" Opacity="{Binding MultiOpacity}" IsVisible="{Binding IsMultiMember}"
@@ -87,8 +86,8 @@
 
         <!-- add button of a container, with the building blocks it accepts -->
         <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
-            <Button Classes="action" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
-                    IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}">
+            <Button Classes="action addblock" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
+                    IsEnabled="{Binding IsEditable}">
                 <Button.Flyout>
                     <MenuFlyout ItemsSource="{Binding AddChoices}">
                         <MenuFlyout.ItemContainerTheme>
@@ -109,6 +108,11 @@
             <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
             <Setter Property="CornerRadius" Value="0" />
             <Setter Property="Padding" Value="12,6" />
+        </Style>
+        <!-- the containers' add buttons: low, as the Results tab's selection state buttons -->
+        <Style Selector="Button.action.addblock">
+            <Setter Property="Padding" Value="12,2,12,3" />
+            <Setter Property="MinHeight" Value="0" />
         </Style>
         <Style Selector="Button.action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
@@ -206,6 +210,15 @@
         <Style Selector="Border.block.fixed Border.name">
             <Setter Property="Width" Value="200" />
         </Style>
+        <!-- under the rectangle being drawn: a blue frame (the rectangle's blue) - what would be picked; inverted only once let go -->
+        <Style Selector="Border.block.bandcovered Border.name">
+            <Setter Property="BorderBrush" Value="#2E6FD8" />
+            <Setter Property="BorderThickness" Value="3" />
+        </Style>
+        <Style Selector="Border.block.bandcovered Border.square">
+            <Setter Property="BorderBrush" Value="#2E6FD8" />
+            <Setter Property="BorderThickness" Value="3" />
+        </Style>
         <!-- picked among several (to move together): the name field inverted - blocks keep fixed light fields in both modes, so dark -->
         <Style Selector="Border.block.picked Border.name">
             <Setter Property="Background" Value="#1E1E1E" />
@@ -213,9 +226,6 @@
         </Style>
         <Style Selector="Border.block.picked Border.name TextBlock">
             <Setter Property="Foreground" Value="#FFFFFF" />
-        </Style>
-        <Style Selector="Border.block.selected Border.name">
-            <Setter Property="BorderBrush" Value="{StaticResource SelectedBrush}" />
         </Style>
         <Style Selector="Border.badge">
             <Setter Property="Background" Value="{StaticResource LogoBrush}" />
@@ -254,8 +264,11 @@
                     <ContentControl Grid.Column="3" Content="{Binding Problem}" ContentTemplate="{StaticResource Block}"
                                     IsVisible="{Binding HasProblem}" />
                     <Button Grid.Column="3" Classes="action" Content="+ Add problem" Command="{Binding ChooseProblemCommand}"
-                            IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}"
+                            IsEnabled="{Binding IsEditable}"
                             IsVisible="{Binding !HasProblem}" Height="32" />
+                    <!-- the selected algorithm with its problem: one orange layer over the algorithm, the line and the problem -->
+                    <Border Grid.Column="1" Grid.ColumnSpan="3" Classes="selection rowselection" Background="#F7931D" Opacity="0.38"
+                            IsVisible="{Binding IsRowSelected}" IsHitTestVisible="False" />
                 </Grid>
                 <StackPanel Margin="40,0,0,2" Spacing="0" IsVisible="{Binding IsExpanded}">
                     <Button Classes="link" Content="{Binding ParametersText}" Command="{Binding OpenTabCommand}" CommandParameter="1" />
@@ -382,7 +395,7 @@
             <ContentControl.DataTemplates>
                 <DataTemplate DataType="vm:ExperimentBlockViewModel">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable}">
+                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding IsEditable}">
                             <TextBlock Text="{Binding Kind}" Opacity="0.7" />
                             <TextBox Text="{Binding Name}" />
                             <TextBlock Text="{Binding FilePath, FallbackValue='', TargetNullValue='Not saved yet'}" Opacity="0.7" TextWrapping="Wrap" />
@@ -402,7 +415,7 @@
                 </DataTemplate>
                 <DataTemplate DataType="vm:ContainerBlockViewModel">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable}">
+                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding IsEditable}">
                             <TextBlock Text="{Binding Kind}" Opacity="0.7" />
                             <TextBox Text="{Binding Name}" />
                             <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsBatchRun}">

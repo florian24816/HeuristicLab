@@ -30,8 +30,12 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   private readonly DispatcherTimer timer;
   private Task? execution;
   private bool startedHere;
-  /// <summary>The runs the algorithm had before its Start here: the ones added since are single runs.</summary>
+  /// <summary>The runs the algorithm had before its Start here: the ones added since are its quick batch run's.</summary>
   private HashSet<IRun>? runsBefore;
+  /// <summary>How many runs the quick batch run started here makes (the Options tab's size when it started).</summary>
+  private int batchSize = QuickBatchRuns.DefaultSize;
+  /// <summary>Stop was pressed: the quick batch run ends with the runs made so far.</summary>
+  private volatile bool stopPressed;
 
   public AlgorithmDetailViewModel(AlgorithmBlockViewModel block) {
     this.block = block;
@@ -43,11 +47,15 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     context.Edited += () => OnPropertyChanged(nameof(AlgorithmWarning));
     Engines = ItemInspector.Engines();
     Results = new ResultsViewModel(() => Algorithm.Results, context);
-    // its runs in the experiment, then the single runs its Start made (kept apart in the experiment's SingleRuns)
+    // its runs in the experiment, then the quick batch runs its Start made (kept apart in the experiment's QuickBatchRuns)
     Runs = new RunsViewModel(() => [.. Algorithm.Runs.ToArray(),
-      .. block.Root?.SingleRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs ?? []]);
-    Analysis = new AnalysisViewModel(() => Algorithm, running => block.Workspace.SetAlgorithmRunning(running),
+      .. block.Root?.QuickBatchRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs ?? []]);
+    Analysis = new AnalysisViewModel(() => Algorithm, running => block.Workspace.SetAlgorithmRunning(block, Analysis!, running),
       status => block.Workspace.NotifyFinished($"Detailed analysis of {block.Name} finished", status));
+    // the QBR size shown follows the Options tab
+    block.Workspace.PropertyChanged += (_, e) => {
+      if (e.PropertyName == nameof(ExperimentWorkspaceViewModel.QuickBatchSize)) OnPropertyChanged(nameof(BatchSizeText));
+    };
     timer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => Tick());
     RefreshProblem();
   }
@@ -245,8 +253,11 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   /// <summary>Why the algorithm cannot run with its problem at all (a needed operator is missing): yellow above its parameters.</summary>
   public string? AlgorithmWarning => ParameterChecks.AlgorithmWarning(Algorithm);
 
-  /// <summary>Parameters can change only while the algorithm is prepared or stopped and no experiment runs.</summary>
-  public bool CanEdit => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Stopped && !block.Workspace.IsRunningExperiments;
+  /// <summary>Its experiment runs (started with the start buttons): the experiment's Start/Stop control the algorithm.</summary>
+  private bool ExperimentRuns => block.Root?.IsRunning == true;
+
+  /// <summary>Parameters can change only while the algorithm is prepared or stopped and its experiment does not run.</summary>
+  public bool CanEdit => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Stopped && !ExperimentRuns;
 
   [RelayCommand(CanExecute = nameof(CanStart))]
   private void Start() {
@@ -260,35 +271,65 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
       return;
     }
     HeuristicLab.Next.Runtime.Resources.Configure(Algorithm);
-    block.Workspace.SetAlgorithmRunning(true);
-    if (!startedHere) runsBefore = new HashSet<IRun>(Algorithm.Runs, ReferenceEqualityComparer.Instance);
+    block.Workspace.SetAlgorithmRunning(block, this, true);
+    if (!startedHere) {
+      // a new quick batch run (a paused one is resumed instead)
+      runsBefore = new HashSet<IRun>(Algorithm.Runs, ReferenceEqualityComparer.Instance);
+      batchSize = Math.Max(1, block.Workspace.QuickBatchSize);
+    }
     startedHere = true;
-    execution = Task.Run(() => Algorithm.Start(CancellationToken.None));
+    stopPressed = false;
+    execution = Task.Run(RunBatch);
     timer.Start();
     Tick();
   }
+
+  /// <summary>Runs made by the quick batch run started here so far.</summary>
+  private int BatchRunsMade => runsBefore == null ? 0 : Algorithm.Runs.Count(r => !runsBefore.Contains(r));
+
+  /// <summary>
+  /// A quick batch run: the algorithm runs again and again (prepared anew, keeping its runs; with SetSeedRandomly each
+  /// run gets its own seed) until it made <see cref="batchSize"/> runs. A pause leaves it (Start resumes it), as do
+  /// Stop and a failure.
+  /// </summary>
+  private void RunBatch() {
+    while (true) {
+      Algorithm.Start(CancellationToken.None);
+      if (Algorithm.ExecutionState == ExecutionState.Paused || stopPressed || BatchRunsMade >= batchSize) return;
+      Algorithm.Prepare(clearRuns: false);
+      if (Algorithm.ExecutionState != ExecutionState.Prepared) return;
+      HeuristicLab.Next.Runtime.Resources.Configure(Algorithm);
+    }
+  }
+
+  /// <summary>The quick batch run's size: the one in use while it runs (or is paused), else the Options tab's.</summary>
+  public string BatchSizeText => (startedHere ? batchSize : block.Workspace.QuickBatchSize).ToString(CultureInfo.InvariantCulture);
+
+  /// <summary>"QBR: run 3 of 10" while a quick batch run started here goes on.</summary>
+  public string? BatchProgress => startedHere && execution is { IsCompleted: false } ? $"Quick batch run: run {Math.Min(BatchRunsMade + 1, batchSize)} of {batchSize}" : null;
   private bool CanStart() => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Paused or ExecutionState.Stopped
-                             && Algorithm.Problem != null && !block.Workspace.IsRunningExperiments
+                             && Algorithm.Problem != null && !ExperimentRuns
                              && (execution == null || execution.IsCompleted || Algorithm.ExecutionState == ExecutionState.Paused);
 
   [RelayCommand(CanExecute = nameof(IsStarted))]
   private void Pause() => Algorithm.Pause();
   // while an experiment runs the algorithm, the experiment's Stop controls it
-  private bool IsStarted() => Algorithm.ExecutionState == ExecutionState.Started && !block.Workspace.IsRunningExperiments;
+  private bool IsStarted() => Algorithm.ExecutionState == ExecutionState.Started && !ExperimentRuns;
 
   [RelayCommand(CanExecute = nameof(CanStop))]
   private void Stop() {
+    stopPressed = true;
     block.StopRequested();
     Algorithm.Stop();
   }
-  private bool CanStop() => Algorithm.ExecutionState is ExecutionState.Started or ExecutionState.Paused && !block.Workspace.IsRunningExperiments;
+  private bool CanStop() => Algorithm.ExecutionState is ExecutionState.Started or ExecutionState.Paused && !ExperimentRuns;
 
   [RelayCommand(CanExecute = nameof(CanPrepare))]
   private void Prepare() {
     Algorithm.Prepare(clearRuns: false);
     Tick();
   }
-  private bool CanPrepare() => Algorithm.ExecutionState is ExecutionState.Stopped or ExecutionState.Paused && !block.Workspace.IsRunningExperiments;
+  private bool CanPrepare() => Algorithm.ExecutionState is ExecutionState.Stopped or ExecutionState.Paused && !ExperimentRuns;
 
   private bool HasBreakpoints() =>
     ItemInspector.GraphOf(Algorithm) is OperatorGraph g && Operators(g, []).Any(o => o.Breakpoint);
@@ -305,6 +346,8 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   private void Tick() {
     OnPropertyChanged(nameof(State));
     OnPropertyChanged(nameof(ExecutionTime));
+    OnPropertyChanged(nameof(BatchProgress));
+    OnPropertyChanged(nameof(BatchSizeText));
     OnPropertyChanged(nameof(CanEdit));
     SyncEditability();
     StartCommand.NotifyCanExecuteChanged();
@@ -324,12 +367,15 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
         // paused (e.g. at a breakpoint) still counts as running for the workspace: the tree stays locked
         bool paused = Algorithm.ExecutionState == ExecutionState.Paused;
         startedHere = paused;
-        block.Workspace.SetAlgorithmRunning(paused);
-        if (paused) Message = "Paused (breakpoint or Pause). Start resumes.";
-        else {
-          int made = MoveSingleRuns();
+        if (paused) {
+          block.Workspace.SetAlgorithmRunning(block, this, true);
+          Message = "Paused (breakpoint or Pause). Start resumes.";
+        } else {
+          // the runs become a quick batch run first, then the experiment is free again (the Runs and Results tabs read them)
+          int made = MoveQuickBatchRuns();
+          block.Workspace.SetAlgorithmRunning(block, this, false);
           block.Workspace.NotifyFinished($"{block.Name} finished",
-            $"{(execution is { IsFaulted: true } ? "Failed" : State)} after {ExecutionTime}, {made} single run{(made == 1 ? "" : "s")}");
+            $"{(execution is { IsFaulted: true } ? "Failed" : State)}: a quick batch run of {made} run{(made == 1 ? "" : "s")}");
         }
       }
     }
@@ -337,21 +383,36 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
 
   /// <summary>
   /// The runs this Start made leave the experiment tree (HeuristicLab passes the removal on to the batch run,
-  /// time-limit run and experiment) and become the experiment's single runs.
+  /// time-limit run and experiment) and become one quick batch run of the experiment ("QBR k").
   /// </summary>
-  private int MoveSingleRuns() {
+  private int MoveQuickBatchRuns() {
     var made = Algorithm.Runs.Where(r => runsBefore?.Contains(r) != true).ToList();
     runsBefore = null;
     if (made.Count == 0 || block.Root is not { } experiment) return made.Count;
     Algorithm.Runs.RemoveRange(made);
-    experiment.SingleRuns.Add(made);
+    int k = experiment.QuickBatchRuns.Add(made);
     block.MarkModified();
     Runs.Invalidate();
     Runs.Refresh();
     block.RefreshCounts();
-    Message = made.Count == 1 ? "The run is a single run: Runs and Results tabs, \"Single runs\"."
-      : $"The {made.Count} runs are single runs: Runs and Results tabs, \"Single runs\".";
+    Message = $"QBR {k} ({made.Count} run{(made.Count == 1 ? "" : "s")}): Runs and Results tabs, \"Quick batch runs\".";
     return made.Count;
+  }
+
+  /// <summary>
+  /// The algorithm was prepared, started, paused or stopped (also by an experiment, or by a problem change): the state
+  /// shown and the buttons follow - they were only read by the detail's own timer, so a change made elsewhere stayed
+  /// unseen (a new algorithm showed "Stopped" and no Start after it had been prepared).
+  /// </summary>
+  internal void ExecutionStateChanged() {
+    OnPropertyChanged(nameof(State));
+    OnPropertyChanged(nameof(ExecutionTime));
+    OnPropertyChanged(nameof(CanEdit));
+    SyncEditability();
+    StartCommand.NotifyCanExecuteChanged();
+    PauseCommand.NotifyCanExecuteChanged();
+    StopCommand.NotifyCanExecuteChanged();
+    PrepareCommand.NotifyCanExecuteChanged();
   }
 
   /// <summary>Called when the workspace's run state changes.</summary>

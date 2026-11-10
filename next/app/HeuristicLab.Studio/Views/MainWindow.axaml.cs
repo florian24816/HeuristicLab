@@ -27,12 +27,14 @@ public partial class MainWindow : Window
             subscribed.ResultsWindowRequested -= ShowResultsWindow;
             subscribed.ResultsWindowCloseRequested -= CloseResultsWindow;
             subscribed.ActivateRequested -= Activate;
+            subscribed.RunAnalysis.RunWindows.Requested -= ShowRunWindow;
         }
         subscribed = DataContext as MainViewModel;
         if (subscribed != null) {
             subscribed.ResultsWindowRequested += ShowResultsWindow;
             subscribed.ResultsWindowCloseRequested += CloseResultsWindow;
             subscribed.ActivateRequested += Activate;
+            subscribed.RunAnalysis.RunWindows.Requested += ShowRunWindow;
         }
     }
 
@@ -112,7 +114,7 @@ public partial class MainWindow : Window
         main.Dock(results, index);
     }
 
-    // ---- closing the main window while results windows are open: asked first, as "Close windows" does
+    // ---- closing the main window while results windows are open: asked first, as "Close all result windows" does
 
     private bool closeConfirmed;
 
@@ -125,6 +127,32 @@ public partial class MainWindow : Window
         closeConfirmed = true;
         foreach (var window in windows.Values.ToArray()) window.Close();
         Close();
+    }
+
+    // ---- run windows (shared by all Results tabs; not owned, so they can go to another screen)
+
+    private readonly List<RunWindow> runWindows = [];
+
+    /// <summary>The open run windows (tests).</summary>
+    public IReadOnlyList<RunWindow> RunWindows => runWindows;
+
+    private void ShowRunWindow(RunWindowViewModel run)
+    {
+        if (subscribed is not { } main) return;
+        var window = new RunWindow(run);
+        runWindows.Add(window);
+        window.Closed += (_, _) => {
+            runWindows.Remove(window);
+            main.RunAnalysis.RunWindows.Closed(run);
+        };
+        window.Show();
+    }
+
+    /// <summary>Run windows close with the main window.</summary>
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        subscribed?.CloseAllRunWindows();
     }
 
     private void CloseResultsWindow(ResultsWindowViewModel results)

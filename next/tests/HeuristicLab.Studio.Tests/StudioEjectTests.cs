@@ -116,10 +116,16 @@ public class StudioEjectTests {
         unsavedWindow.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-eject-unsaved.png"));
         unsavedWindow.Close();
 
-        // not while anything runs
-        ws.SetAlgorithmRunning(true);
-        Assert.IsFalse(ws.EjectCommand.CanExecute(null));
-        ws.SetAlgorithmRunning(false);
+        // an experiment that runs is not ejected; the others can be
+        var busy = ws.AllBlocks().OfType<AlgorithmBlockViewModel>().First();
+        var key = new object();
+        ws.SetAlgorithmRunning(busy, key, true);
+        Assert.IsTrue(busy.Root!.IsLocked);
+        Assert.IsTrue(ws.EjectCommand.CanExecute(null), "the others can be ejected");
+        Assert.AreEqual(0, (await ws.EjectAsync([busy.Root], autosave: true)).Count);
+        Assert.IsTrue(ws.Experiments.Contains(busy.Root), "it runs: it stays");
+        ws.SetAlgorithmRunning(busy, key, false);
+        Assert.IsFalse(busy.Root.IsLocked);
         Assert.IsTrue(ws.EjectCommand.CanExecute(null));
 
         // cancelled: nothing happens

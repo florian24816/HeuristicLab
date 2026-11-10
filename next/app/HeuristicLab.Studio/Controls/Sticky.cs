@@ -40,6 +40,8 @@ public class Sticky : Border {
   private void OnScrollChanged(object? sender, ScrollChangedEventArgs e) => Update();
 
   private void Update() {
+    // most cells stick to nothing (a wide table has thousands): nothing to do for them while scrolling
+    if (!StickX && !StickY && RenderTransform == null) return;
     var offset = scroll?.Offset ?? default;
     double x = StickX ? offset.X : 0, y = StickY ? offset.Y : 0;
     RenderTransform = x == 0 && y == 0 ? null : new TranslateTransform(x, y);

@@ -50,14 +50,41 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   /// <summary>One of several blocks picked to move together (Ctrl+click or a rectangle); shown inverted.</summary>
   [ObservableProperty]
   public partial bool IsPicked { get; set; }
+
+  partial void OnIsPickedChanged(bool value) {
+    PickChanged(value);
+    Workspace.PicksChanged();
+  }
+
+  /// <summary>An algorithm's problem is picked along with it (shown picked too).</summary>
+  protected virtual void PickChanged(bool value) { }
+
+  /// <summary>Under the rectangle being drawn (it would be picked when let go): a blue frame, not yet inverted.</summary>
+  [ObservableProperty]
+  public partial bool IsBandCovered { get; set; }
+
+  /// <summary>This block is one of several picked ones: its menu acts on all of them.</summary>
+  protected bool InPickedGroup => Workspace.PickedGroup() is { Count: > 1 } group && group.Contains(ExperimentWorkspaceViewModel.Movable(this)!);
   public abstract INamedItem Item { get; }
   /// <summary>What kind of block this is, e.g. "Batch Run" or "Traveling Salesman Problem".</summary>
   public string Kind => Item.ItemName;
 
+  /// <summary>
+  /// Whether this block can change now: not while its experiment runs (an experiment run, a quick batch run or detailed
+  /// analysis of one of its algorithms); blocks of other experiments can.
+  /// </summary>
+  public bool IsEditable => Workspace.CanChange(this);
+
+  /// <summary>Its experiment started or stopped running: editing, its menu and the add buttons follow.</summary>
+  internal void RefreshEditable() {
+    OnPropertyChanged(nameof(IsEditable));
+    RefreshMenu();
+  }
+
   public string Name {
     get => Item.Name;
     set {
-      if (!Workspace.IsEditable) {
+      if (!IsEditable) {
         OnPropertyChanged();  // nothing changes while experiments run
         return;
       }
@@ -112,7 +139,15 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   public partial bool IsEditingName { get; set; }
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(ShowsSelection))]
   public partial bool IsSelected { get; set; }
+
+  /// <summary>The block's own orange layer; an algorithm with a problem has one over its whole row instead.</summary>
+  public virtual bool ShowsSelection => IsSelected;
+
+  partial void OnIsSelectedChanged(bool value) => SelectionChanged();
+
+  protected virtual void SelectionChanged() { }
 
   /// <summary>Parameters shown in the details panel (algorithms and problems).</summary>
   public IReadOnlyList<ParameterRowViewModel> Parameters =>
@@ -128,7 +163,7 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [RelayCommand]
   private void Rename() {
     Workspace.Selected = this;
-    if (Workspace.IsEditable) IsEditingName = true;
+    if (IsEditable) IsEditingName = true;
   }
 
   [RelayCommand]
@@ -140,15 +175,29 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [RelayCommand]
   private Task CopyManyAsync() => Workspace.CopyManyAsync(this);
 
-  /// <summary>"Copy" and "Copy n times..." where a copy can go next to the block.</summary>
+  [RelayCommand]
+  private Task DeleteSelectedAsync() => Workspace.DeleteSelectedAsync();
+
+  [RelayCommand]
+  private void CopySelected() => Workspace.CopySelected(1);
+
+  [RelayCommand]
+  private Task CopySelectedManyAsync() => Workspace.CopySelectedManyAsync();
+
+  /// <summary>"Copy" and "Copy n times..." where a copy can go next to the block; for several picked blocks the same for all of them.</summary>
   protected IReadOnlyList<MenuChoice> CopyMenu =>
-    Workspace.IsEditable && Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
+    !IsEditable ? []
+    : InPickedGroup ? (Workspace.CanCopySelected() ? [new("Copy selected items", CopySelectedCommand), new("Copy selected items n times...", CopySelectedManyCommand)] : [])
+    : Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
 
   /// <summary>Context menu of the block (while experiments run only what changes nothing).</summary>
   public virtual IReadOnlyList<MenuChoice> Menu => EditMenu;
 
   /// <summary>Rename and Delete, if the tree can be changed now.</summary>
-  protected IReadOnlyList<MenuChoice> EditMenu => Workspace.IsEditable ? [new("Rename", RenameCommand), new("Delete", DeleteCommand)] : [];
+  protected IReadOnlyList<MenuChoice> EditMenu =>
+    !IsEditable ? []
+    : InPickedGroup ? [new("Rename", RenameCommand), new("Delete selected items", DeleteSelectedCommand)]
+    : [new("Rename", RenameCommand), new("Delete", DeleteCommand)];
 
   public void RefreshLabel() => OnPropertyChanged(nameof(Label));
 
@@ -252,7 +301,7 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   public string RepetitionsText {
     get => (Optimizer as BatchRun)?.Repetitions.ToString(CultureInfo.InvariantCulture) ?? "";
     set {
-      if (Optimizer is not BatchRun b || !Workspace.IsEditable) return;
+      if (Optimizer is not BatchRun b || !IsEditable) return;
       if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= 1) {
         b.Repetitions = n;
         MarkModified();
@@ -266,7 +315,7 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   public string TimeLimitText {
     get => Optimizer is TimeLimitRun t ? ExperimentWorkspaceViewModel.FormatDuration(t.MaximumExecutionTime) : "";
     set {
-      if (Optimizer is not TimeLimitRun t || !Workspace.IsEditable) return;
+      if (Optimizer is not TimeLimitRun t || !IsEditable) return;
       if (ExperimentWorkspaceViewModel.ParseDuration(value) is TimeSpan limit && limit > TimeSpan.Zero) {
         t.MaximumExecutionTime = limit;
         MarkModified();
@@ -286,8 +335,8 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
     : ContainerBlockViewModel(workspace, null, experiment) {
   public Experiment Experiment { get; } = experiment;
 
-  /// <summary>Runs made by Start on one of its algorithms, kept apart from the experiment's runs (Runs/Results: "Single runs").</summary>
-  public SingleRuns SingleRuns { get; } = new();
+  /// <summary>Runs made by Start on one of its algorithms, kept apart from the experiment's runs (Runs/Results: "Quick batch runs").</summary>
+  public QuickBatchRuns QuickBatchRuns { get; } = new();
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(IsSaved), nameof(StatePictogram), nameof(StateTip), nameof(IsStateClickable), nameof(HasFile), nameof(Menu))]
@@ -323,6 +372,11 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   [ObservableProperty]
   public partial bool IsRunning { get; set; }
 
+  /// <summary>It runs (started with the start buttons) or one of its algorithms does (quick batch run, detailed analysis): nothing in it changes.</summary>
+  public bool IsLocked => IsRunning || Workspace.RunsAlgorithmIn(this);
+
+  internal void RefreshLocked() => OnPropertyChanged(nameof(IsLocked));
+
   /// <summary>Why the experiment cannot start yet (empty when ready).</summary>
   [ObservableProperty]
   public partial string Missing { get; set; } = "";
@@ -339,7 +393,7 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   private Task RenameFileAsync() => Workspace.RenameFileAsync(this);
   public bool HasFile => FilePath != null;
 
-  public override IReadOnlyList<MenuChoice> Menu => Workspace.IsEditable
+  public override IReadOnlyList<MenuChoice> Menu => IsEditable
     ? [new("Save as...", SaveCommand), .. FilePath != null ? [new MenuChoice("Rename file...", RenameFileCommand)] : Array.Empty<MenuChoice>(),
        new("Show runs", ShowRunsCommand), new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)]
     : [new("Show runs", ShowRunsCommand)];
@@ -375,6 +429,7 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
 
   private void StatusChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() => {
     RefreshStatus();
+    detail?.ExecutionStateChanged();
     MarkModified();  // results and runs are part of the saved file
   });
 
@@ -429,10 +484,26 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
   }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(HasProblem), nameof(Menu))]
+  [NotifyPropertyChangedFor(nameof(HasProblem), nameof(Menu), nameof(ShowsSelection), nameof(IsRowSelected))]
   public partial ProblemBlockViewModel? Problem { get; set; }
 
   public bool HasProblem => Problem != null;
+
+  /// <summary>
+  /// The algorithm or its problem selected: one orange layer covers the algorithm, the line and the problem (user's
+  /// requests 2026-11-03 / 2026-11-11).
+  /// </summary>
+  public bool IsRowSelected => HasProblem && (IsSelected || Problem!.IsSelected);
+
+  public override bool ShowsSelection => IsSelected && !HasProblem;
+
+  protected override void SelectionChanged() => RowSelectionChanged();
+
+  internal void RowSelectionChanged() => OnPropertyChanged(nameof(IsRowSelected));
+
+  protected override void PickChanged(bool value) {
+    if (Problem != null && Problem.IsPicked != value) Problem.IsPicked = value;
+  }
 
   [RelayCommand]
   private Task ChooseProblemAsync() => Workspace.ChooseProblemAsync(this);
@@ -456,11 +527,11 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
 
   public string ParametersText => $"Parameters ({ItemInspector.Parameters(Algorithm).Count})";
   public string ResultsText => $"Results ({Algorithm.Results.Count})";
-  /// <summary>Its runs in the experiment, and its single runs (made by its own Start) if it has any.</summary>
+  /// <summary>Its runs in the experiment, and the runs of its quick batch runs (made by its own Start) if it has any.</summary>
   public string RunsText {
     get {
-      int single = Root?.SingleRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs.Count ?? 0;
-      return single == 0 ? $"Runs ({Algorithm.Runs.Count})" : $"Runs ({Algorithm.Runs.Count}, {single} single)";
+      int qbr = Root?.QuickBatchRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs.Count ?? 0;
+      return qbr == 0 ? $"Runs ({Algorithm.Runs.Count})" : $"Runs ({Algorithm.Runs.Count}, {qbr} in QBRs)";
     }
   }
 
@@ -482,7 +553,7 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
   private void ShowRuns() => Workspace.ShowRuns(this);
 
   public override IReadOnlyList<MenuChoice> Menu =>
-    [.. Workspace.IsEditable ? [new MenuChoice(HasProblem ? "Change problem..." : "Add problem...", ChooseProblemCommand)] : Array.Empty<MenuChoice>(),
+    [.. IsEditable ? [new MenuChoice(HasProblem ? "Change problem..." : "Add problem...", ChooseProblemCommand)] : Array.Empty<MenuChoice>(),
      new("Show runs", ShowRunsCommand), .. CopyMenu, .. EditMenu];
 
   internal void SetProblem(IProblem? problem) {
@@ -497,7 +568,7 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
         // only re-preparing is skipped, and setting a new problem parameterizes everything again
       }
     }
-    Problem = problem == null ? null : new ProblemBlockViewModel(Workspace, this, problem);
+    Problem = problem == null ? null : new ProblemBlockViewModel(Workspace, this, problem) { IsPicked = IsPicked };
     detail?.RefreshProblem();
     MarkModified();
     RefreshStatus();
@@ -513,6 +584,11 @@ public partial class ProblemBlockViewModel(ExperimentWorkspaceViewModel workspac
   public override string Pictogram => "Problem_logo";
   public override bool FixedWidth => true;
 
+  /// <summary>Selected, the problem is covered by its algorithm's row layer (AlgorithmBlockViewModel.IsRowSelected).</summary>
+  public override bool ShowsSelection => false;
+
+  protected override void SelectionChanged() => Owner.RowSelectionChanged();
+
   /// <summary>"TSP: ch130": the abbreviation of the problem type (if it has one) and the instance name.</summary>
   public override string Label {
     get {
@@ -525,6 +601,17 @@ public partial class ProblemBlockViewModel(ExperimentWorkspaceViewModel workspac
   [RelayCommand]
   private Task ChangeAsync() => Workspace.ChooseProblemAsync(Owner);
 
+  [RelayCommand]
+  private Task ChangeSelectedAsync() => Workspace.ChangeSelectedProblemsAsync();
+
+  /// <summary>
+  /// Only problems picked (without their algorithms): change or remove all of them; picked with its algorithm among
+  /// several: the menu of the picked blocks; else this problem's own.
+  /// </summary>
   public override IReadOnlyList<MenuChoice> Menu =>
-    Workspace.IsEditable ? [new("Change problem...", ChangeCommand), new("Rename", RenameCommand), new("Remove problem", DeleteCommand)] : [];
+    !IsEditable ? []
+    : IsPicked && !Owner.IsPicked && Workspace.OnlyProblemsPicked()
+      ? [new("Change selected problem blocks to...", ChangeSelectedCommand), new("Remove selected problems", DeleteSelectedCommand)]
+    : InPickedGroup ? [.. CopyMenu, .. EditMenu]
+    : [new("Change problem...", ChangeCommand), new("Rename", RenameCommand), new("Remove problem", DeleteCommand)];
 }

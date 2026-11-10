@@ -18,6 +18,10 @@ public sealed class StudioSettings {
   public bool DarkMode { get; set; }
   /// <summary>Notifications (the button next to it): a message in the system's notification center when started runs finish.</summary>
   public bool Notifications { get; set; }
+  /// <summary>Options tab: how many runs Start on one algorithm makes (a quick batch run).</summary>
+  public int QuickBatchSize { get; set; } = 10;
+  /// <summary>Options tab: where every file dialog opens (null: wherever the system opens it).</summary>
+  public string? WorkingDirectory { get; set; }
 }
 
 public interface ISettingsStore {

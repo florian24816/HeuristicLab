@@ -164,7 +164,9 @@ public class StudioMultiSelectTests {
       var top = rowA.TranslatePoint(new Point(0, -2), window)!.Value.Y;
       var bottom = rowC.TranslatePoint(new Point(rowC.Bounds.Width + 30, rowC.Bounds.Height + 2), window)!.Value;
       Sweep(window, new Point(left, top), bottom);
-      CollectionAssert.AreEquivalent(new[] { "A", "C" }, ws.AllBlocks().Where(x => x.IsPicked).Select(x => x.Name).ToList());
+      CollectionAssert.AreEquivalent(new[] { "A", "C" }, ws.PickedGroup().Select(x => x.Name).ToList());
+      Assert.IsTrue(ws.AllBlocks().OfType<ProblemBlockViewModel>().Where(p => p.IsPicked).Select(p => p.Owner.Name).Order()
+        .SequenceEqual(new[] { "A", "C" }), "their problems picked along");
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-band.png"));
       ws.ClearPicks();
       // ---- Results tab: select sources (click, Ctrl+click), then tick / untick / only them
@@ -179,7 +181,39 @@ public class StudioMultiSelectTests {
       CollectionAssert.AreEquivalent(new[] { first.Name, second.Name }, selected);
       Assert.AreEqual(Color.Parse("#1E1E1E"), Fill(Row(first.Name)), "selected sources inverted");
       Assert.IsTrue(analysis.OnlySelectedCommand.CanExecute(null));
-      analysis.TickSelectedCommand.Execute(null);
+      // the same with a rectangle, as in the Experiments tab: a blue frame while it is drawn, inverted when let go
+      var tree = window.GetVisualDescendants().OfType<TreeView>().First(x => x.Name == "SourceTree" && x.IsEffectivelyVisible);
+      Click(window, tree.TranslatePoint(new Point(tree.Bounds.Width / 2, tree.Bounds.Height - 30), window)!.Value);
+      Assert.IsFalse(analysis.AllSourceNodes.Any(s => s.IsSelected), "a click on empty space clears the selection");
+      var from = Center(Row(first.Name), window);
+      var to = Center(Row(second.Name), window);
+      window.MouseDown(from, MouseButton.Left);
+      window.MouseMove(new Point(from.X + 2, (from.Y + to.Y) / 2), RawInputModifiers.LeftMouseButton);
+      window.MouseMove(to, RawInputModifiers.LeftMouseButton);
+      Pump();
+      Assert.IsTrue(Row(second.Name).Classes.Contains("bandcovered"));
+      Assert.AreEqual(Color.Parse("#2E6FD8"), ((ISolidColorBrush)Row(second.Name).BorderBrush!).Color);
+      Assert.IsFalse(analysis.AllSourceNodes.Single(s => s.Name == second.Name).IsSelected, "not selected before it is let go");
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-sources-band.png"));
+      window.MouseUp(to, MouseButton.Left);
+      Pump();
+      Assert.IsFalse(Row(second.Name).Classes.Contains("bandcovered"));
+      selected = analysis.AllSourceNodes.Where(s => s.IsSelected).Select(s => s.Name).ToList();
+      Assert.IsTrue(selected.Contains(first.Name) && selected.Contains(second.Name), string.Join(", ", selected));
+      // the right-click menu ticks them (no buttons for it any more)
+      Assert.IsFalse(window.GetVisualDescendants().OfType<Button>().Any(x => x.Content as string == "Tick selected"));
+      window.MouseDown(Center(Row(second.Name), window), MouseButton.Right);
+      window.MouseUp(Center(Row(second.Name), window), MouseButton.Right);
+      Pump();
+      var resultsView = window.GetVisualDescendants().OfType<RunAnalysisView>().First(x => x.IsEffectivelyVisible);
+      var menu = resultsView.Menu!;
+      Assert.IsTrue(menu.IsOpen);
+      CollectionAssert.AreEqual(new[] { "Tick selected", "Untick selected", "Only selected" }, menu.Items.Cast<MenuItem>().Select(m => m.Header as string).ToList());
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-sources-menu.png"));
+      menu.Items.Cast<MenuItem>().First().Command!.Execute(null);
+      menu.Close();
+      Click(window, Center(Row(first.Name), window));
+      Click(window, Center(Row(second.Name), window), RawInputModifiers.Control);
       Assert.AreEqual(true, analysis.Sources.First(s => s.Name == first.Name).IsChecked);
       Assert.AreEqual(true, analysis.Sources.First(s => s.Name == second.Name).IsChecked);
       int both = analysis.Table.Rows.Count;
@@ -199,6 +233,82 @@ public class StudioMultiSelectTests {
       Assert.IsTrue(analysis.Sources.First(s => s.Name == second.Name).IsSelected);
       Assert.IsFalse(analysis.Sources.First(s => s.Name == first.Name).IsSelected);
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-results.png"));
+      window.Close();
+      return true;
+    }, CancellationToken.None);
+  }
+
+  [TestMethod]
+  [Timeout(300_000)]
+  public async Task PickedBlocksStayInOneExperimentAndShareTheMenu() {
+    await session.Dispatch(() => {
+      var vm = new MainViewModel(null, new Dialogs());
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+      window.Show();
+      var ga = Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!;
+      var first = ws.NewExperiment();
+      var a = ws.AddAlgorithm(first, ga);
+      var b = ws.AddAlgorithm(first, ga);
+      var second = ws.NewExperiment();
+      var c = ws.AddAlgorithm(second, ga);
+      a.Name = "A"; b.Name = "B"; c.Name = "C";
+      ws.Selected = null;
+      Pump();
+      Border Name(BlockViewModel block) => window.GetVisualDescendants().OfType<Border>()
+        .First(x => x.Classes.Contains("name") && x.DataContext == block && x.IsEffectivelyVisible);
+
+      // a rectangle started in the first experiment, swept down over the second: only the first's blocks
+      var area = window.GetVisualDescendants().OfType<Border>().First(x => x.Classes.Contains("experiment") && x.DataContext == first);
+      var start = area.TranslatePoint(new Point(4, Name(a).TranslatePoint(new Point(0, -3), area)!.Value.Y), window)!.Value;
+      var end = Name(c).TranslatePoint(new Point(Name(c).Bounds.Width + 30, Name(c).Bounds.Height + 3), window)!.Value;
+      window.MouseDown(start, MouseButton.Left);
+      window.MouseMove(new Point((start.X + end.X) / 2, (start.Y + end.Y) / 2), RawInputModifiers.LeftMouseButton);
+      window.MouseMove(end, RawInputModifiers.LeftMouseButton);
+      Pump();
+      // while it is drawn: what it would pick has a blue frame, nothing is inverted yet
+      Assert.IsTrue(a.IsBandCovered && b.IsBandCovered && !c.IsBandCovered, "not the other experiment's block");
+      Assert.IsFalse(a.IsPicked);
+      Assert.AreEqual(Color.Parse("#2E6FD8"), ((ISolidColorBrush)Name(a).BorderBrush!).Color);
+      Assert.AreNotEqual(Color.Parse("#1E1E1E"), Fill(Name(a)), "not inverted while hovering");
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-band-hover.png"));
+      window.MouseUp(end, MouseButton.Left);
+      Pump();
+      CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+      Assert.IsFalse(a.IsBandCovered);
+      Assert.AreEqual(Color.Parse("#1E1E1E"), Fill(Name(a)), "picked: inverted");
+
+      // Ctrl+click in the other experiment starts anew there
+      Click(window, Center(Name(c), window), RawInputModifiers.Control);
+      CollectionAssert.AreEquivalent(new[] { c }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+
+      // a plain click on a picked block ends picking several: only that one is selected
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
+      Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Assert.IsTrue(a.IsPicked && b.IsPicked);
+      Click(window, Center(Name(a), window));
+      Assert.IsFalse(ws.AllBlocks().Any(x => x.IsPicked), "a plain click unselects them");
+      Assert.AreSame(a, ws.Selected);
+
+      // two picked: the menu acts on all of them (B first: two quick clicks on A would be a double click)
+      Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
+      CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+      var menu = a.Menu.Select(m => m.Display).ToList();
+      CollectionAssert.IsSubsetOf(new[] { "Delete selected items", "Copy selected items", "Copy selected items n times..." }, menu);
+      CollectionAssert.DoesNotContain(menu, "Delete");
+      CollectionAssert.Contains(c.Menu.Select(m => m.Display).ToList(), "Delete", "a block not picked keeps its own menu");
+      a.Menu.Single(m => m.Display == "Copy selected items").Command.Execute(null);
+      Pump();
+      CollectionAssert.AreEqual(new[] { "A", "A (copy 1)", "B", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
+      Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
+      Assert.IsTrue(a.IsPicked && b.IsPicked);
+      a.Menu.Single(m => m.Display == "Delete selected items").Command.Execute(null);
+      Pump();
+      CollectionAssert.AreEqual(new[] { "A (copy 1)", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
+      CollectionAssert.AreEqual(new[] { "C" }, second.Children.Select(x => x.Name).ToList());
+      Assert.IsFalse(ws.AllBlocks().Any(x => x.IsPicked));
       window.Close();
       return true;
     }, CancellationToken.None);

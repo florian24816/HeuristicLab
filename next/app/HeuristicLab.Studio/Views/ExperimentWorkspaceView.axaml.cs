@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -19,6 +20,8 @@ public partial class ExperimentWorkspaceView : UserControl {
   // picking blocks with a rectangle: where it started (in the band layer), whether Ctrl adds to the picked ones
   private Point? bandStart;
   private bool bandAdds;
+  // the experiment the rectangle started in: it picks blocks of that one only (null: the first block's)
+  private ExperimentBlockViewModel? bandExperiment;
 
   public ExperimentWorkspaceView() {
     InitializeComponent();
@@ -101,38 +104,57 @@ public partial class ExperimentWorkspaceView : UserControl {
       if (v is Button or ToggleButton or TextBox) return;
     var layer = this.FindControl<Canvas>("BandLayer")!;
     bandStart = e.GetPosition(layer);
+    bandExperiment = ExperimentAt(bandStart.Value);
     bandAdds = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
     e.Pointer.Capture(this);
   }
 
   private void UpdateBand(Point at) {
-    var layer = this.FindControl<Canvas>("BandLayer")!;
     var band = this.FindControl<Border>("Band")!;
-    if (bandStart is not { } start) return;
+    if (bandStart is not { } start || Workspace is not { } workspace) return;
     var rect = new Rect(start, at).Normalize();
     Canvas.SetLeft(band, rect.X);
     Canvas.SetTop(band, rect.Y);
     band.Width = rect.Width;
     band.Height = rect.Height;
     band.IsVisible = rect.Width > 3 || rect.Height > 3;
+    // what would be picked when let go: a blue frame on it already (inverted only once picked)
+    workspace.CoverWithBand(band.IsVisible ? workspace.InOneExperiment(Covered(rect), bandExperiment) : null);
+  }
+
+  /// <summary>The blocks the rectangle touches (in band layer coordinates).</summary>
+  private IEnumerable<BlockViewModel> Covered(Rect rect) {
+    var layer = this.FindControl<Canvas>("BandLayer")!;
+    return this.GetVisualDescendants().OfType<Border>()
+      .Where(b => b.Classes.Contains("block") && b.IsEffectivelyVisible && b.DataContext is BlockViewModel)
+      .Where(b => b.TranslatePoint(default, layer) is { } p && new Rect(p, b.Bounds.Size).Intersects(rect))
+      .Select(b => (BlockViewModel)b.DataContext!);
+  }
+
+  /// <summary>The experiment whose area contains this point of the band layer (the rectangle picks only there).</summary>
+  private ExperimentBlockViewModel? ExperimentAt(Point point) {
+    var layer = this.FindControl<Canvas>("BandLayer")!;
+    return this.GetVisualDescendants().OfType<Border>()
+      .Where(b => b.Classes.Contains("experiment") && b.DataContext is ExperimentBlockViewModel && b.IsEffectivelyVisible)
+      .FirstOrDefault(b => b.TranslatePoint(default, layer) is { } p && new Rect(p, b.Bounds.Size).Contains(point))?.DataContext as ExperimentBlockViewModel;
   }
 
   private void EndBand(Point at) {
-    var layer = this.FindControl<Canvas>("BandLayer")!;
     var band = this.FindControl<Border>("Band")!;
     if (bandStart is not { } start || Workspace is not { } workspace) return;
     var rect = new Rect(start, at).Normalize();
     bandStart = null;
     band.IsVisible = false;
+    workspace.CoverWithBand(null);
     if (rect.Width <= 3 && rect.Height <= 3) {
-      if (!bandAdds) workspace.ClearPicks();  // a click on empty space
+      // a click on empty space: nothing picked, nothing selected
+      if (!bandAdds) {
+        workspace.ClearPicks();
+        workspace.Selected = null;
+      }
       return;
     }
-    var covered = this.GetVisualDescendants().OfType<Border>()
-      .Where(b => b.Classes.Contains("block") && b.IsEffectivelyVisible && b.DataContext is BlockViewModel)
-      .Where(b => b.TranslatePoint(default, layer) is { } p && new Rect(p, b.Bounds.Size).Intersects(rect))
-      .Select(b => (BlockViewModel)b.DataContext!);
-    workspace.Pick(covered, bandAdds);
+    workspace.Pick(Covered(rect), bandAdds, bandExperiment);
   }
 
   private void OnPointerMoved(object? sender, PointerEventArgs e) {
@@ -215,7 +237,8 @@ public partial class ExperimentWorkspaceView : UserControl {
       e.Handled = true;
       return;
     }
-    if (ExperimentWorkspaceViewModel.Movable(block) is not { IsPicked: true }) Workspace?.ClearPicks();
+    // a plain click (no drag: that is no tap) ends picking several, also on a picked block
+    Workspace?.ClearPicks();
     block.SelectCommand.Execute(null);
   }
 

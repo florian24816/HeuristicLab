@@ -13,14 +13,14 @@ namespace HeuristicLab.Studio.ViewModels;
 
 /// <summary>
 /// An experiment, batch run, time-limit run or algorithm of the workspace with its runs, or a part of the
-/// "Single runs" folder (all of them, an experiment's, an algorithm's).
+/// "Quick batch runs" folder (all of them, an experiment's, an algorithm's, one QBR).
 /// </summary>
 public sealed class RunsSourceViewModel(string name, string kind, object key, Func<IReadOnlyList<IRun>> runs) {
   public RunsSourceViewModel(string name, string kind, IOptimizer optimizer) : this(name, kind, optimizer, () => optimizer.Runs.ToArray()) { }
 
   public string Name { get; } = name;
   public string Kind { get; } = kind;
-  /// <summary>What it stands for (the optimizer, or a part of the single runs): kept selected over a refresh.</summary>
+  /// <summary>What it stands for (the optimizer, or a part of the quick batch runs): kept selected over a refresh.</summary>
   public object Key { get; } = key;
   public IOptimizer? Optimizer => Key as IOptimizer;
   public IReadOnlyList<IRun> Runs => runs();
@@ -73,23 +73,28 @@ public partial class RunsBrowserViewModel : ViewModelBase {
     var run = SelectedRun;
     Sources.Clear();
     foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment));
-    if (workspace.Experiments.Count > 0) Sources.Add(SingleRunsNode(workspace.Experiments));
+    if (workspace.Experiments.Count > 0) Sources.Add(QuickBatchRunsNode(workspace.Experiments));
     OnPropertyChanged(nameof(HasSources));
     SelectKey(selected, run);
   }
 
-  /// <summary>The key of the "Single runs" folder (all single runs of the workspace).</summary>
-  public static readonly object SingleRunsKey = new();
+  /// <summary>The key of the "Quick batch runs" folder (all quick batch runs of the workspace).</summary>
+  public static readonly object QuickBatchRunsKey = new();
+  public const string QuickBatchRunsName = "Quick batch runs";
 
-  /// <summary>"Single runs": runs made by Start on one algorithm, per experiment and algorithm.</summary>
-  internal static RunsSourceViewModel SingleRunsNode(IEnumerable<ExperimentBlockViewModel> experiments) {
+  /// <summary>"Quick batch runs": runs made by Start on one algorithm, per experiment, algorithm and QBR.</summary>
+  internal static RunsSourceViewModel QuickBatchRunsNode(IEnumerable<ExperimentBlockViewModel> experiments) {
     var list = experiments.ToList();
-    var folder = new RunsSourceViewModel("Single runs", "Started on one algorithm", SingleRunsKey,
-      () => list.SelectMany(e => e.SingleRuns.Runs).ToList());
-    foreach (var experiment in list.Where(e => e.SingleRuns.Count > 0)) {
-      var single = experiment.SingleRuns;
-      var node = new RunsSourceViewModel(experiment.Name, "Experiment", single, () => single.Runs.ToArray());
-      foreach (var group in single.Groups) node.Children.Add(new RunsSourceViewModel(group.Algorithm, "Algorithm", group, () => group.Runs));
+    var folder = new RunsSourceViewModel(QuickBatchRunsName, "Started on one algorithm", QuickBatchRunsKey,
+      () => list.SelectMany(e => e.QuickBatchRuns.Runs).ToList());
+    foreach (var experiment in list.Where(e => e.QuickBatchRuns.Count > 0)) {
+      var qbrs = experiment.QuickBatchRuns;
+      var node = new RunsSourceViewModel(experiment.Name, "Experiment", qbrs, () => qbrs.Runs.ToArray());
+      foreach (var group in qbrs.Groups) {
+        var algorithm = new RunsSourceViewModel(group.Algorithm, "Algorithm", group, () => group.Runs);
+        foreach (var batch in group.Batches) algorithm.Children.Add(new RunsSourceViewModel(batch.Name, "Quick batch run", batch, () => batch.Runs));
+        node.Children.Add(algorithm);
+      }
       folder.Children.Add(node);
     }
     return folder;
