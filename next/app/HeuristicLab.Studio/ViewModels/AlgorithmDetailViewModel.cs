@@ -52,6 +52,10 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
       .. block.Root?.QuickBatchRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs ?? []]);
     Analysis = new AnalysisViewModel(() => Algorithm, running => block.Workspace.SetAlgorithmRunning(block, Analysis!, running),
       status => block.Workspace.NotifyFinished($"Detailed analysis of {block.Name} finished", status));
+    // the QBR size shown follows the Options tab
+    block.Workspace.PropertyChanged += (_, e) => {
+      if (e.PropertyName == nameof(ExperimentWorkspaceViewModel.QuickBatchSize)) OnPropertyChanged(nameof(BatchSizeText));
+    };
     timer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => Tick());
     RefreshProblem();
   }
@@ -298,6 +302,9 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     }
   }
 
+  /// <summary>The quick batch run's size: the one in use while it runs (or is paused), else the Options tab's.</summary>
+  public string BatchSizeText => (startedHere ? batchSize : block.Workspace.QuickBatchSize).ToString(CultureInfo.InvariantCulture);
+
   /// <summary>"QBR: run 3 of 10" while a quick batch run started here goes on.</summary>
   public string? BatchProgress => startedHere && execution is { IsCompleted: false } ? $"Quick batch run: run {Math.Min(BatchRunsMade + 1, batchSize)} of {batchSize}" : null;
   private bool CanStart() => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Paused or ExecutionState.Stopped
@@ -340,6 +347,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     OnPropertyChanged(nameof(State));
     OnPropertyChanged(nameof(ExecutionTime));
     OnPropertyChanged(nameof(BatchProgress));
+    OnPropertyChanged(nameof(BatchSizeText));
     OnPropertyChanged(nameof(CanEdit));
     SyncEditability();
     StartCommand.NotifyCanExecuteChanged();

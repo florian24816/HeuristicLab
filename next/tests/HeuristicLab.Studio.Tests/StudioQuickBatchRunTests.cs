@@ -166,6 +166,48 @@ public class StudioQuickBatchRunTests {
 
   [TestMethod]
   [Timeout(300_000)]
+  public async Task QbrControlsAreOneRowOfSquareFields() {
+    await session.Dispatch(() => {
+      var vm = new MainViewModel(null, null);
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+      window.Show();
+      var experiment = ws.NewExperiment();
+      var ga = ws.AddAlgorithm(experiment, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
+      ws.SetProblem(ga, (IProblem)Setups.Create(new SetupRequest("GeneticAlgorithm") { Problem = "TravelingSalesmanProblem", Instance = "ch130" }).Algorithm.Problem!.Clone());
+      ws.Selected = ga;
+      Pump();
+      var title = window.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "QbrTitle" && p.IsEffectivelyVisible);
+      var fields = title.Children.OfType<Border>().ToList();
+      CollectionAssert.AreEqual(new[] { "Quick batch", "of", "10", "run" }, fields.Select(f => ((TextBlock)f.Child!).Text).ToList());
+      Assert.AreEqual(((Avalonia.Media.ISolidColorBrush)fields[0].Background!).Color, ((Avalonia.Media.ISolidColorBrush)fields[3].Background!).Color, "\"run\" looks like \"Quick batch\"");
+      Assert.AreNotEqual(((Avalonia.Media.ISolidColorBrush)fields[0].Background!).Color, ((Avalonia.Media.ISolidColorBrush)fields[1].Background!).Color, "\"of\" in another shade");
+      var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("exec") && b.IsEffectivelyVisible).ToList();
+      CollectionAssert.AreEqual(new[] { "▶ Start", "⏸ Pause", "⏹ Stop", "↺ Prepare" }, buttons.Select(b => (string)b.Content!).ToList());
+      foreach (var control in fields.Cast<Control>().Concat(buttons)) {
+        Assert.AreEqual(32, control.Bounds.Height, 0.5, "one height");
+        Assert.AreEqual(fields[0].TranslatePoint(default, window)!.Value.Y, control.TranslatePoint(default, window)!.Value.Y, 0.5, "one row");
+      }
+      Assert.IsTrue(buttons.All(b => b.CornerRadius == default), "no rounded corners");
+      Assert.IsTrue(fields.Last().TranslatePoint(default, window)!.Value.X < buttons[0].TranslatePoint(default, window)!.Value.X, "the title before the buttons");
+      // the size follows the Options tab
+      vm.Options.QuickBatchSize = 25;
+      Pump();
+      Assert.AreEqual("25", ((TextBlock)fields[2].Child!).Text);
+      vm.Options.QuickBatchSize = 10;
+      Pump();
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-qbr-controls.png"));
+      vm.IsDarkMode = true;
+      Pump();
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-qbr-controls-dark.png"));
+      vm.IsDarkMode = false;
+      window.Close();
+      return true;
+    }, CancellationToken.None);
+  }
+
+  [TestMethod]
+  [Timeout(300_000)]
   public async Task OptionsTabSetsTheSizeAndTheWorkingDirectory() {
     var folder = Path.Combine(Path.GetTempPath(), $"studio-options-{Guid.NewGuid():N}");
     Directory.CreateDirectory(folder);

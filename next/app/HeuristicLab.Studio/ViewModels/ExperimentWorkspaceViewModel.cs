@@ -161,7 +161,8 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   public partial ViewModelBase? Detail { get; set; }
 
   /// <summary>How many runs Start on one algorithm makes: a quick batch run (the Options tab).</summary>
-  public int QuickBatchSize { get; set; } = QuickBatchRuns.DefaultSize;
+  [ObservableProperty]
+  public partial int QuickBatchSize { get; set; } = QuickBatchRuns.DefaultSize;
 
   /// <summary>
   /// Anything runs (experiments, a quick batch run, a detailed analysis; also paused): live monitoring is on. Only the
