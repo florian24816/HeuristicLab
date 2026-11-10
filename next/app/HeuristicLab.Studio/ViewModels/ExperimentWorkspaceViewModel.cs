@@ -701,14 +701,19 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     return picked.Where(b => !picked.Any(other => other != b && other is ContainerBlockViewModel c && IsWithin(b, c))).ToList();
   }
 
+  /// <summary>What picking this block picks: a problem itself (its algorithm stays as it is), experiments nothing.</summary>
+  public static BlockViewModel? Pickable(BlockViewModel block) => block is ProblemBlockViewModel ? block : Movable(block);
+
   /// <summary>
-  /// Adds a block to the picked ones or takes it out (Ctrl+click); a problem stands for its algorithm, experiments are
-  /// not picked. Picked blocks belong to one experiment: a block of another one starts anew there.
+  /// Adds a block to the picked ones or takes it out (Ctrl+click); an algorithm takes its problem along, a problem alone
+  /// is picked without its algorithm (a problem picked with its algorithm goes with it); experiments are not picked.
+  /// Picked blocks belong to one experiment: a block of another one starts anew there.
   /// </summary>
   public void TogglePick(BlockViewModel block) {
-    if (Movable(block) is not { } movable) return;
-    if (!movable.IsPicked) foreach (var other in AllBlocks().Where(b => b.IsPicked && b.Root != movable.Root)) other.IsPicked = false;
-    movable.IsPicked = !movable.IsPicked;
+    if (Pickable(block) is not { } pickable) return;
+    if (pickable is ProblemBlockViewModel { Owner.IsPicked: true } problem) pickable = problem.Owner;
+    if (!pickable.IsPicked) foreach (var other in AllBlocks().Where(b => b.IsPicked && b.Root != pickable.Root)) other.IsPicked = false;
+    pickable.IsPicked = !pickable.IsPicked;
   }
 
   /// <summary>
@@ -719,21 +724,28 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     var chosen = InOneExperiment(blocks, within);
     var experiment = chosen.FirstOrDefault()?.Root ?? within;
     foreach (var block in AllBlocks()) {
-      bool on = chosen.Contains(block) || add && block.IsPicked && block.Root == experiment;
+      bool on = chosen.Contains(block) || block is ProblemBlockViewModel p && chosen.Contains(p.Owner)
+        || add && block.IsPicked && block.Root == experiment;
       if (block.IsPicked != on) block.IsPicked = on;
     }
   }
 
-  /// <summary>The movable blocks among these that belong to one experiment (the given one, else the first block's).</summary>
+  /// <summary>
+  /// The pickable blocks among these that belong to one experiment (the given one, else the first block's); a problem
+  /// whose algorithm is among them goes with it, a problem alone stays alone.
+  /// </summary>
   public HashSet<BlockViewModel> InOneExperiment(IEnumerable<BlockViewModel> blocks, ExperimentBlockViewModel? within) {
-    var movable = blocks.Select(Movable).OfType<BlockViewModel>().ToList();
-    var experiment = within ?? movable.FirstOrDefault()?.Root;
-    return movable.Where(b => b.Root == experiment).ToHashSet();
+    var pickable = blocks.Select(Pickable).OfType<BlockViewModel>().Distinct().ToList();
+    var experiment = within ?? pickable.FirstOrDefault()?.Root;
+    var chosen = pickable.Where(b => b.Root == experiment).ToHashSet();
+    chosen.RemoveWhere(b => b is ProblemBlockViewModel p && chosen.Contains(p.Owner));
+    return chosen;
   }
 
-  /// <summary>The blocks the rectangle being drawn covers (a blue frame on them; null: none).</summary>
+  /// <summary>The blocks the rectangle being drawn covers (a blue frame on them, on an algorithm's problem too; null: none).</summary>
   public void CoverWithBand(IEnumerable<BlockViewModel>? blocks) {
     var covered = blocks == null ? [] : blocks.ToHashSet();
+    foreach (var algorithm in covered.OfType<AlgorithmBlockViewModel>().ToList()) if (algorithm.Problem != null) covered.Add(algorithm.Problem);
     foreach (var block in AllBlocks()) if (block.IsBandCovered != covered.Contains(block)) block.IsBandCovered = covered.Contains(block);
   }
 
@@ -744,8 +756,50 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   // ---- the menu of a picked block: delete or copy all picked ones
 
-  /// <summary>Deletes all picked blocks (asked once).</summary>
+  /// <summary>Problems picked without their algorithms, in tree order.</summary>
+  public IReadOnlyList<ProblemBlockViewModel> PickedProblems() =>
+    AllBlocks().OfType<ProblemBlockViewModel>().Where(p => p.IsPicked && !p.Owner.IsPicked).ToList();
+
+  /// <summary>Only problems are picked (no algorithm or run): their menu changes or removes all of them.</summary>
+  public bool OnlyProblemsPicked() => PickedGroup().Count == 0 && PickedProblems().Count > 0;
+
+  /// <summary>
+  /// "Change selected problem blocks to...": one problem chosen in the problem dialog (offered for the first one's
+  /// algorithm) goes to every picked problem's algorithm, a copy each; algorithms that cannot take it keep theirs.
+  /// </summary>
+  public async Task ChangeSelectedProblemsAsync() {
+    var problems = PickedProblems();
+    if (!IsEditable || problems.Count == 0 || dialogs == null) return;
+    if (await dialogs.PickProblemAsync(problems[0].Owner.Algorithm) is not IProblem problem) return;
+    ChangeProblems(problems.Select(p => p.Owner).ToList(), problem);
+  }
+
+  /// <summary>Gives every one of these algorithms a copy of the problem (those that take its type); returns how many took it.</summary>
+  public int ChangeProblems(IReadOnlyList<AlgorithmBlockViewModel> algorithms, IProblem problem) {
+    if (IsRunning) return 0;
+    ClearPicks();
+    var refused = new List<string>();
+    foreach (var algorithm in algorithms) {
+      if (!algorithm.Algorithm.ProblemType.IsInstanceOfType(problem)) { refused.Add(algorithm.Name); continue; }
+      algorithm.SetProblem((IProblem)problem.Clone());
+    }
+    RefreshState();
+    int changed = algorithms.Count - refused.Count;
+    Status = $"Changed {changed} problem(s) to {problem.Name}."
+      + (refused.Count > 0 ? $" Not for {string.Join(", ", refused)}: the algorithm cannot take a {problem.ItemName}." : "");
+    return changed;
+  }
+
+  /// <summary>Deletes all picked blocks (asked once); only problems picked: removes those problems.</summary>
   public async Task DeleteSelectedAsync() {
+    if (OnlyProblemsPicked()) {
+      var problems = PickedProblems();
+      if (!IsEditable) return;
+      if (dialogs != null && !await dialogs.ConfirmAsync("Remove problems", $"Remove the {problems.Count} selected problems from their algorithms?")) return;
+      foreach (var problem in problems) DeleteNow(problem);
+      Status = $"Removed {problems.Count} problems.";
+      return;
+    }
     var group = PickedGroup();
     if (!IsEditable || group.Count == 0) return;
     if (dialogs != null && !await dialogs.ConfirmAsync("Delete", $"Delete the {group.Count} selected building blocks (with what is inside them)?")) return;

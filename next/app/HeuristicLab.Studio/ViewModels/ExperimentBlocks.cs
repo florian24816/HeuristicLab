@@ -51,7 +51,13 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [ObservableProperty]
   public partial bool IsPicked { get; set; }
 
-  partial void OnIsPickedChanged(bool value) => Workspace.PicksChanged();
+  partial void OnIsPickedChanged(bool value) {
+    PickChanged(value);
+    Workspace.PicksChanged();
+  }
+
+  /// <summary>An algorithm's problem is picked along with it (shown picked too).</summary>
+  protected virtual void PickChanged(bool value) { }
 
   /// <summary>Under the rectangle being drawn (it would be picked when let go): a blue frame, not yet inverted.</summary>
   [ObservableProperty]
@@ -472,6 +478,10 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
 
   protected override void SelectionChanged() => OnPropertyChanged(nameof(IsRowSelected));
 
+  protected override void PickChanged(bool value) {
+    if (Problem != null && Problem.IsPicked != value) Problem.IsPicked = value;
+  }
+
   [RelayCommand]
   private Task ChooseProblemAsync() => Workspace.ChooseProblemAsync(this);
 
@@ -535,7 +545,7 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
         // only re-preparing is skipped, and setting a new problem parameterizes everything again
       }
     }
-    Problem = problem == null ? null : new ProblemBlockViewModel(Workspace, this, problem);
+    Problem = problem == null ? null : new ProblemBlockViewModel(Workspace, this, problem) { IsPicked = IsPicked };
     detail?.RefreshProblem();
     MarkModified();
     RefreshStatus();
@@ -563,6 +573,17 @@ public partial class ProblemBlockViewModel(ExperimentWorkspaceViewModel workspac
   [RelayCommand]
   private Task ChangeAsync() => Workspace.ChooseProblemAsync(Owner);
 
+  [RelayCommand]
+  private Task ChangeSelectedAsync() => Workspace.ChangeSelectedProblemsAsync();
+
+  /// <summary>
+  /// Only problems picked (without their algorithms): change or remove all of them; picked with its algorithm among
+  /// several: the menu of the picked blocks; else this problem's own.
+  /// </summary>
   public override IReadOnlyList<MenuChoice> Menu =>
-    Workspace.IsEditable ? [new("Change problem...", ChangeCommand), new("Rename", RenameCommand), new("Remove problem", DeleteCommand)] : [];
+    !Workspace.IsEditable ? []
+    : IsPicked && !Owner.IsPicked && Workspace.OnlyProblemsPicked()
+      ? [new("Change selected problem blocks to...", ChangeSelectedCommand), new("Remove selected problems", DeleteSelectedCommand)]
+    : InPickedGroup ? [.. CopyMenu, .. EditMenu]
+    : [new("Change problem...", ChangeCommand), new("Rename", RenameCommand), new("Remove problem", DeleteCommand)];
 }

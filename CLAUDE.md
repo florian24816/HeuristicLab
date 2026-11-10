@@ -85,6 +85,14 @@
   inverted only once let go). A picked block's menu acts on all picked ones: "Delete selected items" (asked once),
   "Copy selected items", "Copy selected items n times..." (each block's copies after it; menus refresh on
   PicksChanged).
+  Problem blocks (user's request 2026-11-10): an algorithm picked takes its problem along (AlgorithmBlockViewModel.PickChanged:
+  shown picked, blue under the rectangle too - CoverWithBand adds the problems); a problem picked alone (rectangle over
+  it only, Ctrl+click; ExperimentWorkspaceViewModel.Pickable) leaves its algorithm unpicked; Ctrl+click on a problem picked
+  with its algorithm unpicks both. Only problems picked (OnlyProblemsPicked / PickedProblems): their menu is "Change
+  selected problem blocks to..." (the problem dialog for the first one's algorithm; ChangeProblems gives every picked
+  problem's algorithm a copy, whatever the algorithms; one that cannot take the problem type keeps its own, said in the
+  status) and "Remove selected problems" - no copy entries. A problem picked with its algorithm among several shows the
+  picked blocks' menu.
   Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
   warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
   HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once

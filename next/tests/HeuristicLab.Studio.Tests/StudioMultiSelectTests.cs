@@ -164,7 +164,9 @@ public class StudioMultiSelectTests {
       var top = rowA.TranslatePoint(new Point(0, -2), window)!.Value.Y;
       var bottom = rowC.TranslatePoint(new Point(rowC.Bounds.Width + 30, rowC.Bounds.Height + 2), window)!.Value;
       Sweep(window, new Point(left, top), bottom);
-      CollectionAssert.AreEquivalent(new[] { "A", "C" }, ws.AllBlocks().Where(x => x.IsPicked).Select(x => x.Name).ToList());
+      CollectionAssert.AreEquivalent(new[] { "A", "C" }, ws.PickedGroup().Select(x => x.Name).ToList());
+      Assert.IsTrue(ws.AllBlocks().OfType<ProblemBlockViewModel>().Where(p => p.IsPicked).Select(p => p.Owner.Name).Order()
+        .SequenceEqual(new[] { "A", "C" }), "their problems picked along");
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-band.png"));
       ws.ClearPicks();
       // ---- Results tab: select sources (click, Ctrl+click), then tick / untick / only them
