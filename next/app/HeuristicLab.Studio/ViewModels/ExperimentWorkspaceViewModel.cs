@@ -158,6 +158,9 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   [ObservableProperty]
   public partial ViewModelBase? Detail { get; set; }
 
+  /// <summary>How many runs Start on one algorithm makes: a quick batch run (the Options tab).</summary>
+  public int QuickBatchSize { get; set; } = QuickBatchRuns.DefaultSize;
+
   /// <summary>Experiments or a single algorithm are running (or paused): the tree cannot change.</summary>
   [ObservableProperty]
   [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StartSelectedCommand), nameof(StopCommand), nameof(EjectCommand))]
@@ -334,9 +337,9 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     var block = new ExperimentBlockViewModel(this, experiment, path);
     if (path != null) {
       try {
-        block.SingleRuns.Load(path);
+        block.QuickBatchRuns.Load(path);
       } catch (Exception e) when (e is IOException or InvalidOperationException or UnauthorizedAccessException) {
-        Status = $"Its single runs ({Path.GetFileName(SingleRuns.FileFor(path))}) could not be read: {e.Message}";
+        Status = $"Its quick batch runs ({Path.GetFileName(QuickBatchRuns.FileFor(path))}) could not be read: {e.Message}";
       }
     }
     Experiments.Add(block);
@@ -354,7 +357,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
     var path = await fileDialogs.SaveHlFileAsync(Path.GetFileName(block.FilePath) ?? block.Name + ".hl");
     if (path == null) return;
-    await Task.Run(() => { Documents.Save(block.Experiment, path); block.SingleRuns.Save(path); });
+    await Task.Run(() => { Documents.Save(block.Experiment, path); block.QuickBatchRuns.Save(path); });
     block.FilePath = path;
     block.IsModified = false;
     Remember(path);
@@ -375,7 +378,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       return;
     }
     try {
-      await Task.Run(() => { Documents.Save(block.Experiment, block.FilePath); block.SingleRuns.Save(block.FilePath); });
+      await Task.Run(() => { Documents.Save(block.Experiment, block.FilePath); block.QuickBatchRuns.Save(block.FilePath); });
       block.IsModified = false;
       Remember(block.FilePath);
       Status = $"Saved {block.Name} to {Path.GetFileName(block.FilePath)}";
@@ -415,7 +418,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     }
     try {
       File.Move(path, target);
-      SingleRuns.Move(path, target);
+      QuickBatchRuns.Move(path, target);
     } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
       Status = $"Could not rename {Path.GetFileName(path)}: {e.Message}";
       return false;
@@ -430,7 +433,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>
   /// Runs tab's "Delete runs...": the user picks an experiment, then confirms; all its runs (also those
-  /// of its batch runs, time-limit runs and algorithms) are deleted. Never single runs, never while running.
+  /// of its batch runs, time-limit runs and algorithms) are deleted. Never quick batch runs, never while running.
   /// </summary>
   public async Task DeleteRunsAsync() {
     if (!IsEditable) {
@@ -438,22 +441,22 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       return;
     }
     if (dialogs == null || Experiments.Count == 0) return;
-    // per experiment: its runs, or only its single runs (Start on one algorithm); all single runs at once
+    // per experiment: its runs, or only its quick batch runs (Start on one algorithm); all quick batch runs at once
     var choices = new List<(string Text, Action Delete)>();
     static string Runs(int n) => $"{n} run{(n == 1 ? "" : "s")}";
     foreach (var e in Experiments.ToList()) {
       choices.Add(($"{e.Name}: the experiment's runs  ({Runs(e.Experiment.Runs.Count)})", () => DeleteRuns(e)));
-      if (e.SingleRuns.Count > 0) choices.Add(($"{e.Name}: only its single runs  ({Runs(e.SingleRuns.Count)})", () => DeleteSingleRuns(e)));
+      if (e.QuickBatchRuns.Count > 0) choices.Add(($"{e.Name}: only its quick batch runs  ({Runs(e.QuickBatchRuns.Count)})", () => DeleteQuickBatchRuns(e)));
     }
-    var withSingle = Experiments.Where(e => e.SingleRuns.Count > 0).ToList();
-    if (withSingle.Count > 1)
-      choices.Add(($"All single runs of all experiments  ({Runs(withSingle.Sum(e => e.SingleRuns.Count))})", () => {
-        int n = withSingle.Sum(DeleteSingleRuns);
-        Status = $"Deleted all {Runs(n)} single runs";
+    var withQbrs = Experiments.Where(e => e.QuickBatchRuns.Count > 0).ToList();
+    if (withQbrs.Count > 1)
+      choices.Add(($"All quick batch runs of all experiments  ({Runs(withQbrs.Sum(e => e.QuickBatchRuns.Count))})", () => {
+        int n = withQbrs.Sum(DeleteQuickBatchRuns);
+        Status = $"Deleted all {Runs(n)} of the quick batch runs";
       }));
     var picked = await dialogs.ChooseAsync("Delete runs",
-      "Choose what to delete, then press \"Delete runs\": an experiment's runs (of everything inside it; its single runs stay), " +
-      "or only single runs (made by Start on one algorithm). The experiments themselves stay.",
+      "Choose what to delete, then press \"Delete runs\": an experiment's runs (of everything inside it; its quick batch runs stay), " +
+      "or only quick batch runs (QBRs, made by Start on one algorithm). The experiments themselves stay.",
       choices.Select(c => c.Text).ToList(), "Delete runs");
     if (picked == null) return;
     var statuses = new List<string>();
@@ -464,14 +467,14 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     if (statuses.Count > 1) Status = string.Join("; ", statuses);
   }
 
-  /// <summary>Deletes the single runs of this experiment (Start on one algorithm); returns how many there were.</summary>
-  public int DeleteSingleRuns(ExperimentBlockViewModel experiment) {
+  /// <summary>Deletes the quick batch runs of this experiment (Start on one algorithm); returns how many runs there were.</summary>
+  public int DeleteQuickBatchRuns(ExperimentBlockViewModel experiment) {
     if (!IsEditable) return 0;
-    int count = experiment.SingleRuns.Count;
-    experiment.SingleRuns.Runs.Clear();
+    int count = experiment.QuickBatchRuns.Count;
+    experiment.QuickBatchRuns.Runs.Clear();
     if (count > 0) experiment.MarkModified();
     RefreshLive();
-    Status = $"Deleted {count} single run{(count == 1 ? "" : "s")} of {experiment.Name}";
+    Status = $"Deleted {count} quick batch run{(count == 1 ? "" : "s")} of {experiment.Name}";
     return count;
   }
 

@@ -98,6 +98,9 @@
             <TabItem Header="Resources">
                 <ContentControl Content="{Binding Resources}" />
             </TabItem>
+            <TabItem Header="Options">
+                <ContentControl Content="{Binding Options}" />
+            </TabItem>
         </TabControl>
         <Button Classes="theme" Classes.dark="{Binding IsDarkMode}" Command="{Binding ToggleThemeCommand}"
                 Margin="14,10,0,0" HorizontalAlignment="Left" VerticalAlignment="Top">

@@ -18,14 +18,14 @@
                 <Border Grid.Row="1" Grid.ColumnSpan="2" Classes="selectionstate" Padding="8,2,8,8">
                     <c:JustifiedWrapPanel ItemSpacing="4" LineSpacing="4">
                         <Button Classes="ticks" Classes.on="{Binding AllTicked}" Content="All" Command="{Binding SelectAllCommand}"
-                                ToolTip.Tip="Tick everything, the single runs too" />
-                        <Button Classes="ticks" Classes.on="{Binding AllButSingleTicked}" Content="All w/o singles" Command="{Binding SelectAllWithoutSingleCommand}"
-                                ToolTip.Tip="Tick every experiment, not the single runs" />
-                        <Button Classes="ticks" Classes.on="{Binding OnlySinglesTicked}" Content="Only singles" Command="{Binding SelectOnlySinglesCommand}"
-                                ToolTip.Tip="Tick only the single runs" />
+                                ToolTip.Tip="Tick everything, the quick batch runs (QBRs) too" />
+                        <Button Classes="ticks" Classes.on="{Binding AllButQbrsTicked}" Content="All w/o QBRs" Command="{Binding SelectAllWithoutQbrsCommand}"
+                                ToolTip.Tip="Tick every experiment, not the quick batch runs (QBRs)" />
+                        <Button Classes="ticks" Classes.on="{Binding OnlyQbrsTicked}" Content="Only QBRs" Command="{Binding SelectOnlyQbrsCommand}"
+                                ToolTip.Tip="Tick only the quick batch runs (QBRs)" />
                         <Button Classes="ticks" Classes.on="{Binding NoneTicked}" Content="None" Command="{Binding UnselectAllCommand}"
                                 ToolTip.Tip="Untick everything" />
-                        <Border Classes="tickstate" Classes.on="{Binding IsCustom}" ToolTip.Tip="Ticked by hand: none of All, All w/o singles, Only singles, None">
+                        <Border Classes="tickstate" Classes.on="{Binding IsCustom}" ToolTip.Tip="Ticked by hand: none of All, All w/o QBRs, Only QBRs, None">
                             <TextBlock Text="Custom" />
                         </Border>
                         <Button Classes="ticks" Classes.on="{Binding MatchesMain}" Content="Same as main results" Command="{Binding CopySelectionFromMainCommand}"

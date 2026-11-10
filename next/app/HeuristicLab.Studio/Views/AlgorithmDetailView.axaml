@@ -25,12 +25,15 @@
         <Border DockPanel.Dock="Bottom" Padding="0,8,0,0" BorderThickness="0,1,0,0" Margin="0,8,0,0"
                 BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="&#x25B6; Start" Command="{Binding StartCommand}" ToolTip.Tip="Start, or resume after a pause" />
+                <Button Content="&#x25B6; Start" Command="{Binding StartCommand}"
+                        ToolTip.Tip="Start a quick batch run (QBR): the algorithm runs as often as the Options tab's QBR size says (10 at first), its runs go to &quot;Quick batch runs&quot; in the Runs and Results tabs. After a pause: resume" />
                 <Button Content="&#x23F8; Pause" Command="{Binding PauseCommand}" />
                 <Button Content="&#x23F9; Stop" Command="{Binding StopCommand}" />
                 <Button Content="&#x21BA; Prepare" Command="{Binding PrepareCommand}" ToolTip.Tip="Reset results (runs are kept)" />
                 <TextBlock Text="{Binding State}" VerticalAlignment="Center" Margin="8,0,0,0" />
                 <TextBlock Text="{Binding ExecutionTime}" VerticalAlignment="Center" FontFamily="monospace" />
+                <TextBlock Text="{Binding BatchProgress}" IsVisible="{Binding BatchProgress, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           VerticalAlignment="Center" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding Message}" VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
                        ToolTip.Tip="{Binding Message}" />
             </StackPanel>

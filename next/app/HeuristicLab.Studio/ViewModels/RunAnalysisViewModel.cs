@@ -31,7 +31,7 @@ public partial class RunSourceViewModel(RunAnalysisViewModel owner, string name,
   public ObservableCollection<RunSourceViewModel> Children { get; } = [];
   public RunSourceViewModel? Parent { get; init; }
 
-  /// <summary>A part of the "Single runs" folder: what it stands for (kept ticked over a refresh) and its runs.</summary>
+  /// <summary>A part of the "Quick batch runs" folder: what it stands for (kept ticked over a refresh) and its runs.</summary>
   public object? Group { get; init; }
   public Func<IReadOnlyList<IRun>>? RunList { get; init; }
 
@@ -198,7 +198,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     rebuilding = true;
     Sources.Clear();
     foreach (var experiment in workspace.Experiments) Sources.Add(Node(experiment, null, before));
-    if (workspace.Experiments.Count > 0) Sources.Add(SingleRunsNode(before));
+    if (workspace.Experiments.Count > 0) Sources.Add(QuickBatchRunsNode(before));
     foreach (var folder in folders) {
       var node = new RunSourceViewModel(this, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), "Results folder", null, folder) {
         Own = before.GetValueOrDefault(folder)
@@ -212,24 +212,30 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   private static object? Key(RunSourceViewModel s) => (object?)s.Optimizer ?? s.Group ?? s.Folder;
 
   /// <summary>
-  /// "Single runs" (made by Start on one algorithm, kept apart from the experiments): per experiment and
-  /// algorithm, not ticked at first - ticked, they are compared like any other runs.
+  /// "Quick batch runs" (made by Start on one algorithm, kept apart from the experiments): per experiment,
+  /// algorithm and QBR, not ticked at first - ticked, they are compared like any other runs.
   /// </summary>
-  private RunSourceViewModel SingleRunsNode(IReadOnlyDictionary<object, bool> before) {
+  private RunSourceViewModel QuickBatchRunsNode(IReadOnlyDictionary<object, bool> before) {
     var experiments = workspace.Experiments.ToList();
-    var folder = new RunSourceViewModel(this, "Single runs", "Started on one algorithm", null, null) {
-      Group = RunsBrowserViewModel.SingleRunsKey, RunList = () => experiments.SelectMany(e => e.SingleRuns.Runs).ToList(),
-      Own = before.GetValueOrDefault(RunsBrowserViewModel.SingleRunsKey)
+    var folder = new RunSourceViewModel(this, RunsBrowserViewModel.QuickBatchRunsName, "Started on one algorithm", null, null) {
+      Group = RunsBrowserViewModel.QuickBatchRunsKey, RunList = () => experiments.SelectMany(e => e.QuickBatchRuns.Runs).ToList(),
+      Own = before.GetValueOrDefault(RunsBrowserViewModel.QuickBatchRunsKey)
     };
-    foreach (var experiment in experiments.Where(e => e.SingleRuns.Count > 0)) {
-      var single = experiment.SingleRuns;
+    foreach (var experiment in experiments.Where(e => e.QuickBatchRuns.Count > 0)) {
+      var qbrs = experiment.QuickBatchRuns;
       var node = new RunSourceViewModel(this, experiment.Name, "Experiment", null, null) {
-        Parent = folder, Group = single, RunList = () => single.Runs.ToArray(), Own = before.GetValueOrDefault(single)
+        Parent = folder, Group = qbrs, RunList = () => qbrs.Runs.ToArray(), Own = before.GetValueOrDefault(qbrs)
       };
-      foreach (var group in single.Groups)
-        node.Children.Add(new RunSourceViewModel(this, group.Algorithm, "Algorithm", null, null) {
+      foreach (var group in qbrs.Groups) {
+        var algorithm = new RunSourceViewModel(this, group.Algorithm, "Algorithm", null, null) {
           Parent = node, Group = group, RunList = () => group.Runs, Own = before.GetValueOrDefault(group)
-        });
+        };
+        foreach (var batch in group.Batches)
+          algorithm.Children.Add(new RunSourceViewModel(this, batch.Name, "Quick batch run", null, null) {
+            Parent = algorithm, Group = batch, RunList = () => batch.Runs, Own = before.GetValueOrDefault(batch)
+          });
+        node.Children.Add(algorithm);
+      }
       folder.Children.Add(node);
     }
     return folder;
@@ -289,7 +295,7 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     Rebuild();
   }
 
-  // ---- the selection state: all, all with the single runs, only the single runs, none; a results window can
+  // ---- the selection state: all, all without the quick batch runs, only the quick batch runs, none; a results window can
   // match the main tab's ticks; anything else is "Custom" 
 
   /// <summary>The main Results tab, for a results window (its "Same as main results"); null for the main tab.</summary>
@@ -333,33 +339,33 @@ public partial class RunAnalysisViewModel : ViewModelBase {
     }
   }
 
-  /// <summary>Whether the box is the "Single runs" folder or below it.</summary>
-  private static bool IsSingle(RunSourceViewModel node) {
-    for (var n = node; n != null; n = n.Parent) if (ReferenceEquals(n.Group, RunsBrowserViewModel.SingleRunsKey)) return true;
+  /// <summary>Whether the box is the "Quick batch runs" folder or below it.</summary>
+  private static bool IsQbr(RunSourceViewModel node) {
+    for (var n = node; n != null; n = n.Parent) if (ReferenceEquals(n.Group, RunsBrowserViewModel.QuickBatchRunsKey)) return true;
     return false;
   }
 
   /// <summary>The boxes whose own tick counts (no children).</summary>
   private List<RunSourceViewModel> Leaves() => AllSources(Sources).Where(s => s.Counts).ToList();
 
-  /// <summary>Everything ticked, the single runs too (the button "All" shows it in full orange).</summary>
+  /// <summary>Everything ticked, the quick batch runs too (the button "All" shows it in full orange).</summary>
   public bool AllTicked => Leaves() is { Count: > 0 } leaves && leaves.All(s => s.Own);
 
-  /// <summary>Everything but the single runs ticked ("All w/o singles").</summary>
-  public bool AllButSingleTicked {
+  /// <summary>Everything but the quick batch runs ticked ("All w/o QBRs").</summary>
+  public bool AllButQbrsTicked {
     get {
       var leaves = Leaves();
-      var experiments = leaves.Where(s => !IsSingle(s)).ToList();
-      return experiments.Count > 0 && experiments.All(s => s.Own) && leaves.Where(IsSingle).All(s => !s.Own);
+      var experiments = leaves.Where(s => !IsQbr(s)).ToList();
+      return experiments.Count > 0 && experiments.All(s => s.Own) && leaves.Where(IsQbr).All(s => !s.Own);
     }
   }
 
-  /// <summary>The single runs ticked and nothing else.</summary>
-  public bool OnlySinglesTicked {
+  /// <summary>The quick batch runs ticked and nothing else ("Only QBRs").</summary>
+  public bool OnlyQbrsTicked {
     get {
       var leaves = Leaves();
-      var singles = leaves.Where(IsSingle).ToList();
-      return singles.Count > 0 && singles.All(s => s.Own) && leaves.Where(s => !IsSingle(s)).All(s => !s.Own);
+      var qbrs = leaves.Where(IsQbr).ToList();
+      return qbrs.Count > 0 && qbrs.All(s => s.Own) && leaves.Where(s => !IsQbr(s)).All(s => !s.Own);
     }
   }
 
@@ -367,12 +373,12 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   public bool NoneTicked => Leaves().All(s => !s.Own);
 
   /// <summary>None of the states above: "Custom" is full orange (also when it is the main tab's ticks - both are then).</summary>
-  public bool IsCustom => !(AllTicked || AllButSingleTicked || OnlySinglesTicked || NoneTicked);
+  public bool IsCustom => !(AllTicked || AllButQbrsTicked || OnlyQbrsTicked || NoneTicked);
 
   private void NotifyTickStates() {
     OnPropertyChanged(nameof(AllTicked));
-    OnPropertyChanged(nameof(AllButSingleTicked));
-    OnPropertyChanged(nameof(OnlySinglesTicked));
+    OnPropertyChanged(nameof(AllButQbrsTicked));
+    OnPropertyChanged(nameof(OnlyQbrsTicked));
     OnPropertyChanged(nameof(NoneTicked));
     OnPropertyChanged(nameof(MatchesMain));
     OnPropertyChanged(nameof(IsCustom));
@@ -388,10 +394,10 @@ public partial class RunAnalysisViewModel : ViewModelBase {
   private void SelectAll() => TickWhere(_ => true);
 
   [RelayCommand]
-  private void SelectAllWithoutSingle() => TickWhere(n => !IsSingle(n));
+  private void SelectAllWithoutQbrs() => TickWhere(n => !IsQbr(n));
 
   [RelayCommand]
-  private void SelectOnlySingles() => TickWhere(IsSingle);
+  private void SelectOnlyQbrs() => TickWhere(IsQbr);
 
   [RelayCommand]
   private void UnselectAll() => TickWhere(_ => false);

@@ -19,7 +19,7 @@ public sealed record NameValue(string Name, string Value);
 public partial class MainViewModel : ViewModelBase {
   private readonly ISettingsStore? settingsStore;
 
-  public const int ExperimentsTab = 0, RunsTab = 1, ResultsTab = 2, ScriptsTab = 3, ResourcesTab = 4;
+  public const int ExperimentsTab = 0, RunsTab = 1, ResultsTab = 2, ScriptsTab = 3, ResourcesTab = 4, OptionsTab = 5;
 
   public MainViewModel() : this(null) { }
 
@@ -61,6 +61,12 @@ public partial class MainViewModel : ViewModelBase {
       Priority = Enum.TryParse<ResourcePriority>(loaded.ResourcePriority, out var priority) ? priority : ResourcePriority.Normal
     };
     Resources = new ResourcesViewModel(limits, _ => { if (Resources != null) SaveSettings(); }, StopEverything);
+    Options = new OptionsViewModel(loaded?.QuickBatchSize ?? QuickBatchRuns.DefaultSize, loaded?.WorkingDirectory, fileDialogs, () => {
+      Workspace.QuickBatchSize = Options!.BatchSize;
+      SaveSettings();
+    });
+    Workspace.QuickBatchSize = Options.BatchSize;
+    if (fileDialogs != null) fileDialogs.WorkingDirectory = Options.WorkingDirectory;
     // the main Results tab closes the results windows ("Close all result windows", shown while there are some)
     RunAnalysis.CloseWindowsCommand = CloseResultsWindowsCommand;
     ResultsWindows.CollectionChanged += (_, _) => {
@@ -109,9 +115,13 @@ public partial class MainViewModel : ViewModelBase {
       RecentFiles = Workspace.RecentFiles.ToList(),
       ResourceCores = limits.Cores, ResourceThreads = limits.ThreadsPerAlgorithm, ResourceConcurrentExperiments = limits.ConcurrentExperiments,
       ResourceMemoryGB = limits.MemoryLimitGB, ResourcePriority = limits.Priority.ToString(), DarkMode = IsDarkMode,
-      Notifications = IsNotifying
+      Notifications = IsNotifying, QuickBatchSize = Options?.BatchSize ?? QuickBatchRuns.DefaultSize,
+      WorkingDirectory = Options?.WorkingDirectory
     });
   }
+
+  /// <summary>Options tab: quick batch run size, working directory.</summary>
+  public OptionsViewModel Options { get; }
 
   /// <summary>Experiments tab: building blocks of several experiments.</summary>
   public ExperimentWorkspaceViewModel Workspace { get; }

@@ -60,8 +60,8 @@
   TextBlock: a string's '_' would be an access key.
   Runs tab: "Delete runs..." next to Refresh (ChooseWindow: pick an entry, the delete button is disabled
   until then): per experiment "the experiment's runs" (ExperimentTree.DeleteRuns clears every optimizer's
-  runs without Prepare; its single runs stay) or "only its single runs" (DeleteSingleRuns), and "All single
-  runs of all experiments" when several have some; never while running; marks it unsaved. Several entries
+  runs without Prepare; its quick batch runs stay) or "only its quick batch runs" (DeleteQuickBatchRuns), and "All quick
+  batch runs of all experiments" when several have some; never while running; marks it unsaved. Several entries
   at once (IDialogService.ChooseAsync returns the picked indices).
   Selecting several (user's request): Controls/SweepSelection - click = one, Ctrl+click toggles, Shift+click
   a range from the last clicked, press and drag (on a row or empty space) = a rectangle as in the Experiments
@@ -266,8 +266,8 @@
   stack overflow that closed Studio without a message (test StudioFilterTests types filters key by key).
   Selection state (user's request 2026-10-30): a box (Border.selectionstate, ExperimentBrush) with Refresh in a cut-out
   at its top left, "Selection state" beside it; square buttons (Button.ticks: pale logo orange #FDE5C8, full #F7931D
-  when it is the state now): "All" (AllTicked, single runs too), "All w/o singles" (AllButSingleTicked), "Only singles"
-  (OnlySinglesTicked), "None" (NoneTicked) - low buttons (padding 6,2,6,3, no MinHeight), "Custom" (Border.tickstate, cannot be pressed: grey #E3E3E3 with grey writing unless it is the state; IsCustom = none of those
+  when it is the state now): "All" (AllTicked, quick batch runs too), "All w/o QBRs" (AllButQbrsTicked), "Only QBRs"
+  (OnlyQbrsTicked), "None" (NoneTicked) - low buttons (padding 6,2,6,3, no MinHeight), "Custom" (Border.tickstate, cannot be pressed: grey #E3E3E3 with grey writing unless it is the state; IsCustom = none of those
   four, so it can be full orange together with "Same as main results"), last in further tabs "Same as main results"
   (MatchesMain). Controls/JustifiedWrapPanel: as many per row as fit, every row stretched from edge to edge (a child
   alone takes the row). Level with Refresh in the right column: a further tab's "Window name" (RunAnalysisViewModel.
@@ -365,15 +365,20 @@
   RunsView: Runs tab (ShowsDetails false) the table at the top (max 300 px); Experiments tab (experiment,
   batch/time-limit run, algorithm Runs tab) the table fills the height down to the window's edge, the selected
   run's details below it (max 240 px; RunsView.axaml.cs sets the rows).
-  Single runs (user's decision 2026-10-15): Start on one algorithm (its detail) makes single runs - when it
-  ends (not paused) the runs it made leave the algorithm (HeuristicLab removes them from its batch run,
-  time-limit run and experiment too) and go to ExperimentBlockViewModel.SingleRuns (ViewModels/SingleRuns.cs),
-  named "Single run k" per algorithm (grouped by the runs' "Algorithm Name"). The algorithm's Runs tab lists
-  its runs and its single runs (RunsViewModel takes a run list). Runs and Results tabs: a "Single runs"
-  folder > experiment > algorithm after the experiments (RunsSourceViewModel/RunSourceViewModel Key/Group +
-  run list); in the Results tab not ticked at first. Saved with the experiment as a run collection
-  "<name>.single-runs.hl" next to its .hl (HeuristicLab opens it; written also when emptied), loaded when the
-  experiment is opened, renamed with "Rename file...". RunValueCache reads a run again when its numbers of
+  Quick batch runs ("QBRs"; user's decisions 2026-10-15 single runs, replaced 2026-11-10 everywhere): Start on one
+  algorithm (its detail) runs it the Options tab's QBR size times (10 at first; AlgorithmDetailViewModel.RunBatch on the
+  thread: Start, then Prepare(clearRuns: false) and Start again until that many runs; SetSeedRandomly gives each its own
+  seed; a pause leaves the loop and Start resumes it, Stop / a failure end it with the runs made; "Quick batch run: run 3
+  of 10" beside the time, BatchProgress) - when it ends (not paused) the runs it made leave the algorithm (HeuristicLab
+  removes them from its batch run, time-limit run and experiment too) and become one QBR of
+  ExperimentBlockViewModel.QuickBatchRuns (ViewModels/QuickBatchRuns.cs), runs named "QBR k, run j" (k per algorithm,
+  grouped by the runs' "Algorithm Name"; QbrAlgorithmGroup.Batches / QuickBatch by the number in the name). The
+  algorithm's Runs tab lists its runs and its QBRs' (RunsViewModel takes a run list; tree counter "Runs (2, 10 in
+  QBRs)"). Runs and Results tabs: a "Quick batch runs" folder > experiment > algorithm > "QBR k" after the experiments
+  (RunsSourceViewModel/RunSourceViewModel Key/Group + run list); in the Results tab not ticked at first. Saved with the
+  experiment as a run collection "<name>.quick-batch-runs.hl" next to its .hl (HeuristicLab opens it; written also when
+  emptied), loaded when the experiment is opened (without one, an older "<name>.single-runs.hl" is read: "Single run k"
+  becomes "QBR k, run 1"), renamed with "Rename file..." (both files). RunValueCache reads a run again when its numbers of
   parameters/results changed (Studio tags runs with "Resources: ..." after they were first read).
   Runs: Run #F9B462; the header row one shade darker (TableGridViewModel.Darker, x0.9). Click a row to select
   it (blue overlay).
@@ -432,7 +437,12 @@
   -> Services.DesktopNotifications: Linux notify-send (else gdbus to org.freedesktop.Notifications),
   Windows a toast via Windows PowerShell's WinRT (PowerShell's AppId, text in env variables), macOS
   osascript. A failure shows in the status bar. Tests use a fake IDesktopNotifications.
-  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits, dark mode, notifications.
+  Options tab (after Resources; user's request 2026-11-10; OptionsViewModel / OptionsView): the QBR size (1..1000,
+  "Back to 10"; ExperimentWorkspaceViewModel.QuickBatchSize) and a working directory ("Choose..." / "No working
+  directory"; a missing folder is said in yellow): IFileDialogService.WorkingDirectory - FileDialogService gives every
+  picker (open, save, export, data, folder) SuggestedStartLocation there.
+  Settings (~/.config/HeuristicLab.Studio/settings.json): recent files, resource limits, dark mode, notifications,
+  QBR size, working directory.
   Own LineChart control. Chart text (LineChart, SceneView legend/scales/titles): 13 px in the full text color
   (SystemControlForegroundBaseHigh), axis titles semi-bold, y titles vertical beside their scales, margins
   from the labels' sizes; SceneVisual.XCategories names a category axis under the drawing (wrapped to

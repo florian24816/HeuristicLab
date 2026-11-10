@@ -323,8 +323,8 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
     : ContainerBlockViewModel(workspace, null, experiment) {
   public Experiment Experiment { get; } = experiment;
 
-  /// <summary>Runs made by Start on one of its algorithms, kept apart from the experiment's runs (Runs/Results: "Single runs").</summary>
-  public SingleRuns SingleRuns { get; } = new();
+  /// <summary>Runs made by Start on one of its algorithms, kept apart from the experiment's runs (Runs/Results: "Quick batch runs").</summary>
+  public QuickBatchRuns QuickBatchRuns { get; } = new();
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(IsSaved), nameof(StatePictogram), nameof(StateTip), nameof(IsStateClickable), nameof(HasFile), nameof(Menu))]
@@ -504,11 +504,11 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
 
   public string ParametersText => $"Parameters ({ItemInspector.Parameters(Algorithm).Count})";
   public string ResultsText => $"Results ({Algorithm.Results.Count})";
-  /// <summary>Its runs in the experiment, and its single runs (made by its own Start) if it has any.</summary>
+  /// <summary>Its runs in the experiment, and the runs of its quick batch runs (made by its own Start) if it has any.</summary>
   public string RunsText {
     get {
-      int single = Root?.SingleRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs.Count ?? 0;
-      return single == 0 ? $"Runs ({Algorithm.Runs.Count})" : $"Runs ({Algorithm.Runs.Count}, {single} single)";
+      int qbr = Root?.QuickBatchRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs.Count ?? 0;
+      return qbr == 0 ? $"Runs ({Algorithm.Runs.Count})" : $"Runs ({Algorithm.Runs.Count}, {qbr} in QBRs)";
     }
   }
 

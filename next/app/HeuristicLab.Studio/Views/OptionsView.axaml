@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HeuristicLab.Studio.ViewModels"
+             x:Class="HeuristicLab.Studio.Views.OptionsView"
+             x:DataType="vm:OptionsViewModel">
+    <ScrollViewer>
+        <StackPanel Margin="16" Spacing="12" MaxWidth="1100" HorizontalAlignment="Left">
+            <TextBlock Text="Options" FontSize="20" FontWeight="SemiBold" />
+
+            <Grid ColumnDefinitions="260,Auto,*" RowDefinitions="Auto,Auto" RowSpacing="14" ColumnSpacing="12">
+                <TextBlock Text="Quick batch run (QBR) size" VerticalAlignment="Center" FontWeight="SemiBold" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <NumericUpDown x:Name="QbrSize" Value="{Binding QuickBatchSize}" Minimum="{Binding MinQuickBatchSize}" Maximum="{Binding MaxQuickBatchSize}"
+                                   Increment="1" FormatString="0" Width="140" />
+                    <Button Content="Back to 10" Command="{Binding DefaultQuickBatchSizeCommand}" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" TextWrapping="Wrap" FontSize="12" Opacity="0.75" VerticalAlignment="Center"
+                           Text="How many runs Start on one algorithm makes. They are one quick batch run (&quot;QBR k&quot;), kept apart from the experiment's runs: &quot;Quick batch runs&quot; in the Runs and Results tabs." />
+
+                <TextBlock Grid.Row="1" Text="Working directory" VerticalAlignment="Top" Margin="0,6,0,0" FontWeight="SemiBold" />
+                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Choose..." Command="{Binding ChooseWorkingDirectoryCommand}" />
+                        <Button Content="No working directory" Command="{Binding ClearWorkingDirectoryCommand}" />
+                    </StackPanel>
+                    <TextBlock x:Name="WorkingDirectoryPath" Text="{Binding WorkingDirectoryText}" TextWrapping="Wrap" MaxWidth="420"
+                               FontFamily="monospace" />
+                    <TextBlock Text="This folder does not exist (any more): file dialogs open where the system opens them."
+                               IsVisible="{Binding WorkingDirectoryMissing}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" MaxWidth="420" />
+                </StackPanel>
+                <TextBlock Grid.Row="1" Grid.Column="2" TextWrapping="Wrap" FontSize="12" Opacity="0.75" VerticalAlignment="Top" Margin="0,6,0,0"
+                           Text="Every file dialog (open, save, save as, export, data files, folders) opens in this folder." />
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

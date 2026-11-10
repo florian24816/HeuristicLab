@@ -14,8 +14,8 @@ namespace HeuristicLab.Studio.Tests;
 
 /// <summary>
 /// "Add results window" (next to the Results tab's header): another Results tab in its own window, named in its title
-/// bar ("HL-Results: n", changed live), ticked as the main tab; the selection state box: "All", "All w/o singles",
-/// "Only singles", "None" (full orange when that is the state), "Custom" when none of them is, in a further tab
+/// bar ("HL-Results: n", changed live), ticked as the main tab; the selection state box: "All", "All w/o QBRs",
+/// "Only QBRs", "None" (full orange when that is the state), "Custom" when none of them is, in a further tab
 /// "Same as main results"; Refresh in a cut-out of the box, level with a further tab's name; rows reaching edge to edge.
 /// </summary>
 [TestClass]
@@ -59,7 +59,7 @@ public class StudioResultsWindowTests {
       ws.SetProblem(ga, (IProblem)Setups.Create(new SetupRequest("GeneticAlgorithm") { Problem = "TravelingSalesmanProblem", Instance = "ch130" }).Algorithm.Problem!.Clone());
       ParameterEditor.Apply(ga.Algorithm, ["PopulationSize=10", "MaximumGenerations=2"]);
       await ws.StartAllCommand.ExecuteAsync(null);
-      experiment.SingleRuns.Add([(IRun)experiment.Experiment.Runs.Single().Clone()]);
+      experiment.QuickBatchRuns.Add([(IRun)experiment.Experiment.Runs.Single().Clone()]);
 
       // "Add window" only while the Results tab is shown, in its header
       Pump();
@@ -73,12 +73,12 @@ public class StudioResultsWindowTests {
       var bar = main.GetVisualDescendants().OfType<ResultsTabBar>().Single();
       Assert.IsFalse(bar.IsEffectivelyVisible, "no second tab bar before a further results tab exists");
 
-      // the main tab: the experiment ticked, not the single runs - "All w/o singles" is full orange, in a box of its own
+      // the main tab: the experiment ticked, not the quick batch runs - "All w/o QBRs" is full orange, in a box of its own
       var analysis = vm.RunAnalysis;
       analysis.Sources.First().IsChecked = true;
       Pump();
-      Assert.IsTrue(analysis.AllButSingleTicked);
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/o singles")));
+      Assert.IsTrue(analysis.AllButQbrsTicked);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/o QBRs")));
       Assert.AreEqual(Pale, Fill(Shortcut(main, "All")));
       Assert.AreEqual(new CornerRadius(0), Shortcut(main, "All").CornerRadius, "square corners");
       var box = main.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("selectionstate") && b.Child is HeuristicLab.Studio.Controls.JustifiedWrapPanel && b.IsEffectivelyVisible);
@@ -123,17 +123,17 @@ public class StudioResultsWindowTests {
       double textBelow = allButton.Bounds.Height - textTop - allText.Bounds.Height;
       Assert.IsTrue(textBelow >= 1 && textBelow <= 5, $"text {textBelow:0.#} above the bottom edge");
       Assert.AreEqual(allButton.Bounds.Height, Custom().Bounds.Height, 1);
-      // only the single runs, then one of two experiment sources by hand: "Custom"
-      Shortcut(main, "Only singles").Command!.Execute(null);
+      // only the quick batch runs, then one of two experiment sources by hand: "Custom"
+      Shortcut(main, "Only QBRs").Command!.Execute(null);
       Pump();
-      Assert.IsTrue(analysis.OnlySinglesTicked);
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "Only singles")));
-      Assert.AreEqual(1, analysis.Table.Rows.Count, "the single run");
+      Assert.IsTrue(analysis.OnlyQbrsTicked);
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "Only QBRs")));
+      Assert.AreEqual(1, analysis.Table.Rows.Count, "the quick batch run's run");
       analysis.Sources.First().IsChecked = true;
       Pump();
       Assert.IsTrue(analysis.AllTicked);
       Assert.AreEqual(Orange, Fill(Shortcut(main, "All")));
-      analysis.Sources.Single(s => s.Name == "Single runs").IsChecked = false;
+      analysis.Sources.Single(s => s.Name == "Quick batch runs").IsChecked = false;
       analysis.Sources.First().IsChecked = false;
       Pump();
       Assert.AreEqual(Orange, Fill(Shortcut(main, "None")));
@@ -145,11 +145,11 @@ public class StudioResultsWindowTests {
       Pump();
       Assert.IsTrue(analysis.IsCustom);
       Assert.AreEqual(Orange, ((ISolidColorBrush)Custom().Background!).Color);
-      Assert.IsFalse(new[] { "All", "All w/o singles", "Only singles", "None" }.Any(t => Fill(Shortcut(main, t)) == Orange));
+      Assert.IsFalse(new[] { "All", "All w/o QBRs", "Only QBRs", "None" }.Any(t => Fill(Shortcut(main, t)) == Orange));
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selection-state.png"));
-      Shortcut(main, "All w/o singles").Command!.Execute(null);
+      Shortcut(main, "All w/o QBRs").Command!.Execute(null);
       Pump();
-      Assert.IsTrue(analysis.AllButSingleTicked);
+      Assert.IsTrue(analysis.AllButQbrsTicked);
 
       // "Add window": a tab in the second bar (spanning the window), selected and shown, ticked as the main tab
       add.Command!.Execute(null);
@@ -163,7 +163,7 @@ public class StudioResultsWindowTests {
       Assert.AreEqual(0, main.OpenResultsWindows.Count, "in the main window, not a window yet");
       Assert.IsTrue(first.Analysis.MatchesMain);
       Assert.AreEqual(Orange, Fill(Shortcut(main, "Same as main results")));
-      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/o singles")), "both: the main tab's ticks are All w/o singles");
+      Assert.AreEqual(Orange, Fill(Shortcut(main, "All w/o QBRs")), "both: the main tab's ticks are All w/o QBRs");
       // the window's name, level with Refresh
       Assert.AreEqual(Top(Shortcut(main, "Refresh")), Top(main.GetVisualDescendants().OfType<TextBox>().Single(t => t.Classes.Contains("windowname") && t.IsEffectivelyVisible)), 1);
       // the main tab ticked by hand, the further tab the same: "Custom" and "Same as main results" both full orange
@@ -178,7 +178,7 @@ public class StudioResultsWindowTests {
       main.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selection-state-window.png"));
       vm.SelectResults(null);
       Pump();
-      Shortcut(main, "All w/o singles").Command!.Execute(null);
+      Shortcut(main, "All w/o QBRs").Command!.Execute(null);
       vm.SelectResults(first);
       first.Analysis.CopySelectionFromMain();
       Pump();
@@ -204,7 +204,7 @@ public class StudioResultsWindowTests {
       Shortcut(main, "All").Command!.Execute(null);
       Pump();
       Assert.IsTrue(other.AllTicked);
-      Assert.AreEqual(analysis.Table.Rows.Count + 1, other.Table.Rows.Count, "with the single run");
+      Assert.AreEqual(analysis.Table.Rows.Count + 1, other.Table.Rows.Count, "with the quick batch run's run");
       Assert.AreEqual(1, analysis.Table.Rows.Count, "the main tab keeps its own selection");
       Assert.AreEqual(Pale, Fill(Shortcut(main, "Same as main results")));
       Shortcut(main, "Same as main results").Command!.Execute(null);
