@@ -41,13 +41,11 @@ public partial class MainViewModel : ViewModelBase {
     }, loaded?.RecentFiles, SaveSettings);
     Runs = new RunsBrowserViewModel(Workspace);
     RunAnalysis = new RunAnalysisViewModel(Workspace, fileDialogs);
-    Workspace.PropertyChanged += (_, e) => {
-      // finished experiments bring new runs
-      if (e.PropertyName == nameof(ExperimentWorkspaceViewModel.IsRunning) && !Workspace.IsRunning) {
-        RunAnalysis.RefreshSources();
-        foreach (var window in ResultsWindows) window.Analysis.RefreshSources();
-        Runs.Refresh();
-      }
+    // finished experiments and quick batch runs bring new runs (also while others still run)
+    Workspace.RunsFinished += () => {
+      RunAnalysis.RefreshSources();
+      foreach (var window in ResultsWindows) window.Analysis.RefreshSources();
+      Runs.Refresh();
     };
     Workspace.Finished += SendNotification;
     // before Resources: loading the settings saves nothing

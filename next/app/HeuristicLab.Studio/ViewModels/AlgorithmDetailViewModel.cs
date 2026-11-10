@@ -50,7 +50,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     // its runs in the experiment, then the quick batch runs its Start made (kept apart in the experiment's QuickBatchRuns)
     Runs = new RunsViewModel(() => [.. Algorithm.Runs.ToArray(),
       .. block.Root?.QuickBatchRuns.Groups.FirstOrDefault(g => g.Algorithm == Algorithm.Name)?.Runs ?? []]);
-    Analysis = new AnalysisViewModel(() => Algorithm, running => block.Workspace.SetAlgorithmRunning(running),
+    Analysis = new AnalysisViewModel(() => Algorithm, running => block.Workspace.SetAlgorithmRunning(block, Analysis!, running),
       status => block.Workspace.NotifyFinished($"Detailed analysis of {block.Name} finished", status));
     timer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => Tick());
     RefreshProblem();
@@ -249,8 +249,11 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   /// <summary>Why the algorithm cannot run with its problem at all (a needed operator is missing): yellow above its parameters.</summary>
   public string? AlgorithmWarning => ParameterChecks.AlgorithmWarning(Algorithm);
 
-  /// <summary>Parameters can change only while the algorithm is prepared or stopped and no experiment runs.</summary>
-  public bool CanEdit => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Stopped && !block.Workspace.IsRunningExperiments;
+  /// <summary>Its experiment runs (started with the start buttons): the experiment's Start/Stop control the algorithm.</summary>
+  private bool ExperimentRuns => block.Root?.IsRunning == true;
+
+  /// <summary>Parameters can change only while the algorithm is prepared or stopped and its experiment does not run.</summary>
+  public bool CanEdit => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Stopped && !ExperimentRuns;
 
   [RelayCommand(CanExecute = nameof(CanStart))]
   private void Start() {
@@ -264,7 +267,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
       return;
     }
     HeuristicLab.Next.Runtime.Resources.Configure(Algorithm);
-    block.Workspace.SetAlgorithmRunning(true);
+    block.Workspace.SetAlgorithmRunning(block, this, true);
     if (!startedHere) {
       // a new quick batch run (a paused one is resumed instead)
       runsBefore = new HashSet<IRun>(Algorithm.Runs, ReferenceEqualityComparer.Instance);
@@ -298,13 +301,13 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   /// <summary>"QBR: run 3 of 10" while a quick batch run started here goes on.</summary>
   public string? BatchProgress => startedHere && execution is { IsCompleted: false } ? $"Quick batch run: run {Math.Min(BatchRunsMade + 1, batchSize)} of {batchSize}" : null;
   private bool CanStart() => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Paused or ExecutionState.Stopped
-                             && Algorithm.Problem != null && !block.Workspace.IsRunningExperiments
+                             && Algorithm.Problem != null && !ExperimentRuns
                              && (execution == null || execution.IsCompleted || Algorithm.ExecutionState == ExecutionState.Paused);
 
   [RelayCommand(CanExecute = nameof(IsStarted))]
   private void Pause() => Algorithm.Pause();
   // while an experiment runs the algorithm, the experiment's Stop controls it
-  private bool IsStarted() => Algorithm.ExecutionState == ExecutionState.Started && !block.Workspace.IsRunningExperiments;
+  private bool IsStarted() => Algorithm.ExecutionState == ExecutionState.Started && !ExperimentRuns;
 
   [RelayCommand(CanExecute = nameof(CanStop))]
   private void Stop() {
@@ -312,14 +315,14 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     block.StopRequested();
     Algorithm.Stop();
   }
-  private bool CanStop() => Algorithm.ExecutionState is ExecutionState.Started or ExecutionState.Paused && !block.Workspace.IsRunningExperiments;
+  private bool CanStop() => Algorithm.ExecutionState is ExecutionState.Started or ExecutionState.Paused && !ExperimentRuns;
 
   [RelayCommand(CanExecute = nameof(CanPrepare))]
   private void Prepare() {
     Algorithm.Prepare(clearRuns: false);
     Tick();
   }
-  private bool CanPrepare() => Algorithm.ExecutionState is ExecutionState.Stopped or ExecutionState.Paused && !block.Workspace.IsRunningExperiments;
+  private bool CanPrepare() => Algorithm.ExecutionState is ExecutionState.Stopped or ExecutionState.Paused && !ExperimentRuns;
 
   private bool HasBreakpoints() =>
     ItemInspector.GraphOf(Algorithm) is OperatorGraph g && Operators(g, []).Any(o => o.Breakpoint);
@@ -356,10 +359,13 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
         // paused (e.g. at a breakpoint) still counts as running for the workspace: the tree stays locked
         bool paused = Algorithm.ExecutionState == ExecutionState.Paused;
         startedHere = paused;
-        block.Workspace.SetAlgorithmRunning(paused);
-        if (paused) Message = "Paused (breakpoint or Pause). Start resumes.";
-        else {
+        if (paused) {
+          block.Workspace.SetAlgorithmRunning(block, this, true);
+          Message = "Paused (breakpoint or Pause). Start resumes.";
+        } else {
+          // the runs become a quick batch run first, then the experiment is free again (the Runs and Results tabs read them)
           int made = MoveQuickBatchRuns();
+          block.Workspace.SetAlgorithmRunning(block, this, false);
           block.Workspace.NotifyFinished($"{block.Name} finished",
             $"{(execution is { IsFaulted: true } ? "Failed" : State)}: a quick batch run of {made} run{(made == 1 ? "" : "s")}");
         }

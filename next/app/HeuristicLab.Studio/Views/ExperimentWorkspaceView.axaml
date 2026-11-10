@@ -87,7 +87,7 @@
         <!-- add button of a container, with the building blocks it accepts -->
         <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
             <Button Classes="action addblock" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
-                    IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}">
+                    IsEnabled="{Binding IsEditable}">
                 <Button.Flyout>
                     <MenuFlyout ItemsSource="{Binding AddChoices}">
                         <MenuFlyout.ItemContainerTheme>
@@ -264,7 +264,7 @@
                     <ContentControl Grid.Column="3" Content="{Binding Problem}" ContentTemplate="{StaticResource Block}"
                                     IsVisible="{Binding HasProblem}" />
                     <Button Grid.Column="3" Classes="action" Content="+ Add problem" Command="{Binding ChooseProblemCommand}"
-                            IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable, FallbackValue=False}"
+                            IsEnabled="{Binding IsEditable}"
                             IsVisible="{Binding !HasProblem}" Height="32" />
                     <!-- the selected algorithm with its problem: one orange layer over the algorithm, the line and the problem -->
                     <Border Grid.Column="1" Grid.ColumnSpan="3" Classes="selection rowselection" Background="#F7931D" Opacity="0.38"
@@ -395,7 +395,7 @@
             <ContentControl.DataTemplates>
                 <DataTemplate DataType="vm:ExperimentBlockViewModel">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable}">
+                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding IsEditable}">
                             <TextBlock Text="{Binding Kind}" Opacity="0.7" />
                             <TextBox Text="{Binding Name}" />
                             <TextBlock Text="{Binding FilePath, FallbackValue='', TargetNullValue='Not saved yet'}" Opacity="0.7" TextWrapping="Wrap" />
@@ -415,7 +415,7 @@
                 </DataTemplate>
                 <DataTemplate DataType="vm:ContainerBlockViewModel">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding $parent[UserControl].((vm:ExperimentWorkspaceViewModel)DataContext).IsEditable}">
+                        <StackPanel DockPanel.Dock="Top" Spacing="8" IsEnabled="{Binding IsEditable}">
                             <TextBlock Text="{Binding Kind}" Opacity="0.7" />
                             <TextBox Text="{Binding Name}" />
                             <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsBatchRun}">

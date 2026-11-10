@@ -31,9 +31,17 @@
   named "Batch content"; a time-limit run is HeuristicLab's TimeLimitRun and takes one algorithm -
   kept that way on purpose so .hl files stay compatible with HeuristicLab 3.3 (user's decision
   2026-10-11; a multi-block time-limit container was built and reverted).
-  While anything runs, blocks stay clickable (details shown) but nothing changes: menus offer no
-  edits, names/limits/repetitions are ignored, add buttons disabled, no saving, dragging, copying
-  or editing across algorithms; value and choice parameters show parameter_currently_not_editable. Block design (user's request,
+  Only the experiments that run are locked (user's request 2026-11-10; ExperimentBlockViewModel.IsLocked = started with
+  the start buttons (IsRunning) or a quick batch run / detailed analysis of one of its algorithms runs or is paused -
+  ExperimentWorkspaceViewModel.SetAlgorithmRunning(block, key, running)); BlockViewModel.IsEditable = Workspace.
+  CanChange(block), refreshed per experiment (LockChanged). A locked experiment's blocks stay clickable (details shown)
+  but nothing in it changes: menus offer no edits, names/limits/repetitions are ignored, its add buttons disabled, no
+  saving, dragging into or out of it, copying or editing across algorithms; value and choice parameters show
+  parameter_currently_not_editable while the experiment itself runs. Other experiments and new ones (new, open, samples)
+  are worked on meanwhile and can be started too: "Start all" / "Start selected" start the ones that do not run yet
+  (overlapping starts share Stop's token and the Resources tab's experiments-at-once slots); Stop stops every
+  experiment run. Eject and "Delete runs..." offer only experiments that do not run. Workspace.IsRunning = anything
+  runs (live monitoring); RunsFinished (each experiment run / QBR end) makes the Runs and Results tabs read again. Block design (user's request,
   no rounded corners, no green/yellow): orange (#F7931D) square with the kind's pictogram, a dark
   square with the state (experiment: saved/unsaved; algorithm: status), the name; batch/time-limit
   runs end in an orange field (repetitions / time limit; while running "3 / 10" or "01:23 / 05:00").
