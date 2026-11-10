@@ -489,12 +489,17 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
 
   public bool HasProblem => Problem != null;
 
-  /// <summary>Selected with a problem: the orange layer covers the algorithm, the line and the problem (user's request 2026-11-03).</summary>
-  public bool IsRowSelected => IsSelected && HasProblem;
+  /// <summary>
+  /// The algorithm or its problem selected: one orange layer covers the algorithm, the line and the problem (user's
+  /// requests 2026-11-03 / 2026-11-11).
+  /// </summary>
+  public bool IsRowSelected => HasProblem && (IsSelected || Problem!.IsSelected);
 
   public override bool ShowsSelection => IsSelected && !HasProblem;
 
-  protected override void SelectionChanged() => OnPropertyChanged(nameof(IsRowSelected));
+  protected override void SelectionChanged() => RowSelectionChanged();
+
+  internal void RowSelectionChanged() => OnPropertyChanged(nameof(IsRowSelected));
 
   protected override void PickChanged(bool value) {
     if (Problem != null && Problem.IsPicked != value) Problem.IsPicked = value;
@@ -578,6 +583,11 @@ public partial class ProblemBlockViewModel(ExperimentWorkspaceViewModel workspac
   public override INamedItem Item => Problem;
   public override string Pictogram => "Problem_logo";
   public override bool FixedWidth => true;
+
+  /// <summary>Selected, the problem is covered by its algorithm's row layer (AlgorithmBlockViewModel.IsRowSelected).</summary>
+  public override bool ShowsSelection => false;
+
+  protected override void SelectionChanged() => Owner.RowSelectionChanged();
 
   /// <summary>"TSP: ch130": the abbreviation of the problem type (if it has one) and the instance name.</summary>
   public override string Label {

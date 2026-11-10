@@ -115,7 +115,8 @@
   The selected block is covered by a see-through orange layer (Border.selection, #F7931D at 0.38, not
   hit-testable, under the purple multi-edit layer); no dark frame around the name any more (user's request 2026-11-03).
   A selected algorithm with a problem gets one such layer over the algorithm, the line and the problem (Border.rowselection
-  in the algorithm row, AlgorithmBlockViewModel.IsRowSelected; its own layer off: ShowsSelection); a selected problem only its own.
+  in the algorithm row, AlgorithmBlockViewModel.IsRowSelected; its own layer off: ShowsSelection); a selected problem shows
+  the same layer (user's request 2026-11-11; ProblemBlockViewModel.ShowsSelection is always false).
   Drag and drop (own pointer handling in ExperimentWorkspaceView, logic in the workspace VM:
   BeginDrag/TargetAt/PreviewDrop/EndDrag/Move): algorithms (also dragged by their problem), batch
   runs and time-limit runs (with their content) move anywhere, also into other experiments; upper

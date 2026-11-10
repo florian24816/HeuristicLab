@@ -194,11 +194,17 @@ public class StudioBlockDesignTests {
       Assert.AreEqual(right - left, row.Bounds.Width, 1, "from the algorithm's left to the problem's right edge");
       Assert.AreEqual(algo.Bounds.Height, row.Bounds.Height, 1);
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selected-row.png"));
-      // the problem selected: only its own layer
+      // the problem selected: the same layer over the problem, the line and the algorithm
       ws.Selected = second.Problem;
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      Assert.IsTrue(row.IsEffectivelyVisible);
+      Assert.AreEqual(right - left, row.Bounds.Width, 1);
+      Assert.IsFalse(Layer(second.Problem!).IsEffectivelyVisible, "not twice over the problem");
+      Assert.IsFalse(Layer(second).IsEffectivelyVisible);
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-selected-problem-row.png"));
+      ws.Selected = first;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       Assert.IsFalse(row.IsEffectivelyVisible);
-      Assert.IsTrue(Layer(second.Problem!).IsEffectivelyVisible);
       window.Close();
       return true;
     }, CancellationToken.None);
