@@ -177,11 +177,17 @@ public class StudioQuickBatchRunTests {
       ws.SetProblem(ga, (IProblem)Setups.Create(new SetupRequest("GeneticAlgorithm") { Problem = "TravelingSalesmanProblem", Instance = "ch130" }).Algorithm.Problem!.Clone());
       ws.Selected = ga;
       Pump();
+      var detail = (AlgorithmDetailViewModel)ws.Detail!;
+      Assert.AreEqual("Prepared", detail.State, $"{ga.Algorithm.ExecutionState}; running: {ws.IsRunning}");
+      Assert.IsTrue(detail.StartCommand.CanExecute(null), "a new algorithm with a problem can start");
       var title = window.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "QbrTitle" && p.IsEffectivelyVisible);
       var fields = title.Children.OfType<Border>().ToList();
-      CollectionAssert.AreEqual(new[] { "Quick batch", "of", "10", "run" }, fields.Select(f => ((TextBlock)f.Child!).Text).ToList());
-      Assert.AreEqual(((Avalonia.Media.ISolidColorBrush)fields[0].Background!).Color, ((Avalonia.Media.ISolidColorBrush)fields[3].Background!).Color, "\"run\" looks like \"Quick batch\"");
-      Assert.AreNotEqual(((Avalonia.Media.ISolidColorBrush)fields[0].Background!).Color, ((Avalonia.Media.ISolidColorBrush)fields[1].Background!).Color, "\"of\" in another shade");
+      CollectionAssert.AreEqual(new[] { "Quick batch", "of 10", "run" }, fields.Select(f => ((TextBlock)f.Child!).Text).ToList());
+      Avalonia.Media.Color Fill(Border b) => ((Avalonia.Media.ISolidColorBrush)b.Background!).Color;
+      Assert.AreEqual(Avalonia.Media.Color.Parse("#FBCD96"), Fill(fields[0]));
+      Assert.AreEqual(Fill(fields[0]), Fill(fields[2]), "\"run\" looks like \"Quick batch\"");
+      Assert.AreEqual(Avalonia.Media.Color.Parse("#E3E3E3"), Fill(fields[1]), "\"of 10\": the grey of what cannot be pressed");
+      Assert.IsTrue(fields.All(f => ((TextBlock)f.Child!).FontWeight == Avalonia.Media.FontWeight.Bold), "bold");
       var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("exec") && b.IsEffectivelyVisible).ToList();
       CollectionAssert.AreEqual(new[] { "▶ Start", "⏸ Pause", "⏹ Stop", "↺ Prepare" }, buttons.Select(b => (string)b.Content!).ToList());
       foreach (var control in fields.Cast<Control>().Concat(buttons)) {
@@ -193,9 +199,13 @@ public class StudioQuickBatchRunTests {
       // the size follows the Options tab
       vm.Options.QuickBatchSize = 25;
       Pump();
-      Assert.AreEqual("25", ((TextBlock)fields[2].Child!).Text);
+      Assert.AreEqual("of 25", ((TextBlock)fields[1].Child!).Text);
       vm.Options.QuickBatchSize = 10;
       Pump();
+      Assert.AreEqual("Prepared", detail.State, "still");
+      Assert.IsTrue(buttons[0].IsEnabled, "Start can be pressed");
+      var stateText = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && (t.Text == "Prepared" || t.Text == "Stopped")).Select(t => t.Text + "@" + ((t.DataContext as AlgorithmDetailViewModel) == detail)).ToList();
+      Assert.AreEqual("Prepared@True", string.Join(",", stateText));
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-qbr-controls.png"));
       vm.IsDarkMode = true;
       Pump();

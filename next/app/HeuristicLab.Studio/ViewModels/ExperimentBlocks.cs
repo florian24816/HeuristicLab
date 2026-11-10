@@ -429,6 +429,7 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
 
   private void StatusChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() => {
     RefreshStatus();
+    detail?.ExecutionStateChanged();
     MarkModified();  // results and runs are part of the saved file
   });
 

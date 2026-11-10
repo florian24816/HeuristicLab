@@ -399,6 +399,22 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     return made.Count;
   }
 
+  /// <summary>
+  /// The algorithm was prepared, started, paused or stopped (also by an experiment, or by a problem change): the state
+  /// shown and the buttons follow - they were only read by the detail's own timer, so a change made elsewhere stayed
+  /// unseen (a new algorithm showed "Stopped" and no Start after it had been prepared).
+  /// </summary>
+  internal void ExecutionStateChanged() {
+    OnPropertyChanged(nameof(State));
+    OnPropertyChanged(nameof(ExecutionTime));
+    OnPropertyChanged(nameof(CanEdit));
+    SyncEditability();
+    StartCommand.NotifyCanExecuteChanged();
+    PauseCommand.NotifyCanExecuteChanged();
+    StopCommand.NotifyCanExecuteChanged();
+    PrepareCommand.NotifyCanExecuteChanged();
+  }
+
   /// <summary>Called when the workspace's run state changes.</summary>
   public void Refresh() => Tick();
 

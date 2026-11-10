@@ -14,29 +14,26 @@
         </Style>
 
         <!-- the quick batch run's controls (user's request 2026-11-10): square fields and buttons of one height in the
-             logo orange's shades with dark writing, in both modes (as the blocks); "Quick batch" / "run" palest, "of" a
-             shade stronger, the size full orange; Start full orange, Pause / Stop a shade paler, Prepare palest; a
+             logo orange's shades with dark writing, in both modes (as the blocks); "Quick batch" / "run" #FBCD96 bold,
+             "of <size>" one box in the grey of what cannot be pressed (ExecOffBrush, bold); Start full orange, Pause / Stop a shade paler, Prepare palest; a
              button that cannot be pressed now is grey (ExecOffBrush: lighter than the window in dark mode) -->
         <Style Selector="Border.qbr">
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="10,0" />
-            <Setter Property="Background" Value="#FDE5C8" />
+            <Setter Property="Background" Value="#FBCD96" />
         </Style>
         <Style Selector="Border.qbr > TextBlock">
             <Setter Property="Foreground" Value="#1E1E1E" />
+            <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="HorizontalAlignment" Value="Center" />
         </Style>
-        <Style Selector="Border.qbr.of">
-            <Setter Property="Background" Value="#FBCD96" />
-            <Setter Property="Padding" Value="7,0" />
-        </Style>
         <Style Selector="Border.qbr.size">
-            <Setter Property="Background" Value="#F7931D" />
-            <Setter Property="MinWidth" Value="44" />
+            <Setter Property="Background" Value="{DynamicResource ExecOffBrush}" />
+            <Setter Property="MinWidth" Value="60" />
         </Style>
         <Style Selector="Border.qbr.size > TextBlock">
-            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource ExecOffInkBrush}" />
         </Style>
         <Style Selector="Button.exec">
             <Setter Property="Height" Value="32" />
@@ -91,8 +88,7 @@
                 <StackPanel x:Name="QbrTitle" Orientation="Horizontal" Spacing="2"
                             ToolTip.Tip="Start makes a quick batch run (QBR): the algorithm runs this many times; the runs go to &quot;Quick batch runs&quot; in the Runs and Results tabs. The size is set in the Options tab.">
                     <Border Classes="qbr"><TextBlock Text="Quick batch" /></Border>
-                    <Border Classes="qbr of"><TextBlock Text="of" /></Border>
-                    <Border Classes="qbr size"><TextBlock Text="{Binding BatchSizeText}" /></Border>
+                    <Border Classes="qbr size"><TextBlock Text="{Binding BatchSizeText, StringFormat='of {0}'}" /></Border>
                     <Border Classes="qbr"><TextBlock Text="run" /></Border>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="2">

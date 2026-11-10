@@ -378,10 +378,13 @@
   thread: Start, then Prepare(clearRuns: false) and Start again until that many runs; SetSeedRandomly gives each its own
   seed; a pause leaves the loop and Start resumes it, Stop / a failure end it with the runs made; "Quick batch run: run 3
   of 10" beside the time, BatchProgress). Its controls (user's request 2026-11-10; AlgorithmDetailView): one row of square
-  fields and buttons 32 px high in the logo orange's shades with dark writing in both modes - "Quick batch" #FDE5C8 |
-  "of" #FBCD96 | the size (BatchSizeText: the Options tab's, the one in use while a QBR runs) #F7931D bold | "run" #FDE5C8
-  (Border.qbr, StackPanel QbrTitle), then Button.exec Start #F7931D, Pause / Stop #F9B462, Prepare #FDE5C8 (hover a
-  shade darker; disabled ExecOffBrush/ExecOffInkBrush: light #E3E3E3/#8C8C8C, dark #3A3A3A/#8A8A8A), then the status - when it ends (not paused) the runs it made leave the algorithm (HeuristicLab
+  fields and buttons 32 px high, all text of the title bold - "Quick batch" #FBCD96 | "of <size>" in one box in the
+  grey of what cannot be pressed (ExecOffBrush/ExecOffInkBrush; BatchSizeText: the Options tab's size, the one in use
+  while a QBR runs) | "run" #FBCD96 (Border.qbr, StackPanel QbrTitle), then Button.exec Start #F7931D, Pause / Stop #F9B462, Prepare #FDE5C8 (hover a
+  shade darker; disabled ExecOffBrush/ExecOffInkBrush: light #E3E3E3/#8C8C8C, dark #3A3A3A/#8A8A8A), then the status.
+  The detail follows the algorithm's Prepared/Started/Paused/Stopped events (AlgorithmBlockViewModel.StatusChanged ->
+  AlgorithmDetailViewModel.ExecutionStateChanged): only its own timer read the state before, so a new algorithm could
+  show "Stopped" without Start after it had been prepared - when it ends (not paused) the runs it made leave the algorithm (HeuristicLab
   removes them from its batch run, time-limit run and experiment too) and become one QBR of
   ExperimentBlockViewModel.QuickBatchRuns (ViewModels/QuickBatchRuns.cs), runs named "QBR k, run j" (k per algorithm,
   grouped by the runs' "Algorithm Name"; QbrAlgorithmGroup.Batches / QuickBatch by the number in the name). The
