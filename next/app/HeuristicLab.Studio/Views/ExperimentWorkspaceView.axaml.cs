@@ -83,6 +83,15 @@ public partial class ExperimentWorkspaceView : UserControl {
   // ---- drag and drop: press a block, move, release where the faded preview shows it
 
   private void BlockPressed(object? sender, PointerPressedEventArgs e) {
+    // right-click on a block that is not picked: the picked ones are let go and this one is selected, its own menu opens
+    // (user's request 2026-11-11); on a picked block the menu acts on all picked ones
+    if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed) {
+      if ((sender as Control)?.DataContext is BlockViewModel { IsPicked: false } clicked && Workspace is { } workspace) {
+        workspace.ClearPicks();
+        clicked.SelectCommand.Execute(null);
+      }
+      return;
+    }
     if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
     // Shift+click on a purple algorithm: stop editing a field across algorithms
     if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && (sender as Control)?.DataContext is BlockViewModel { IsMultiMember: true }) {

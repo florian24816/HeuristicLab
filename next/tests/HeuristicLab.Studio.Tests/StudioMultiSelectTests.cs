@@ -298,6 +298,25 @@ public class StudioMultiSelectTests {
       CollectionAssert.IsSubsetOf(new[] { "Delete selected items", "Copy selected items", "Copy selected items n times..." }, menu);
       CollectionAssert.DoesNotContain(menu, "Delete");
       CollectionAssert.Contains(c.Menu.Select(m => m.Display).ToList(), "Delete", "a block not picked keeps its own menu");
+      // right-click: on a picked block the picks stay; on another block they go and that one is selected
+      void RightClick(BlockViewModel block) {
+        var at = Center(Name(block), window);
+        window.MouseDown(at, MouseButton.Right);
+        window.MouseUp(at, MouseButton.Right);
+        Pump();
+        foreach (var border in window.GetVisualDescendants().OfType<Border>().Where(x => x.Classes.Contains("block")))
+          border.ContextMenu?.Close();
+        Pump();
+      }
+      RightClick(a);
+      CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList(), "the picked blocks' menu");
+      RightClick(c);
+      Assert.IsFalse(ws.AllBlocks().Any(x => x.IsPicked), "a block not picked: the picked ones are let go");
+      Assert.AreSame(c, ws.Selected, "and it is selected");
+      Assert.IsTrue(c.IsSelected);
+      Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
+      CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
       a.Menu.Single(m => m.Display == "Copy selected items").Command.Execute(null);
       Pump();
       CollectionAssert.AreEqual(new[] { "A", "A (copy 1)", "B", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
