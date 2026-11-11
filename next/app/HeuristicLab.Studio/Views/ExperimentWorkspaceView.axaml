@@ -339,7 +339,7 @@
 
             <!-- the tree, and over it the rectangle that picks blocks (press on empty space and sweep) -->
             <Panel>
-            <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto" PointerPressed="TreePressed">
+            <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto" PointerPressed="TreePressed" Focusable="True">
                 <!-- blocks stay clickable while experiments run; what would change them is disabled -->
                 <StackPanel Spacing="14">
                     <ItemsControl ItemsSource="{Binding Experiments}">

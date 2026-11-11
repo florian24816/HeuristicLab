@@ -87,6 +87,11 @@ public partial class ExperimentWorkspaceView : UserControl {
     // its own menu opens; the shown block (orange) stays (user's request 2026-11-11). On a picked block the menu acts on
     // all picked ones.
     if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed) {
+      // a menu closed without choosing gives the focus back to the control focused before it (often "+ New experiment /
+      // open..." at the bottom), which the tab then scrolled into view - so the tab's own scroll area takes the focus
+      // first (clearing it is not enough: the menu remembers the control focused last)
+      if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not TextBox && this.FindControl<ScrollViewer>("Tree") is { } tree)
+        tree.Focus(NavigationMethod.Pointer);
       if ((sender as Control)?.DataContext is BlockViewModel { IsPicked: false } clicked && Workspace is { } workspace) {
         workspace.ClearPicks();
         workspace.TogglePick(clicked);

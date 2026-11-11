@@ -91,7 +91,10 @@
   started in (else the first touched block's), Ctrl+click in another experiment starts anew there. While the
   rectangle is drawn, what it would pick gets a blue frame (BlockViewModel.IsBandCovered, the rectangle's #2E6FD8;
   inverted only once let go). A right-click on a block not picked lets the picked ones (if any) go and picks it instead
-  (inverted, its own menu; the shown - orange - block stays; ExperimentWorkspaceView.BlockPressed; user's request 2026-11-11). A picked block's menu (BlockViewModel.Menu = SingleMenu + MultipleMenu; user's request 2026-11-11)
+  (inverted, its own menu; the shown - orange - block stays; ExperimentWorkspaceView.BlockPressed; user's request 2026-11-11). The
+  right-click also focuses the tab's scroll area (ScrollViewer Tree, Focusable): a menu closed without choosing gives the focus
+  back to the control focused before, and when that was "+ New experiment / open..." the tab jumped to the bottom
+  (StudioMenuScrollTests). A picked block's menu (BlockViewModel.Menu = SingleMenu + MultipleMenu; user's request 2026-11-11)
   has two parts with bold titles that cannot be clicked: "Single selection" (the block's own entries, as alone) and
   "Multiple selections" on a grey of its own (MultiMenuBrush: light #D9D9D9, dark #454545; MenuChoice.Look -> MenuItem
   Tag) acting on all picked ones: "Delete selected items" (asked once), "Copy selected items", "Copy selected items n
