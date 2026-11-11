@@ -16,7 +16,13 @@ namespace HeuristicLab.Studio.ViewModels;
 public enum AlgorithmStatus { NotRun, ProblemMissing, Waiting, Working, Finished, Failed }
 
 /// <summary>Entry of an add menu or a block's context menu.</summary>
-public sealed record MenuChoice(string Display, System.Windows.Input.ICommand Command, string? Tip = null);
+public sealed record MenuChoice(string Display, System.Windows.Input.ICommand? Command, string? Tip = null) {
+  /// <summary>
+  /// How a block menu entry looks (MenuItem Tag; ExperimentWorkspaceView.axaml): "" plain, "heading" a section title that
+  /// cannot be clicked, "multi" (and "multiheading") the part acting on all picked blocks on MultiMenuBrush.
+  /// </summary>
+  public string Look { get; init; } = "";
+}
 
 /// <summary>
 /// An existing building block (green in the mockups): experiment, batch run, time-limit run,
@@ -184,20 +190,37 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [RelayCommand]
   private Task CopySelectedManyAsync() => Workspace.CopySelectedManyAsync();
 
-  /// <summary>"Copy" and "Copy n times..." where a copy can go next to the block; for several picked blocks the same for all of them.</summary>
+  /// <summary>"Copy" and "Copy n times..." where a copy can go next to the block.</summary>
   protected IReadOnlyList<MenuChoice> CopyMenu =>
-    !IsEditable ? []
-    : InPickedGroup ? (Workspace.CanCopySelected() ? [new("Copy selected items", CopySelectedCommand), new("Copy selected items n times...", CopySelectedManyCommand)] : [])
-    : Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
-
-  /// <summary>Context menu of the block (while experiments run only what changes nothing).</summary>
-  public virtual IReadOnlyList<MenuChoice> Menu => EditMenu;
+    IsEditable && Workspace.CanCopy(this) ? [new("Copy", CopyCommand), new("Copy n times...", CopyManyCommand)] : [];
 
   /// <summary>Rename and Delete, if the tree can be changed now.</summary>
   protected IReadOnlyList<MenuChoice> EditMenu =>
-    !IsEditable ? []
-    : InPickedGroup ? [new("Rename", RenameCommand), new("Delete selected items", DeleteSelectedCommand)]
-    : [new("Rename", RenameCommand), new("Delete", DeleteCommand)];
+    !IsEditable ? [] : [new("Rename", RenameCommand), new("Delete", DeleteCommand)];
+
+  /// <summary>What the menu offers for this block alone (while its experiment runs only what changes nothing).</summary>
+  protected virtual IReadOnlyList<MenuChoice> SingleMenu => EditMenu;
+
+  /// <summary>What the menu offers for all picked blocks, when this one is picked among several.</summary>
+  protected virtual IReadOnlyList<MenuChoice> MultipleMenu =>
+    !IsEditable || !InPickedGroup ? []
+    : [.. Workspace.CanCopySelected()
+         ? new MenuChoice[] { new("Copy selected items", CopySelectedCommand), new("Copy selected items n times...", CopySelectedManyCommand) } : [],
+       new("Delete selected items", DeleteSelectedCommand)];
+
+  /// <summary>
+  /// Context menu: the block's own entries; picked among several, split into "Single selection" (as alone) and
+  /// "Multiple selections" (on a grey of its own) - user's request 2026-11-11.
+  /// </summary>
+  public IReadOnlyList<MenuChoice> Menu {
+    get {
+      var single = SingleMenu;
+      var multiple = MultipleMenu;
+      if (multiple.Count == 0) return single;
+      return [.. single.Count > 0 ? [new MenuChoice("Single selection", null) { Look = "heading" }, .. single] : Array.Empty<MenuChoice>(),
+              new MenuChoice("Multiple selections", null) { Look = "multiheading" }, .. multiple.Select(m => m with { Look = "multi" })];
+    }
+  }
 
   public void RefreshLabel() => OnPropertyChanged(nameof(Label));
 
@@ -246,7 +269,7 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   }
   public IReadOnlyList<MenuChoice> AddChoices { get; }
 
-  public override IReadOnlyList<MenuChoice> Menu =>
+  protected override IReadOnlyList<MenuChoice> SingleMenu =>
     [new("Show runs", new RelayCommand(() => Workspace.ShowRuns(this))), .. CopyMenu, .. EditMenu];
 
   /// <summary>A time-limit run holds one algorithm, so its add button goes away once it has one.</summary>
@@ -393,7 +416,7 @@ public partial class ExperimentBlockViewModel(ExperimentWorkspaceViewModel works
   private Task RenameFileAsync() => Workspace.RenameFileAsync(this);
   public bool HasFile => FilePath != null;
 
-  public override IReadOnlyList<MenuChoice> Menu => IsEditable
+  protected override IReadOnlyList<MenuChoice> SingleMenu => IsEditable
     ? [new("Save as...", SaveCommand), .. FilePath != null ? [new MenuChoice("Rename file...", RenameFileCommand)] : Array.Empty<MenuChoice>(),
        new("Show runs", ShowRunsCommand), new("Rename", RenameCommand), new("Remove from workspace", DeleteCommand)]
     : [new("Show runs", ShowRunsCommand)];
@@ -552,7 +575,7 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
   [RelayCommand]
   private void ShowRuns() => Workspace.ShowRuns(this);
 
-  public override IReadOnlyList<MenuChoice> Menu =>
+  protected override IReadOnlyList<MenuChoice> SingleMenu =>
     [.. IsEditable ? [new MenuChoice(HasProblem ? "Change problem..." : "Add problem...", ChooseProblemCommand)] : Array.Empty<MenuChoice>(),
      new("Show runs", ShowRunsCommand), .. CopyMenu, .. EditMenu];
 
@@ -604,14 +627,17 @@ public partial class ProblemBlockViewModel(ExperimentWorkspaceViewModel workspac
   [RelayCommand]
   private Task ChangeSelectedAsync() => Workspace.ChangeSelectedProblemsAsync();
 
+  protected override IReadOnlyList<MenuChoice> SingleMenu =>
+    !IsEditable ? [] : [new("Change problem...", ChangeCommand), new("Rename", RenameCommand), new("Remove problem", DeleteCommand)];
+
   /// <summary>
-  /// Only problems picked (without their algorithms): change or remove all of them; picked with its algorithm among
-  /// several: the menu of the picked blocks; else this problem's own.
+  /// Several problems picked without their algorithms: change or remove all of them; picked with its algorithm among
+  /// several: the picked blocks' entries.
   /// </summary>
-  public override IReadOnlyList<MenuChoice> Menu =>
+  protected override IReadOnlyList<MenuChoice> MultipleMenu =>
     !IsEditable ? []
     : IsPicked && !Owner.IsPicked && Workspace.OnlyProblemsPicked()
-      ? [new("Change selected problem blocks to...", ChangeSelectedCommand), new("Remove selected problems", DeleteSelectedCommand)]
-    : InPickedGroup ? [.. CopyMenu, .. EditMenu]
-    : [new("Change problem...", ChangeCommand), new("Rename", RenameCommand), new("Remove problem", DeleteCommand)];
+      ? (Workspace.PickedProblems().Count > 1
+        ? [new("Change selected problem blocks to...", ChangeSelectedCommand), new("Remove selected problems", DeleteSelectedCommand)] : [])
+    : base.MultipleMenu;
 }

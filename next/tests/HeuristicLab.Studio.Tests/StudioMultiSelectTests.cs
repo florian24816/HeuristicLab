@@ -294,10 +294,40 @@ public class StudioMultiSelectTests {
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
       Click(window, Center(Name(a), window), RawInputModifiers.Control);
       CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+      // split in two parts: "Single selection" (this block alone, as before) and "Multiple selections" (all picked ones)
       var menu = a.Menu.Select(m => m.Display).ToList();
-      CollectionAssert.IsSubsetOf(new[] { "Delete selected items", "Copy selected items", "Copy selected items n times..." }, menu);
-      CollectionAssert.DoesNotContain(menu, "Delete");
-      CollectionAssert.Contains(c.Menu.Select(m => m.Display).ToList(), "Delete", "a block not picked keeps its own menu");
+      Assert.AreEqual("Single selection", menu[0]);
+      int multipleAt = menu.IndexOf("Multiple selections");
+      CollectionAssert.IsSubsetOf(new[] { "Copy", "Rename", "Delete" }, menu.Take(multipleAt).ToList());
+      CollectionAssert.AreEqual(new[] { "Copy selected items", "Copy selected items n times...", "Delete selected items" }, menu.Skip(multipleAt + 1).ToList());
+      CollectionAssert.AreEqual(new[] { "heading" }, a.Menu.Take(multipleAt).Select(m => m.Look).Where(l => l != "").ToList());
+      Assert.IsTrue(a.Menu.Skip(multipleAt).All(m => m.Look is "multi" or "multiheading"));
+      Assert.IsTrue(a.Menu.Where(m => m.Look is "heading" or "multiheading").All(m => m.Command == null), "titles cannot be clicked");
+      var own = c.Menu.Select(m => m.Display).ToList();
+      CollectionAssert.Contains(own, "Delete", "a block not picked keeps its own menu");
+      CollectionAssert.DoesNotContain(own, "Single selection", "without titles");
+      // drawn: the multiple part on its own grey (light mode)
+      var aBlock = window.GetVisualDescendants().OfType<Border>().First(x => x.Classes.Contains("block") && x.DataContext == a);
+      window.MouseDown(Center(Name(a), window), MouseButton.Right);
+      window.MouseUp(Center(Name(a), window), MouseButton.Right);
+      Pump();
+      Assert.IsTrue(aBlock.ContextMenu!.IsOpen);
+      var items = aBlock.ContextMenu.GetVisualDescendants().OfType<MenuItem>().ToList();
+      Assert.AreEqual(a.Menu.Count, items.Count);
+      Color Back(MenuItem item) => ((ISolidColorBrush)item.Background!).Color;
+      Assert.AreEqual(Color.Parse("#D9D9D9"), Back(items[multipleAt]));
+      Assert.AreEqual(Color.Parse("#D9D9D9"), Back(items[^1]));
+      Assert.AreNotEqual(Color.Parse("#D9D9D9"), items[1].Background is ISolidColorBrush plain ? plain.Color : Colors.Transparent);
+      Assert.AreEqual(FontWeight.Bold, items[0].FontWeight);
+      Assert.IsFalse(items[0].IsHitTestVisible);
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-menu.png"));
+      vm.IsDarkMode = true;
+      Pump();
+      Assert.AreEqual(Color.Parse("#454545"), Back(items[^1]));
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-menu-dark.png"));
+      vm.IsDarkMode = false;
+      aBlock.ContextMenu.Close();
+      Pump();
       // right-click: on a picked block the picks stay; on another block they go and that one is selected
       void RightClick(BlockViewModel block) {
         var at = Center(Name(block), window);
@@ -325,13 +355,13 @@ public class StudioMultiSelectTests {
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
       Click(window, Center(Name(a), window), RawInputModifiers.Control);
       CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
-      a.Menu.Single(m => m.Display == "Copy selected items").Command.Execute(null);
+      a.Menu.Single(m => m.Display == "Copy selected items").Command!.Execute(null);
       Pump();
       CollectionAssert.AreEqual(new[] { "A", "A (copy 1)", "B", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
       Click(window, Center(Name(a), window), RawInputModifiers.Control);
       Assert.IsTrue(a.IsPicked && b.IsPicked);
-      a.Menu.Single(m => m.Display == "Delete selected items").Command.Execute(null);
+      a.Menu.Single(m => m.Display == "Delete selected items").Command!.Execute(null);
       Pump();
       CollectionAssert.AreEqual(new[] { "A (copy 1)", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
       CollectionAssert.AreEqual(new[] { "C" }, second.Children.Select(x => x.Name).ToList());

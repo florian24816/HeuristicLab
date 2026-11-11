@@ -28,6 +28,16 @@
                             <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
                                 <Setter Property="Header" Value="{Binding Display}" />
                                 <Setter Property="Command" Value="{Binding Command}" />
+                                <Setter Property="Tag" Value="{Binding Look}" />
+                                <!-- picked among several: "Single selection" as before, "Multiple selections" on a grey of its own -->
+                                <Style Selector="^[Tag=heading], ^[Tag=multiheading]">
+                                    <Setter Property="FontWeight" Value="Bold" />
+                                    <Setter Property="IsHitTestVisible" Value="False" />
+                                    <Setter Property="Focusable" Value="False" />
+                                </Style>
+                                <Style Selector="^[Tag=multi], ^[Tag=multiheading]">
+                                    <Setter Property="Background" Value="{DynamicResource MultiMenuBrush}" />
+                                </Style>
                             </ControlTheme>
                         </ContextMenu.ItemContainerTheme>
                     </ContextMenu>
