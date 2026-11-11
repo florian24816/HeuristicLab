@@ -83,12 +83,14 @@ public partial class ExperimentWorkspaceView : UserControl {
   // ---- drag and drop: press a block, move, release where the faded preview shows it
 
   private void BlockPressed(object? sender, PointerPressedEventArgs e) {
-    // right-click on a block that is not picked: the picked ones are let go and this one is selected, its own menu opens
-    // (user's request 2026-11-11); on a picked block the menu acts on all picked ones
+    // right-click on a block that is not picked while others are: the picked ones are let go and this one is picked
+    // instead (inverted), its own menu opens; the shown block (orange) stays (user's request 2026-11-11). On a picked
+    // block the menu acts on all picked ones.
     if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed) {
-      if ((sender as Control)?.DataContext is BlockViewModel { IsPicked: false } clicked && Workspace is { } workspace) {
+      if ((sender as Control)?.DataContext is BlockViewModel { IsPicked: false } clicked && Workspace is { } workspace
+          && workspace.AllBlocks().Any(b => b.IsPicked)) {
         workspace.ClearPicks();
-        clicked.SelectCommand.Execute(null);
+        workspace.TogglePick(clicked);
       }
       return;
     }

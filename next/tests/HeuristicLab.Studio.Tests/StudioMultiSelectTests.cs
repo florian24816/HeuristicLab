@@ -310,10 +310,16 @@ public class StudioMultiSelectTests {
       }
       RightClick(a);
       CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList(), "the picked blocks' menu");
+      var shown = ws.Selected;
       RightClick(c);
-      Assert.IsFalse(ws.AllBlocks().Any(x => x.IsPicked), "a block not picked: the picked ones are let go");
-      Assert.AreSame(c, ws.Selected, "and it is selected");
-      Assert.IsTrue(c.IsSelected);
+      CollectionAssert.AreEqual(new BlockViewModel[] { c }, ws.AllBlocks().Where(x => x.IsPicked).ToList(),
+        "a block not picked: the picked ones are let go, it is picked instead");
+      Assert.AreSame(shown, ws.Selected, "the shown block (orange) stays");
+      Assert.AreEqual(Color.Parse("#1E1E1E"), Fill(Name(c)), "inverted");
+      CollectionAssert.Contains(c.Menu.Select(m => m.Display).ToList(), "Delete", "its own menu");
+      ws.ClearPicks();
+      RightClick(c);
+      Assert.IsFalse(c.IsPicked, "nothing else picked: a right-click only opens the menu");
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
       Click(window, Center(Name(a), window), RawInputModifiers.Control);
       CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
