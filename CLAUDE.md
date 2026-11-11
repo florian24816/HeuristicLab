@@ -90,7 +90,7 @@
   not into a time-limit run). Picked blocks belong to one experiment: the rectangle picks only in the experiment it
   started in (else the first touched block's), Ctrl+click in another experiment starts anew there. While the
   rectangle is drawn, what it would pick gets a blue frame (BlockViewModel.IsBandCovered, the rectangle's #2E6FD8;
-  inverted only once let go). A right-click on a block not picked while others are lets them go and picks it instead
+  inverted only once let go). A right-click on a block not picked lets the picked ones (if any) go and picks it instead
   (inverted, its own menu; the shown - orange - block stays; ExperimentWorkspaceView.BlockPressed; user's request 2026-11-11). A picked block's menu acts on all picked ones: "Delete selected items" (asked once),
   "Copy selected items", "Copy selected items n times..." (each block's copies after it; menus refresh on
   PicksChanged).

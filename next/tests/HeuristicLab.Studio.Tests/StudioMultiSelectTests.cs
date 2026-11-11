@@ -319,7 +319,9 @@ public class StudioMultiSelectTests {
       CollectionAssert.Contains(c.Menu.Select(m => m.Display).ToList(), "Delete", "its own menu");
       ws.ClearPicks();
       RightClick(c);
-      Assert.IsFalse(c.IsPicked, "nothing else picked: a right-click only opens the menu");
+      CollectionAssert.AreEqual(new BlockViewModel[] { c }, ws.AllBlocks().Where(x => x.IsPicked).ToList(), "nothing picked before: picked too");
+      Assert.AreSame(shown, ws.Selected);
+      ws.ClearPicks();
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
       Click(window, Center(Name(a), window), RawInputModifiers.Control);
       CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
