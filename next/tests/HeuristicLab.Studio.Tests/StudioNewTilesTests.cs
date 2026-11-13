@@ -48,13 +48,16 @@ public class StudioNewTilesTests {
       Border LabelBox(Button tile) => tile.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("tilelabel"));
 
       var tiles = Tiles();
-      CollectionAssert.AreEqual(new[] { "New experiment", "New from data or benchmark...", "Open...", "Open recent" }, tiles.Select(Label).ToList());
+      CollectionAssert.AreEqual(new[] { "New experiment", "New benchmark instance", "Open...", "Open recent" }, tiles.Select(Label).ToList());
       Assert.IsFalse(window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "+ New experiment / open..."), "no list button any more");
-      CollectionAssert.AreEqual(new[] { "experiment_logo", "Table_logo", "open_from_file", "open_recent" },
+      CollectionAssert.AreEqual(new[] { "experiment_logo", "Algorith_logo", "open_from_file", "open_recent" },
         tiles.Select(t => t.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().Single().Symbol).ToList());
       foreach (var tile in tiles) {
         var square = Square(tile);
         Assert.AreEqual(square.Bounds.Width, square.Bounds.Height, 0.5, "a square");
+        Assert.AreEqual(LabelBox(tile).Bounds.Width, square.Bounds.Width, 0.5, "as wide as the text field below it");
+        var picture = tile.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().Single();
+        Assert.IsTrue(picture.Bounds.Width > 0.5 * square.Bounds.Width, $"the pictogram grown with it: {picture.Bounds.Width}");
         Assert.IsTrue(square.TranslatePoint(default, tile)!.Value.Y < LabelBox(tile).TranslatePoint(default, tile)!.Value.Y, "the text below it");
       }
       Assert.AreEqual(Color.Parse("#FDE5C8"), Fill(Square(tiles[0])), "pale logo orange");
