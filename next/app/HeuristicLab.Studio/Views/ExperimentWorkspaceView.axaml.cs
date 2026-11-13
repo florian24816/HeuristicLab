@@ -80,6 +80,11 @@ public partial class ExperimentWorkspaceView : UserControl {
       }
     }, Avalonia.Threading.DispatcherPriority.Background);
 
+  // "Open recent" shows its list as soon as it is hovered (no click needed)
+  private void OpenRecentEntered(object? sender, PointerEventArgs e) {
+    if (sender is Button { IsEffectivelyEnabled: true, Flyout: { IsOpen: false } flyout } button) flyout.ShowAt(button);
+  }
+
   // ---- drag and drop: press a block, move, release where the faded preview shows it
 
   private void BlockPressed(object? sender, PointerPressedEventArgs e) {

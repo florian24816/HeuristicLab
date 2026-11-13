@@ -152,6 +152,47 @@
         <Style Selector="Button.action.addblock:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
+        <!-- new / open tiles under the experiments -->
+        <Style Selector="Button.newtile">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <Style Selector="Button.newtile:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.newtile:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.newtile:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.newtile Border.tilesquare">
+            <Setter Property="Width" Value="64" />
+            <Setter Property="Height" Value="64" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Background" Value="#FDE5C8" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+        <Style Selector="Button.newtile Border.tilelabel">
+            <Setter Property="Width" Value="132" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Background" Value="{StaticResource ButtonBrush}" />
+        </Style>
+        <Style Selector="Button.newtile Border.tilelabel > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.newtile:pointerover Border.tilesquare">
+            <Setter Property="Background" Value="#F7931D" />
+        </Style>
+        <Style Selector="Button.newtile:pointerover Border.tilelabel">
+            <Setter Property="Background" Value="#FDE5C8" />
+        </Style>
+        <Style Selector="Button.newtile:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
         <Style Selector="Border.experiment">
             <Setter Property="Background" Value="{DynamicResource ExperimentBrush}" />
             <Setter Property="CornerRadius" Value="0" />
@@ -387,26 +428,51 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Button Classes="action" Content="+ New experiment / open...">
-                        <Button.Flyout>
-                            <MenuFlyout>
-                                <MenuItem Header="New experiment" Command="{Binding CreateExperimentCommand}" />
-                                <MenuItem Header="New from data or benchmark..." Command="{Binding NewFromSetupCommand}"
-                                          ToolTip.Tip="An algorithm with its problem: a benchmark instance or a CSV/Parquet data file" />
-                                <MenuItem Header="Open..." Command="{Binding OpenExperimentCommand}" />
-                                <MenuItem Header="Open recent" ItemsSource="{Binding RecentMenu}" IsEnabled="{Binding HasRecentFiles}">
-                                    <MenuItem.ItemContainerTheme>
+                    <!-- new / open (user's request 2026-11-13): tiles - a pale logo orange square with the pictogram, the text
+                         below it; hovered the square turns logo orange and the text field pale orange. "Open recent" shows its
+                         list when hovered. Samples are offered on the right (nothing selected). -->
+                    <StackPanel x:Name="NewTiles" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Left">
+                        <Button Classes="newtile" Command="{Binding CreateExperimentCommand}" ToolTip.Tip="An empty experiment">
+                            <StackPanel>
+                                <Border Classes="tilesquare"><c:Pictogram Symbol="experiment_logo" Foreground="{StaticResource InkBrush}" /></Border>
+                                <Border Classes="tilelabel"><TextBlock Text="New experiment" /></Border>
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="newtile" Command="{Binding NewFromSetupCommand}"
+                                ToolTip.Tip="An algorithm with its problem: a benchmark instance or a CSV/Parquet data file">
+                            <StackPanel>
+                                <Border Classes="tilesquare"><c:Pictogram Symbol="Table_logo" Foreground="{StaticResource InkBrush}" /></Border>
+                                <Border Classes="tilelabel"><TextBlock Text="New from data or benchmark..." /></Border>
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="newtile" Command="{Binding OpenExperimentCommand}" ToolTip.Tip="One or several .hl files">
+                            <StackPanel>
+                                <Border Classes="tilesquare"><c:Pictogram Symbol="open_from_file" Foreground="{StaticResource InkBrush}" /></Border>
+                                <Border Classes="tilelabel"><TextBlock Text="Open..." /></Border>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="OpenRecent" Classes="newtile" IsEnabled="{Binding HasRecentFiles}" PointerEntered="OpenRecentEntered">
+                            <Button.Flyout>
+                                <MenuFlyout Placement="RightEdgeAlignedTop" ShowMode="TransientWithDismissOnPointerMoveAway" ItemsSource="{Binding RecentMenu}">
+                                    <MenuFlyout.ItemContainerTheme>
+                                        <!-- file names in a TextBlock: a string's '_' would be an access key (GA_TSP.hl -> GATSP.hl) -->
                                         <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
-                                            <Setter Property="Header" Value="{Binding Display}" />
+                                            <Setter Property="Header" Value="{Binding}" />
+                                            <Setter Property="HeaderTemplate">
+                                                <DataTemplate x:DataType="vm:MenuChoice"><TextBlock Text="{Binding Display}" /></DataTemplate>
+                                            </Setter>
                                             <Setter Property="Command" Value="{Binding Command}" />
                                             <Setter Property="ToolTip.Tip" Value="{Binding Tip}" />
                                         </ControlTheme>
-                                    </MenuItem.ItemContainerTheme>
-                                </MenuItem>
-                                <MenuItem Header="Samples..." Command="{Binding ShowSamplesCommand}" />
-                            </MenuFlyout>
-                        </Button.Flyout>
-                    </Button>
+                                    </MenuFlyout.ItemContainerTheme>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                            <StackPanel>
+                                <Border Classes="tilesquare"><c:Pictogram Symbol="open_recent" Foreground="{StaticResource InkBrush}" /></Border>
+                                <Border Classes="tilelabel"><TextBlock Text="Open recent" /></Border>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
             <Canvas x:Name="BandLayer" IsHitTestVisible="False">

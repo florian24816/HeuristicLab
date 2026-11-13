@@ -43,8 +43,8 @@ public class StudioMenuScrollTests {
       Pump();
       var tree = window.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.Name == "Tree");
       Assert.IsTrue(tree.Extent.Height > tree.Viewport.Height + 200, "the tab scrolls");
-      // the last control focused: "+ New experiment / open..." at the bottom (used to make these experiments)
-      var add = window.GetVisualDescendants().OfType<Button>().Last(b => b.Flyout != null && tree.IsVisualAncestorOf(b));
+      // the last control focused: "Open..." at the bottom (used to open these experiments)
+      var add = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("newtile") && b.Command == ws.OpenExperimentCommand);
       tree.Offset = new Vector(0, 0);
       Pump();
       Border Name(BlockViewModel block) => window.GetVisualDescendants().OfType<Border>()

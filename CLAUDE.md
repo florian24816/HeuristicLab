@@ -97,7 +97,7 @@
   inverted only once let go). A right-click on a block not picked lets the picked ones (if any) go and picks it instead
   (inverted, its own menu; the shown - orange - block stays; ExperimentWorkspaceView.BlockPressed; user's request 2026-11-11). The
   right-click also focuses the tab's scroll area (ScrollViewer Tree, Focusable): a menu closed without choosing gives the focus
-  back to the control focused before, and when that was "+ New experiment / open..." the tab jumped to the bottom
+  back to the control focused before, and when that was a new / open tile at the bottom the tab jumped there
   (StudioMenuScrollTests). A picked block's menu (BlockViewModel.Menu = SingleMenu + MultipleMenu; user's request 2026-11-11)
   has two parts with bold titles that cannot be clicked: "Single selection" (the block's own entries, as alone) and
   "Multiple selections" on a grey of its own (MultiMenuBrush: light #D9D9D9, dark #454545; hovered MultiMenuHoverBrush
@@ -373,9 +373,13 @@
   algorithm a new Results collection (never cache it); an algorithm's valid operators (move
   generators, ...) come from its problem, so rebuild parameter views after a problem change.
   No toolbar (removed 2026-10-11, user's request): everything starts in the Experiments tab -
-  "+ New experiment / open..." offers New experiment, New from data or benchmark... (the New dialog:
-  algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like
-  "hl new", opened as a new experiment), Open..., Open recent (workspace RecentFiles) and Samples...
+  under the experiments four tiles (user's request 2026-11-13, StackPanel NewTiles, Button.newtile: a 64 px square in
+  pale logo orange #FDE5C8 with the pictogram, the text in a grey field below it; hovered the square full logo orange,
+  the field pale orange): New experiment (experiment_logo), New from data or benchmark... (Table_logo; the New dialog:
+  algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like "hl new", opened as
+  a new experiment), Open... (open_from_file), Open recent (open_recent; workspace RecentFiles, its list opens when
+  hovered - OpenRecentEntered; names in a TextBlock, a '_' would be an access key). Samples... is no tile: samples are
+  offered on the right when nothing is selected.
   Seeds are the algorithms' own Seed/SetSeedRandomly parameters, parallelism is the Resources tab.
   No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab's
   "+ Results folder..." button was removed 2026-10-15; RunAnalysisViewModel.AddFolder still reads "hl run --store" folders). Runs tab (RunsBrowserViewModel): tree of the
