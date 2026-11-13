@@ -98,21 +98,20 @@
             </StackPanel>
         </DataTemplate>
 
-        <!-- add button of a container, with the building blocks it accepts -->
+        <!-- add buttons of a container, one per building block it accepts: "+ algorithm", "+ batch run", "+ time-limit run" -->
         <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
-            <Button Classes="action addblock" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
-                    IsEnabled="{Binding IsEditable}">
-                <Button.Flyout>
-                    <MenuFlyout ItemsSource="{Binding AddChoices}">
-                        <MenuFlyout.ItemContainerTheme>
-                            <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
-                                <Setter Property="Header" Value="{Binding Display}" />
-                                <Setter Property="Command" Value="{Binding Command}" />
-                            </ControlTheme>
-                        </MenuFlyout.ItemContainerTheme>
-                    </MenuFlyout>
-                </Button.Flyout>
-            </Button>
+            <ItemsControl ItemsSource="{Binding AddChoices}" IsVisible="{Binding CanAdd}" IsEnabled="{Binding IsEditable}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="4" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MenuChoice">
+                        <Button Classes="action addblock" Content="{Binding Display}" Command="{Binding Command}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </DataTemplate>
     </UserControl.Resources>
 
@@ -123,10 +122,15 @@
             <Setter Property="CornerRadius" Value="0" />
             <Setter Property="Padding" Value="12,6" />
         </Style>
-        <!-- the containers' add buttons: low, as the Results tab's selection state buttons -->
+        <!-- the containers' add buttons: low, as the Results tab's selection state buttons; no frame, square at the top and
+             rounded at the bottom, see-through at the top to pale logo orange at the bottom (hovered: to the logo orange) -->
         <Style Selector="Button.action.addblock">
             <Setter Property="Padding" Value="12,2,12,3" />
             <Setter Property="MinHeight" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0,0,6,6" />
+            <Setter Property="Background" Value="{DynamicResource AddBlockBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AddBlockInkBrush}" />
         </Style>
         <Style Selector="Button.action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
@@ -138,6 +142,15 @@
         <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource DisabledBrush}" />
             <Setter Property="Foreground" Value="#9A9A9A" />
+        </Style>
+        <!-- after the general ones: an add button's hover / disabled look -->
+        <Style Selector="Button.action.addblock:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.action.addblock:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AddBlockHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AddBlockInkBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.action.addblock:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Border.experiment">
             <Setter Property="Background" Value="{DynamicResource ExperimentBrush}" />

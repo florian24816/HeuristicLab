@@ -237,11 +237,13 @@ public partial class ContainerBlockViewModel : BlockViewModel {
       : base(workspace, parent) {
     Optimizer = optimizer;
     foreach (var child in ExperimentTree.Children(optimizer)) Children.Add(workspace.CreateBlock(child, this));
-    // offered building blocks: every algorithm (picked in a dialog) and the discovered containers
-    var choices = new List<MenuChoice> { new("Algorithm...", new AsyncRelayCommand(() => Workspace.AddAlgorithmAsync(this))) };
+    // offered building blocks, one add button each (user's request 2026-11-13): "+ algorithm" (picked in a dialog),
+    // "+ batch run", "+ time-limit run" - a time-limit run takes only an algorithm
+    var choices = new List<MenuChoice> { new("+ algorithm", new AsyncRelayCommand(() => Workspace.AddAlgorithmAsync(this))) };
     if (AcceptsContainers)
-      foreach (var entry in ExperimentTree.ContainerTypes().Where(e => e.Type != typeof(Experiment)))
-        choices.Add(new(ExperimentWorkspaceViewModel.DisplayName(entry), new RelayCommand(() => Workspace.AddContainer(this, entry))));
+      foreach (var type in new[] { typeof(BatchRun), typeof(TimeLimitRun) })
+        if (ExperimentTree.ContainerTypes().FirstOrDefault(e => e.Type == type) is { } entry)
+          choices.Add(new("+ " + ExperimentWorkspaceViewModel.DisplayName(entry).ToLowerInvariant(), new RelayCommand(() => Workspace.AddContainer(this, entry))));
     AddChoices = choices;
   }
 
@@ -287,7 +289,6 @@ public partial class ContainerBlockViewModel : BlockViewModel {
   /// <summary>Only algorithms go into a time-limit run.</summary>
   public bool AcceptsContainers => Optimizer is not TimeLimitRun;
 
-  public string AddText => Optimizer is TimeLimitRun ? "+ Add algorithm" : "+ Add batch run / time-limit run / algorithm";
 
   public override string Pictogram => Optimizer switch {
     BatchRun => "batch_run",

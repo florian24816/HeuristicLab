@@ -61,8 +61,12 @@
   Empty clicks (user's request 2026-11-02): a press on anything that takes no focus leaves the text field being typed in
   (Controls/FocusRelease, a tunnel class handler on every TopLevel registered in App.Initialize; Avalonia 12 has no
   ClearFocus: FocusManager.Focus(null)); in the Experiments tab a click on empty space also unselects the selected block
-  (ExperimentWorkspaceView.EndBand: Selected = null). The containers' add buttons are low (Button.action.addblock,
-  padding 12,2,12,3, no MinHeight - as the Results tab's selection state buttons).
+  (ExperimentWorkspaceView.EndBand: Selected = null). The containers' add buttons (user's request 2026-11-13; instead of
+  one button with a list): "+ algorithm", "+ batch run", "+ time-limit run" (ContainerBlockViewModel.AddChoices; a
+  time-limit run only "+ algorithm", gone once it holds one), Button.action.addblock - low (padding 12,2,12,3, no
+  MinHeight), no frame, square top and rounded bottom (CornerRadius 0,0,6,6), gradient from see-through at the top to
+  pale logo orange #FDE5C8 at the bottom (AddBlockBrush), hovered to the logo orange (AddBlockHoverBrush), dark text in
+  both modes (AddBlockInkBrush; light text was hard to read on the pale bottom in dark mode).
   The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
   logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
   TextBlock: a string's '_' would be an access key.
