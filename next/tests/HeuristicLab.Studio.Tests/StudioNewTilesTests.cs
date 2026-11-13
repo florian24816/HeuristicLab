@@ -54,10 +54,11 @@ public class StudioNewTilesTests {
         tiles.Select(t => t.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().Single().Symbol).ToList());
       foreach (var tile in tiles) {
         var square = Square(tile);
-        Assert.AreEqual(square.Bounds.Width, square.Bounds.Height, 0.5, "a square");
-        Assert.AreEqual(LabelBox(tile).Bounds.Width, square.Bounds.Width, 0.5, "as wide as the text field below it");
+        Assert.AreEqual(LabelBox(tile).Bounds.Width, square.Bounds.Width, 0.5, "a rectangle as wide as the text field below it");
+        Assert.AreEqual(64, square.Bounds.Height, 0.5);
         var picture = tile.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().Single();
-        Assert.IsTrue(picture.Bounds.Width > 0.5 * square.Bounds.Width, $"the pictogram grown with it: {picture.Bounds.Width}");
+        Assert.AreEqual(36, picture.Bounds.Width, 0.5, "the pictogram at its first size");
+        Assert.AreEqual(square.Bounds.Width / 2, picture.Bounds.X + picture.Bounds.Width / 2, 0.5, "in the middle");
         Assert.IsTrue(square.TranslatePoint(default, tile)!.Value.Y < LabelBox(tile).TranslatePoint(default, tile)!.Value.Y, "the text below it");
       }
       Assert.AreEqual(Color.Parse("#FDE5C8"), Fill(Square(tiles[0])), "pale logo orange");
@@ -80,8 +81,23 @@ public class StudioNewTilesTests {
       Pump();
       window.MouseMove(Center(Square(tiles[3]), window));
       Pump();
-      var flyout = (MenuFlyout)tiles[3].Flyout!;
+      var flyout = (HeuristicLab.Studio.Controls.HoverMenuFlyout)tiles[3].Flyout!;
       Assert.IsTrue(flyout.IsOpen, "shown when hovered");
+      Assert.IsTrue(tiles[3].Classes.Contains("open"), "the tile keeps its hover look while the list is shown");
+      Assert.AreEqual(Color.Parse("#F7931D"), Fill(Square(tiles[3])));
+      // the pointer off the tile for an instant (that flickered: the list is a window of its own) and back: stays open
+      var list = window.GetVisualDescendants().OfType<MenuItem>().First(m => m.Header is MenuChoice);
+      window.MouseMove(new Point(2, 2));
+      Pump();
+      window.MouseMove(Center(Square(tiles[3]), window));
+      Pump();
+      flyout.CheckNow();
+      Assert.IsTrue(flyout.IsOpen, "back within the grace period: still open, not opened again");
+      // on the list: stays open
+      window.MouseMove(Center(list, window));
+      Pump();
+      flyout.CheckNow();
+      Assert.IsTrue(flyout.IsOpen, "over the list");
       Assert.AreEqual("GA_TSP.hl", ((MenuChoice)flyout.Items.Cast<object>().Single()).Display);
       Assert.IsTrue(window.GetVisualDescendants().OfType<MenuItem>().Any(m => m.HeaderTemplate != null && m.Header is MenuChoice { Display: "GA_TSP.hl" }),
         "the name in a TextBlock: its '_' is no access key");
@@ -90,7 +106,19 @@ public class StudioNewTilesTests {
       vm.IsDarkMode = true;
       Pump();
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-new-tiles-dark.png"));
+      // off the tile and the list for the grace period: closed
       flyout.Hide();
+      Pump();
+      window.MouseMove(new Point(2, 2));
+      Pump();
+      window.MouseMove(Center(Square(tiles[3]), window));
+      Pump();
+      Assert.IsTrue(flyout.IsOpen, "hovered again: open again");
+      window.MouseMove(new Point(2, 2));
+      Pump();
+      flyout.CheckNow();
+      Assert.IsFalse(flyout.IsOpen, "closed once the pointer left both");
+      Assert.IsFalse(tiles[3].Classes.Contains("open"));
       window.Close();
       return true;
     }, CancellationToken.None);

@@ -163,13 +163,19 @@
         <Style Selector="Button.newtile:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.newtile:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.newtile:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
-        <!-- the square as wide as the text field below it, the pictogram grown with it (as 36 of 64 before) -->
+        <!-- a rectangle as wide as the text field below it, the pictogram at its first size (36 px) in the middle -->
         <Style Selector="Button.newtile Border.tilesquare">
             <Setter Property="Width" Value="132" />
-            <Setter Property="Height" Value="132" />
+            <Setter Property="Height" Value="64" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="Background" Value="#FDE5C8" />
-            <Setter Property="Padding" Value="29" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Button.newtile Border.tilesquare > c|Pictogram">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="Button.newtile Border.tilelabel">
             <Setter Property="Width" Value="132" />
@@ -185,10 +191,11 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="Button.newtile:pointerover Border.tilesquare">
+        <!-- "open": Open recent while its list is shown (it keeps the hover look) -->
+        <Style Selector="Button.newtile:pointerover Border.tilesquare, Button.newtile.open Border.tilesquare">
             <Setter Property="Background" Value="#F7931D" />
         </Style>
-        <Style Selector="Button.newtile:pointerover Border.tilelabel">
+        <Style Selector="Button.newtile:pointerover Border.tilelabel, Button.newtile.open Border.tilelabel">
             <Setter Property="Background" Value="#FDE5C8" />
         </Style>
         <Style Selector="Button.newtile:disabled">
@@ -452,10 +459,11 @@
                                 <Border Classes="tilelabel"><TextBlock Text="Open..." /></Border>
                             </StackPanel>
                         </Button>
-                        <Button x:Name="OpenRecent" Classes="newtile" IsEnabled="{Binding HasRecentFiles}" PointerEntered="OpenRecentEntered">
+                        <Button x:Name="OpenRecent" Classes="newtile" IsEnabled="{Binding HasRecentFiles}">
                             <Button.Flyout>
-                                <MenuFlyout Placement="RightEdgeAlignedTop" ShowMode="TransientWithDismissOnPointerMoveAway" ItemsSource="{Binding RecentMenu}">
-                                    <MenuFlyout.ItemContainerTheme>
+                                <c:HoverMenuFlyout Placement="RightEdgeAlignedTop" ShowMode="Transient" ItemsSource="{Binding RecentMenu}"
+                                                  Opened="RecentListOpened" Closed="RecentListClosed">
+                                    <c:HoverMenuFlyout.ItemContainerTheme>
                                         <!-- file names in a TextBlock: a string's '_' would be an access key (GA_TSP.hl -> GATSP.hl) -->
                                         <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
                                             <Setter Property="Header" Value="{Binding}" />
@@ -465,8 +473,8 @@
                                             <Setter Property="Command" Value="{Binding Command}" />
                                             <Setter Property="ToolTip.Tip" Value="{Binding Tip}" />
                                         </ControlTheme>
-                                    </MenuFlyout.ItemContainerTheme>
-                                </MenuFlyout>
+                                    </c:HoverMenuFlyout.ItemContainerTheme>
+                                </c:HoverMenuFlyout>
                             </Button.Flyout>
                             <StackPanel>
                                 <Border Classes="tilesquare"><c:Pictogram Symbol="open_recent" Foreground="{StaticResource InkBrush}" /></Border>

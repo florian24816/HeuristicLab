@@ -373,13 +373,15 @@
   algorithm a new Results collection (never cache it); an algorithm's valid operators (move
   generators, ...) come from its problem, so rebuild parameter views after a problem change.
   No toolbar (removed 2026-10-11, user's request): everything starts in the Experiments tab -
-  under the experiments four tiles (user's request 2026-11-13, StackPanel NewTiles, Button.newtile: a square as wide as
-  the text field below it (132 px, pictogram 74 px) in pale logo orange #FDE5C8 with the pictogram, the text in a grey
-  field below it; hovered the square full logo orange,
+  under the experiments four tiles (user's request 2026-11-13, StackPanel NewTiles, Button.newtile: a rectangle as wide as
+  the text field below it (132 x 64 px, the pictogram 36 px in the middle) in pale logo orange #FDE5C8, the text in a
+  grey field below it; hovered the square full logo orange,
   the field pale orange): New experiment (experiment_logo), New benchmark instance (Algorith_logo; renamed 2026-11-13; the New dialog:
   algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like "hl new", opened as
-  a new experiment), Open... (open_from_file), Open recent (open_recent; workspace RecentFiles, its list opens when
-  hovered - OpenRecentEntered; names in a TextBlock, a '_' would be an access key). Samples... is no tile: samples are
+  a new experiment), Open... (open_from_file), Open recent (open_recent; workspace RecentFiles, its list shown while the
+  tile or the list is hovered - Controls/HoverMenuFlyout: closes after the pointer was off both for 250 ms, the tile
+  keeps its hover look meanwhile (class "open"), overlay input passes through to the tile; closing as soon as the pointer
+  left the tile flickered on the desktop; names in a TextBlock, a '_' would be an access key). Samples... is no tile: samples are
   offered on the right when nothing is selected.
   Seeds are the algorithms' own Seed/SetSeedRandomly parameters, parallelism is the Resources tab.
   No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab's

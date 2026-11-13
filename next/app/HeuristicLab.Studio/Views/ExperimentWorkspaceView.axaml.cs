@@ -26,6 +26,7 @@ public partial class ExperimentWorkspaceView : UserControl {
   public ExperimentWorkspaceView() {
     InitializeComponent();
     AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
+    if (this.FindControl<Button>("OpenRecent") is { Flyout: HeuristicLab.Studio.Controls.HoverMenuFlyout recent } openRecent) recent.Attach(openRecent);
     AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
     AddHandler(PointerCaptureLostEvent, (_, _) => CancelDrag(), RoutingStrategies.Direct | RoutingStrategies.Bubble, handledEventsToo: true);
   }
@@ -80,10 +81,11 @@ public partial class ExperimentWorkspaceView : UserControl {
       }
     }, Avalonia.Threading.DispatcherPriority.Background);
 
-  // "Open recent" shows its list as soon as it is hovered (no click needed)
-  private void OpenRecentEntered(object? sender, PointerEventArgs e) {
-    if (sender is Button { IsEffectivelyEnabled: true, Flyout: { IsOpen: false } flyout } button) flyout.ShowAt(button);
-  }
+  // "Open recent" shows its list while the tile or the list is hovered (Controls/HoverMenuFlyout); the tile keeps its
+  // hover look meanwhile
+  private void RecentListOpened(object? sender, EventArgs e) => this.FindControl<Button>("OpenRecent")?.Classes.Set("open", true);
+
+  private void RecentListClosed(object? sender, EventArgs e) => this.FindControl<Button>("OpenRecent")?.Classes.Set("open", false);
 
   // ---- drag and drop: press a block, move, release where the faded preview shows it
 
