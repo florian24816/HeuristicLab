@@ -69,8 +69,11 @@ public abstract partial class BlockViewModel(ExperimentWorkspaceViewModel worksp
   [ObservableProperty]
   public partial bool IsBandCovered { get; set; }
 
-  /// <summary>This block is one of several picked ones: its menu acts on all of them.</summary>
-  protected bool InPickedGroup => Workspace.PickedGroup() is { Count: > 1 } group && group.Contains(ExperimentWorkspaceViewModel.Movable(this)!);
+  /// <summary>
+  /// This block is one of several picked ones (also inside a picked batch / time-limit run, which picks its content): its
+  /// menu acts on all of them.
+  /// </summary>
+  protected bool InPickedGroup => ExperimentWorkspaceViewModel.Movable(this) is { IsPicked: true } && Workspace.SeveralPicked();
   public abstract INamedItem Item { get; }
   /// <summary>What kind of block this is, e.g. "Batch Run" or "Traveling Salesman Problem".</summary>
   public string Kind => Item.ItemName;
@@ -244,6 +247,12 @@ public partial class ContainerBlockViewModel : BlockViewModel {
 
   public IOptimizer Optimizer { get; }
   public override INamedItem Item => Optimizer;
+
+  /// <summary>A batch / time-limit run picked or let go takes its content along (user's request 2026-11-13).</summary>
+  protected override void PickChanged(bool value) {
+    if (Workspace.KeepsContentPicks) return;
+    foreach (var child in Children.ToList()) if (child.IsPicked != value) child.IsPicked = value;
+  }
 
   private RunsViewModel? runs;
   /// <summary>Runs collected by this experiment, batch run or time-limit run.</summary>

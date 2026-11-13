@@ -749,16 +749,43 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// <summary>What picking this block picks: a problem itself (its algorithm stays as it is), experiments nothing.</summary>
   public static BlockViewModel? Pickable(BlockViewModel block) => block is ProblemBlockViewModel ? block : Movable(block);
 
+  /// <summary>More than one block picked (a problem picked with its algorithm counts with it).</summary>
+  public bool SeveralPicked() => AllBlocks().Count(b => b.IsPicked && Movable(b) == b) > 1;
+
+  /// <summary>Set while a run is let go without its content (a block inside it was taken out).</summary>
+  internal bool KeepsContentPicks { get; private set; }
+
   /// <summary>
   /// Adds a block to the picked ones or takes it out (Ctrl+click); an algorithm takes its problem along, a problem alone
-  /// is picked without its algorithm (a problem picked with its algorithm goes with it); experiments are not picked.
-  /// Picked blocks belong to one experiment: a block of another one starts anew there.
+  /// is picked without its algorithm (a problem picked with its algorithm goes with it); a batch / time-limit run takes
+  /// its content along; experiments are not picked. Taking a block out of a picked run lets the runs above it go (they
+  /// are no longer picked whole), the rest of their content stays picked. Picked blocks belong to one experiment: a
+  /// block of another one starts anew there.
   /// </summary>
   public void TogglePick(BlockViewModel block) {
     if (Pickable(block) is not { } pickable) return;
     if (pickable is ProblemBlockViewModel { Owner.IsPicked: true } problem) pickable = problem.Owner;
-    if (!pickable.IsPicked) foreach (var other in AllBlocks().Where(b => b.IsPicked && b.Root != pickable.Root)) other.IsPicked = false;
-    pickable.IsPicked = !pickable.IsPicked;
+    if (pickable.IsPicked) {
+      KeepsContentPicks = true;
+      try {
+        for (var above = pickable.Parent; above != null; above = above.Parent) if (above.IsPicked) above.IsPicked = false;
+      } finally { KeepsContentPicks = false; }
+      pickable.IsPicked = false;
+      return;
+    }
+    foreach (var other in AllBlocks().Where(b => b.IsPicked && b.Root != pickable.Root)) other.IsPicked = false;
+    pickable.IsPicked = true;
+  }
+
+  /// <summary>These blocks with everything inside the batch / time-limit runs among them.</summary>
+  private static HashSet<BlockViewModel> WithContent(IEnumerable<BlockViewModel> blocks) {
+    var all = new HashSet<BlockViewModel>();
+    void Add(BlockViewModel block) {
+      if (!all.Add(block)) return;
+      if (block is ContainerBlockViewModel container) foreach (var child in container.Children) Add(child);
+    }
+    foreach (var block in blocks) Add(block);
+    return all;
   }
 
   /// <summary>
@@ -783,13 +810,14 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     var pickable = blocks.Select(Pickable).OfType<BlockViewModel>().Distinct().ToList();
     var experiment = within ?? pickable.FirstOrDefault()?.Root;
     var chosen = pickable.Where(b => b.Root == experiment).ToHashSet();
+    chosen = WithContent(chosen);  // a run takes its content along
     chosen.RemoveWhere(b => b is ProblemBlockViewModel p && chosen.Contains(p.Owner));
     return chosen;
   }
 
   /// <summary>The blocks the rectangle being drawn covers (a blue frame on them, on an algorithm's problem too; null: none).</summary>
   public void CoverWithBand(IEnumerable<BlockViewModel>? blocks) {
-    var covered = blocks == null ? [] : blocks.ToHashSet();
+    var covered = blocks == null ? [] : WithContent(blocks);
     foreach (var algorithm in covered.OfType<AlgorithmBlockViewModel>().ToList()) if (algorithm.Problem != null) covered.Add(algorithm.Problem);
     foreach (var block in AllBlocks()) if (block.IsBandCovered != covered.Contains(block)) block.IsBandCovered = covered.Contains(block);
   }

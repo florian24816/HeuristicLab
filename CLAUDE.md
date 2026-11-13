@@ -96,10 +96,16 @@
   back to the control focused before, and when that was "+ New experiment / open..." the tab jumped to the bottom
   (StudioMenuScrollTests). A picked block's menu (BlockViewModel.Menu = SingleMenu + MultipleMenu; user's request 2026-11-11)
   has two parts with bold titles that cannot be clicked: "Single selection" (the block's own entries, as alone) and
-  "Multiple selections" on a grey of its own (MultiMenuBrush: light #D9D9D9, dark #454545; MenuChoice.Look -> MenuItem
-  Tag) acting on all picked ones: "Delete selected items" (asked once), "Copy selected items", "Copy selected items n
+  "Multiple selections" on a grey of its own (MultiMenuBrush: light #D9D9D9, dark #454545; hovered MultiMenuHoverBrush
+  light #ADADAD, dark #6E6E6E - the theme's hover hardly showed; MenuChoice.Look -> MenuItem Tag) acting on all picked ones: "Delete selected items" (asked once), "Copy selected items", "Copy selected items n
   times..." (each block's copies after it; menus refresh on PicksChanged). Alone (nothing else picked) only its own
   entries, no titles.
+  Runs picked take their content (user's request 2026-11-13): a batch / time-limit run picked (right-click, Ctrl+click,
+  the rectangle - blue frame on the content while drawn) picks every block inside it (ContainerBlockViewModel.PickChanged;
+  InOneExperiment / CoverWithBand use WithContent); Ctrl+click on a block inside a picked run takes it out and lets the
+  runs above it go (KeepsContentPicks), the rest stays picked. Several picked = SeveralPicked (more than one movable
+  block picked; a block inside a picked run counts, so its menu splits too); PickedGroup still moves / copies / deletes
+  a run with its content once.
   Problem blocks (user's request 2026-11-10): an algorithm picked takes its problem along (AlgorithmBlockViewModel.PickChanged:
   shown picked, blue under the rectangle too - CoverWithBand adds the problems); a problem picked alone (rectangle over
   it only, Ctrl+click; ExperimentWorkspaceViewModel.Pickable) leaves its algorithm unpicked; Ctrl+click on a problem picked

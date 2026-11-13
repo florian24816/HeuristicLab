@@ -38,6 +38,10 @@
                                 <Style Selector="^[Tag=multi], ^[Tag=multiheading]">
                                     <Setter Property="Background" Value="{DynamicResource MultiMenuBrush}" />
                                 </Style>
+                                <!-- the theme's hover grey hardly shows on that grey: a clearly darker / lighter one -->
+                                <Style Selector="^[Tag=multi]:pointerover /template/ Border#PART_LayoutRoot, ^[Tag=multi]:selected /template/ Border#PART_LayoutRoot">
+                                    <Setter Property="Background" Value="{DynamicResource MultiMenuHoverBrush}" />
+                                </Style>
                             </ControlTheme>
                         </ContextMenu.ItemContainerTheme>
                     </ContextMenu>
