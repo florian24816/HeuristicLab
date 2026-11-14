@@ -104,7 +104,7 @@
         <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
             <Panel Classes="addarea" Classes.folded="{Binding HasChildren}" Background="Transparent" HorizontalAlignment="Left"
                    IsVisible="{Binding CanAdd}">
-            <Border Classes="addline" Height="3" VerticalAlignment="Center" Background="#F7931D" IsHitTestVisible="False" />
+            <Border Classes="addline" Height="3" VerticalAlignment="Center" Background="{DynamicResource AddLineBrush}" IsHitTestVisible="False" />
             <ItemsControl Classes="addbuttons" ItemsSource="{Binding AddChoices}" IsEnabled="{Binding IsEditable}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

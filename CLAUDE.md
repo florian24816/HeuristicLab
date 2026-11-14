@@ -65,9 +65,10 @@
   one button with a list): "+ algorithm", "+ batch run", "+ time-limit run" (ContainerBlockViewModel.AddChoices; a
   time-limit run only "+ algorithm", gone once it holds one), Button.action.addblock - low (padding 12,2,12,3, no
   MinHeight), no frame, square top and rounded bottom (CornerRadius 0,0,6,6), gradient from see-through at the top to
-  pale logo orange #FDE5C8 at the bottom (AddBlockBrush), hovered to the logo orange (AddBlockHoverBrush), dark text in
-  both modes (AddBlockInkBrush; light text was hard to read on the pale bottom in dark mode). Once a container holds a
-  block (ContainerBlockViewModel.HasChildren) its buttons fold into a 3 px logo orange line over the same room (Panel.addarea.
+  pale logo orange #FDE5C8 at the bottom (AddBlockBrush), hovered to the logo orange (AddBlockHoverBrush), text
+  (AddBlockInkBrush) dark in light mode, white in dark mode (user's request 2026-11-14; dark text was hard to see there). Once a container holds a
+  block (ContainerBlockViewModel.HasChildren) its buttons fold into a 3 px grey line (AddLineBrush: light #8F8A84,
+  dark #8A8580; first logo orange, changed 2026-11-14) over the same room (Panel.addarea.
   folded: the buttons at opacity 0 keep their size, so nothing jumps when the pointer passes); hovering the room shows the
   buttons instead of the line (user's request 2026-11-14; StudioAddLineTests).
   The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the

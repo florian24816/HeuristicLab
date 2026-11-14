@@ -54,7 +54,8 @@ public class StudioAddLineTests {
       var ga = ws.AddAlgorithm(experiment, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
       Pump();
       Assert.IsTrue(Line(experiment).IsEffectivelyVisible, "an orange line");
-      Assert.AreEqual(Avalonia.Media.Color.Parse("#F7931D"), ((Avalonia.Media.ISolidColorBrush)Line(experiment).Background!).Color);
+      Avalonia.Media.Color LineColor() => ((Avalonia.Media.ISolidColorBrush)Line(experiment).Background!).Color;
+      Assert.AreEqual(Avalonia.Media.Color.Parse("#8F8A84"), LineColor(), "a grey line (light mode)");
       Assert.AreEqual(0, Buttons(experiment).Opacity, "the buttons folded");
       Assert.AreEqual(room, Area(experiment).Bounds.Size, "the same room: nothing jumps");
       Assert.AreEqual(room.Width, Line(experiment).Bounds.Width, 0.5, "as long as the buttons");
@@ -95,7 +96,13 @@ public class StudioAddLineTests {
       vm.IsDarkMode = true;
       ws.AddAlgorithm(experiment, Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!);
       Pump();
+      Assert.AreEqual(Avalonia.Media.Color.Parse("#8A8580"), LineColor(), "a grey line (dark mode)");
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-add-line-dark.png"));
+      window.MouseMove(Center(Line(experiment), window));
+      Pump();
+      var text = Buttons(experiment).GetVisualDescendants().OfType<Button>().First();
+      Assert.AreEqual(Avalonia.Media.Colors.White, ((Avalonia.Media.ISolidColorBrush)text.Foreground!).Color, "bright text in dark mode");
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-add-line-dark-hovered.png"));
       window.Close();
       return true;
     }, CancellationToken.None);

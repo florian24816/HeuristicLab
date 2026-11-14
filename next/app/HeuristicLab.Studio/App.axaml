@@ -225,6 +225,8 @@
                     <GradientStop Offset="1" Color="#F7931D" />
                 </LinearGradientBrush>
                 <SolidColorBrush x:Key="AddBlockInkBrush" Color="#1E1E1E" />
+                <!-- the folded add buttons' line: a grey that shows on the experiment's area -->
+                <SolidColorBrush x:Key="AddLineBrush" Color="#8F8A84" />
                 <SolidColorBrush x:Key="ExecOffInkBrush" Color="#8C8C8C" />
             </ResourceDictionary>
             <ResourceDictionary x:Key="Dark">
@@ -251,7 +253,8 @@
                     <GradientStop Offset="0" Color="#00F7931D" />
                     <GradientStop Offset="1" Color="#F7931D" />
                 </LinearGradientBrush>
-                <SolidColorBrush x:Key="AddBlockInkBrush" Color="#1E1E1E" />
+                <SolidColorBrush x:Key="AddBlockInkBrush" Color="#FFFFFF" />
+                <SolidColorBrush x:Key="AddLineBrush" Color="#8A8580" />
                 <SolidColorBrush x:Key="ExecOffInkBrush" Color="#8A8A8A" />
             </ResourceDictionary>
         </ResourceDictionary.ThemeDictionaries>
