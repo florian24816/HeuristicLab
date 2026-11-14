@@ -256,7 +256,8 @@
         <Style Selector="Button.picto Border.label">
             <Setter Property="Background" Value="{StaticResource ButtonBrush}" />
             <Setter Property="Height" Value="32" />
-            <Setter Property="Padding" Value="12,0" />
+            <!-- 6 (was 12) so Start all / Start selected / Pause / Stop / Eject fit the 700 px column -->
+            <Setter Property="Padding" Value="6,0" />
             <Setter Property="TextElement.Foreground" Value="{StaticResource InkBrush}" />
         </Style>
         <Style Selector="Button.picto Border.label TextBlock">
@@ -395,7 +396,7 @@
         <DockPanel Margin="12">
             <!-- global start controls -->
             <!-- the status of what runs is shown in the main window's tab row -->
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
+            <Grid x:Name="RunControls" DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="4" Margin="0,0,0,12">
                 <!-- like the blocks: orange square with the pictogram, then the rectangle with the text -->
                 <Button Classes="picto" Command="{Binding StartAllCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="3">
@@ -409,14 +410,28 @@
                         <Border Classes="label"><TextBlock Text="Start selected experiments" /></Border>
                     </StackPanel>
                 </Button>
-                <Button Grid.Column="2" Classes="picto" Command="{Binding StopCommand}">
+                <!-- pause (user's request 2026-11-14): pauses the experiment runs and turns into Resume (the start pictogram) -->
+                <Button Grid.Column="2" x:Name="PauseResume" Classes="picto" Command="{Binding PauseOrResumeCommand}"
+                        ToolTip.Tip="Pause the running experiments; paused: resume them (Stop ends them)">
+                    <Panel>
+                        <StackPanel Orientation="Horizontal" Spacing="3" IsVisible="{Binding !IsPausedExperiments}">
+                            <Border Classes="square logo"><c:Pictogram Symbol="experiment_pause" Foreground="{StaticResource InkBrush}" /></Border>
+                            <Border Classes="label"><TextBlock Text="Pause" /></Border>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="3" IsVisible="{Binding IsPausedExperiments}">
+                            <Border Classes="square logo"><c:Pictogram Symbol="Experiment_run_selected" Foreground="{StaticResource InkBrush}" /></Border>
+                            <Border Classes="label"><TextBlock Text="Resume" /></Border>
+                        </StackPanel>
+                    </Panel>
+                </Button>
+                <Button Grid.Column="3" Classes="picto" Command="{Binding StopCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="3">
                         <Border Classes="square logo"><c:Pictogram Symbol="experiment_stop" Foreground="{StaticResource InkBrush}" /></Border>
                         <Border Classes="label"><TextBlock Text="Stop" /></Border>
                     </StackPanel>
                 </Button>
                 <!-- eject: like the others, but a grey square -->
-                <Button Grid.Column="3" Classes="picto" Command="{Binding EjectCommand}"
+                <Button Grid.Column="4" Classes="picto" Command="{Binding EjectCommand}"
                         ToolTip.Tip="Take experiments out of the workspace (all or chosen ones; save or autosave unsaved ones first)">
                     <StackPanel Orientation="Horizontal" Spacing="3">
                         <Border Classes="square eject"><c:Pictogram Symbol="eject" Foreground="{StaticResource InkBrush}" /></Border>

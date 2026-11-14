@@ -14,6 +14,8 @@ public sealed record RunOptions {
   public TimeSpan? Timeout { get; init; }
   /// <summary>Labels copied into the report, e.g. sweep configuration or walk-forward fold.</summary>
   public IReadOnlyDictionary<string, string>? Labels { get; init; }
+  /// <summary>Pauses and resumes the run (Studio's Pause / Resume); null: a pause by someone else ends the run as stopped.</summary>
+  public RunPause? Pause { get; init; }
 }
 
 /// <summary>
@@ -57,13 +59,42 @@ public static class OptimizerRunner {
     var progressTimer = progress == null ? null
       : new Timer(_ => progress.Report(Snapshot(optimizer, clock.Elapsed)), null, options.ProgressInterval, options.ProgressInterval);
 
+    var pause = options.Pause;
+    void OnPauseChanged() => pause!.Apply(optimizer);
+    if (pause != null) pause.Changed += OnPauseChanged;
     try {
-      await Task.Run(() => optimizer.Start(CancellationToken.None), CancellationToken.None).ConfigureAwait(false);
+      while (true) {
+        // asked to pause before it (re)started: wait here
+        if (pause != null) {
+          try {
+            await pause.WaitResumedAsync(stopSource.Token).ConfigureAwait(false);
+          } catch (OperationCanceledException) {
+            break;
+          }
+        }
+        await Task.Run(() => {
+          // a pause asked for while starting is applied once it runs
+          using var watch = pause == null ? null : new Timer(_ => pause.Apply(optimizer), null, 50, 50);
+          optimizer.Start(CancellationToken.None);
+        }, CancellationToken.None).ConfigureAwait(false);
+        // paused by the user: wait for Resume (or Stop), then go on where it was
+        if (pause is { IsPaused: true } && optimizer.ExecutionState == ExecutionState.Paused && error == null
+            && !stopSource.IsCancellationRequested) {
+          try {
+            await pause.WaitResumedAsync(stopSource.Token).ConfigureAwait(false);
+            continue;
+          } catch (OperationCanceledException) {
+            // stopped while paused
+          }
+        }
+        break;
+      }
       // an exception or the stop request leaves the optimizer paused; stopping records its run
       if (optimizer.ExecutionState == ExecutionState.Paused) TryStop(optimizer);
     } catch (Exception e) {
       error ??= e;
     } finally {
+      if (pause != null) pause.Changed -= OnPauseChanged;
       optimizer.ExceptionOccurred -= OnException;
       // waits for callbacks in flight, so no progress is reported after the final snapshot
       if (progressTimer != null) await progressTimer.DisposeAsync().ConfigureAwait(false);

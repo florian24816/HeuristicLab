@@ -307,14 +307,38 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
 
   /// <summary>"QBR: run 3 of 10" while a quick batch run started here goes on.</summary>
   public string? BatchProgress => startedHere && execution is { IsCompleted: false } ? $"Quick batch run: run {Math.Min(BatchRunsMade + 1, batchSize)} of {batchSize}" : null;
-  private bool CanStart() => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Paused or ExecutionState.Stopped
+  // paused: "Resume" (the Pause button) goes on, Start is for a new quick batch run
+  private bool CanStart() => Algorithm.ExecutionState is ExecutionState.Prepared or ExecutionState.Stopped
                              && Algorithm.Problem != null && !ExperimentRuns
-                             && (execution == null || execution.IsCompleted || Algorithm.ExecutionState == ExecutionState.Paused);
+                             && (execution == null || execution.IsCompleted);
 
-  [RelayCommand(CanExecute = nameof(IsStarted))]
-  private void Pause() => Algorithm.Pause();
-  // while an experiment runs the algorithm, the experiment's Stop controls it
-  private bool IsStarted() => Algorithm.ExecutionState == ExecutionState.Started && !ExperimentRuns;
+  /// <summary>
+  /// Pause, and while paused Resume (user's request 2026-11-14: one button, as in the Experiments tab): pauses the
+  /// quick batch run / goes on with it; Stop while paused ends it with the runs made.
+  /// </summary>
+  [RelayCommand(CanExecute = nameof(CanPauseOrResume))]
+  private void Pause() {
+    if (Algorithm.ExecutionState == ExecutionState.Paused) {
+      if (Algorithm.Problem == null) return;
+      HeuristicLab.Next.Runtime.Resources.Configure(Algorithm);
+      block.Workspace.SetAlgorithmRunning(block, this, true);
+      if (!startedHere) {
+        // paused before this detail knew it: a quick batch run from here
+        runsBefore = new HashSet<IRun>(Algorithm.Runs, ReferenceEqualityComparer.Instance);
+        batchSize = Math.Max(1, block.Workspace.QuickBatchSize);
+        startedHere = true;
+      }
+      stopPressed = false;
+      execution = Task.Run(RunBatch);
+      timer.Start();
+      Tick();
+    } else Algorithm.Pause();
+  }
+  // while an experiment runs the algorithm, the experiment's Pause / Stop control it
+  private bool CanPauseOrResume() => Algorithm.ExecutionState is ExecutionState.Started or ExecutionState.Paused && !ExperimentRuns;
+
+  /// <summary>The Pause button's text: "Resume" while paused.</summary>
+  public string PauseText => Algorithm.ExecutionState == ExecutionState.Paused ? "\u25B6 Resume" : "\u23F8 Pause";
 
   [RelayCommand(CanExecute = nameof(CanStop))]
   private void Stop() {
@@ -352,6 +376,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     SyncEditability();
     StartCommand.NotifyCanExecuteChanged();
     PauseCommand.NotifyCanExecuteChanged();
+    OnPropertyChanged(nameof(PauseText));
     StopCommand.NotifyCanExecuteChanged();
     PrepareCommand.NotifyCanExecuteChanged();
     Results.Refresh();
@@ -411,6 +436,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     SyncEditability();
     StartCommand.NotifyCanExecuteChanged();
     PauseCommand.NotifyCanExecuteChanged();
+    OnPropertyChanged(nameof(PauseText));
     StopCommand.NotifyCanExecuteChanged();
     PrepareCommand.NotifyCanExecuteChanged();
   }

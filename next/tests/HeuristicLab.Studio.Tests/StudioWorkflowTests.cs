@@ -319,9 +319,9 @@ public class StudioWorkflowTests {
       foreach (var a in new[] { inBatch, single, other }) ParameterEditor.Apply(a.Algorithm, ["MaximumGenerations=3", "PopulationSize=10"]);
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("picto")).ToList();
-      Assert.AreEqual(4, buttons.Count, "start all, start selected, stop, eject");
-      var symbols = buttons.Select(b => b.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().Single().Symbol).ToList();
-      CollectionAssert.AreEqual(new[] { "Experiment_run_all", "Experiment_run_selected", "experiment_stop", "eject" }, symbols);
+      Assert.AreEqual(5, buttons.Count, "start all, start selected, pause, stop, eject");
+      var symbols = buttons.Select(b => b.GetVisualDescendants().OfType<HeuristicLab.Studio.Controls.Pictogram>().First(p => p.IsEffectivelyVisible).Symbol).ToList();
+      CollectionAssert.AreEqual(new[] { "Experiment_run_all", "Experiment_run_selected", "experiment_pause", "experiment_stop", "eject" }, symbols);
       window.CaptureRenderedFrame()!.Save(Shot("studio-start-buttons.png"));
       await ws.StartAllCommand.ExecuteAsync(null);
       Assert.AreEqual(3, first.Experiment.Runs.Count, "two from the batch run, one from the algorithm");

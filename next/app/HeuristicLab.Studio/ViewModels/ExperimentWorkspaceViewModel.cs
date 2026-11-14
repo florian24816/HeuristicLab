@@ -34,6 +34,8 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   private readonly Action recentFilesChanged;
   private const int MaxRecentFiles = 10;
   private CancellationTokenSource? stopSource;
+  /// <summary>Pauses / resumes every experiment run started with the start buttons (shared like Stop's token).</summary>
+  private RunPause? runPause;
   /// <summary>Free places for experiments at the same time (Resources tab), shared by overlapping starts.</summary>
   private SemaphoreSlim? slots;
   private int experimentCounter, batchCounter, timeLimitCounter;
@@ -175,8 +177,16 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   /// <summary>Experiments started with the start buttons are running.</summary>
   [ObservableProperty]
-  [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+  [NotifyCanExecuteChangedFor(nameof(StopCommand), nameof(PauseOrResumeCommand))]
   public partial bool IsRunningExperiments { get; set; }
+
+  /// <summary>
+  /// The experiment runs are paused (user's request 2026-11-14): the Pause button shows "Resume"; Stop ends them as
+  /// stopped; no further starts meanwhile.
+  /// </summary>
+  [ObservableProperty]
+  [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StartSelectedCommand))]
+  public partial bool IsPausedExperiments { get; set; }
 
   /// <summary>What runs on one algorithm (its quick batch run, its detailed analysis), by who started it: locks its experiment.</summary>
   private readonly Dictionary<object, AlgorithmBlockViewModel> algorithmsRunning = new(System.Collections.Generic.ReferenceEqualityComparer.Instance);
@@ -202,6 +212,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
 
   private void UpdateRunning() {
     IsRunningExperiments = experimentRuns > 0;
+    if (experimentRuns == 0) IsPausedExperiments = false;
     IsRunning = experimentRuns > 0 || algorithmsRunning.Count > 0;
   }
 
@@ -1032,15 +1043,32 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
   /// <summary>"Start all experiments": every experiment that does not run yet (the running ones go on).</summary>
   [RelayCommand(CanExecute = nameof(CanStartAll))]
   private Task StartAllAsync() => StartAsync(Experiments.Where(e => !e.IsLocked).ToList());
-  private bool CanStartAll() => CanStart(Experiments.Where(e => !e.IsLocked).ToList());
+  private bool CanStartAll() => !IsPausedExperiments && CanStart(Experiments.Where(e => !e.IsLocked).ToList());
 
   /// <summary>"Start selected experiments": the ticked ones that do not run yet.</summary>
   [RelayCommand(CanExecute = nameof(CanStartSelected))]
   private Task StartSelectedAsync() => StartAsync(Experiments.Where(e => e.IsChecked && !e.IsLocked).ToList());
-  private bool CanStartSelected() => CanStart(Experiments.Where(e => e.IsChecked && !e.IsLocked).ToList());
+  private bool CanStartSelected() => !IsPausedExperiments && CanStart(Experiments.Where(e => e.IsChecked && !e.IsLocked).ToList());
 
   private static bool CanStart(System.Collections.Generic.IReadOnlyList<ExperimentBlockViewModel> experiments) =>
     experiments.Count > 0 && experiments.All(e => e.IsReady);
+
+  /// <summary>Pause: the experiment runs pause where they are; Resume: they go on (the same button).</summary>
+  [RelayCommand(CanExecute = nameof(IsRunningExperiments))]
+  private void PauseOrResume() {
+    if (runPause == null) return;
+    if (IsPausedExperiments) {
+      IsPausedExperiments = false;
+      foreach (var e in Experiments.Where(e => e.IsRunning && e.RunStatus.StartsWith("Paused", StringComparison.Ordinal))) e.RunStatus = "Running ...";
+      runPause.Resume();
+      Status = "Resumed.";
+    } else {
+      IsPausedExperiments = true;
+      runPause.Pause();
+      foreach (var e in Experiments.Where(e => e.IsRunning)) e.RunStatus = "Paused";
+      Status = "Paused - Resume goes on, Stop ends the runs.";
+    }
+  }
 
   [RelayCommand(CanExecute = nameof(IsRunningExperiments))]
   private void Stop() {
@@ -1061,7 +1089,9 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
     if (experimentRuns == 0 || stopSource is not { IsCancellationRequested: false }) {
       stopSource?.Dispose();
       stopSource = new CancellationTokenSource();
+      runPause = new RunPause();
     }
+    var pauseGate = runPause!;
     if (experimentRuns == 0 || slots == null) {
       int concurrent = Resources.Current.ConcurrentExperiments;
       slots = new SemaphoreSlim(concurrent > 0 ? concurrent : 4096);
@@ -1088,12 +1118,12 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
         }
         try {
           Resources.Configure(e.Experiment);
-          e.RunStatus = "Running ...";
+          e.RunStatus = pauseGate.IsPaused ? "Paused" : "Running ...";
           var progress = new Progress<RunProgress>(p => {
             if (e.RunStatus.StartsWith("Running", StringComparison.Ordinal)) e.RunStatus = $"Running ... {p.Elapsed:hh\\:mm\\:ss}";
           });
           var report = await OptimizerRunner.RunAsync(e.Experiment,
-            new RunOptions { ProgressInterval = TimeSpan.FromMilliseconds(500), Labels = new System.Collections.Generic.Dictionary<string, string> { ["experiment"] = e.Name } },
+            new RunOptions { ProgressInterval = TimeSpan.FromMilliseconds(500), Pause = pauseGate, Labels = new System.Collections.Generic.Dictionary<string, string> { ["experiment"] = e.Name } },
             e.FilePath, progress, token);
           e.RunStatus = report.Outcome switch {
             RunOutcome.Completed => $"Completed: {report.Runs.Count} runs in {TimeSpan.FromSeconds(report.ExecutionSeconds):hh\\:mm\\:ss}",

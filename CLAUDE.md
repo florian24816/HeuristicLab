@@ -50,8 +50,13 @@
   events: no problem, not run / stopped by the user, waiting (in a running experiment, paused),
   working, finished (also stopped by a time limit), failed. Unsaved = changed since opened/saved
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
-  Start all / Start selected / Stop are drawn like blocks (Button.picto: orange square with
-  Experiment_run_all / Experiment_run_selected / experiment_stop, then a grey rectangle).
+  Start all / Start selected / Pause / Stop are drawn like blocks (Button.picto: orange square with
+  Experiment_run_all / Experiment_run_selected / experiment_pause / experiment_stop, then a grey rectangle; labels padded
+  6 px, 4 px apart, so the five with Eject fit the 700 px column - Grid RunControls). Pause (user's request 2026-11-14;
+  PauseOrResumeCommand, IsPausedExperiments): every experiment run started with the start buttons pauses (one shared
+  runtime RunPause, like Stop's token; RunStatus "Paused") and the button turns into Resume (Experiment_run_selected
+  pictogram) that lets them go on; Stop while paused ends them as stopped (their runs recorded); no starts while paused.
+  The user's experiment_stop was a pause pictogram: it became experiment_pause, experiment_stop is a square now.
   Eject (next to Stop: grey #A8A8A8 square with the eject pictogram; not while anything runs): EjectWindow -
   tick experiments ("Eject selected") or "Eject all", Autosave switch; ExperimentWorkspaceViewModel.EjectAsync:
   unsaved ones (!IsSaved) are saved first with autosave (never saved: "Save as..." file), else UnsavedWindow
@@ -409,7 +414,9 @@
   of 10" beside the time, BatchProgress). Its controls (user's request 2026-11-10; AlgorithmDetailView): one row of square
   fields and buttons 32 px high, all text of the title bold - "Quick batch" #FBCD96 | "of <size>" in one box in the
   grey of what cannot be pressed (ExecOffBrush/ExecOffInkBrush; BatchSizeText: the Options tab's size, the one in use
-  while a QBR runs) | "run" #FBCD96 (Border.qbr, StackPanel QbrTitle), then Button.exec Start #F7931D, Pause / Stop #F9B462, Prepare #FDE5C8 (hover a
+  while a QBR runs) | "run" #FBCD96 (Border.qbr, StackPanel QbrTitle), then Button.exec Start #F7931D, Pause / Stop #F9B462, Prepare #FDE5C8 (Pause turns into "▶ Resume" while paused -
+  PauseText, PauseCommand resumes the same quick batch run; Start only starts a new one, disabled while paused; Stop while
+  paused ends it with the runs made; user's request 2026-11-14) (hover a
   shade darker; disabled ExecOffBrush/ExecOffInkBrush: light #E3E3E3/#8C8C8C, dark #3A3A3A/#8A8A8A), then the status.
   The detail follows the algorithm's Prepared/Started/Paused/Stopped events (AlgorithmBlockViewModel.StatusChanged ->
   AlgorithmDetailViewModel.ExecutionStateChanged): only its own timer read the state before, so a new algorithm could
@@ -503,6 +510,9 @@
   HlRuntime.Initialize, Catalog, Documents (.hl), Setups (shared "new" logic), ParameterEditor
   (set/describe), ProblemInstances, DataFiles/TabularData (CSV via HeuristicLab's parser with
   header-based separator check; Parquet via Parquet.Net 5.6.1 - 6.x dropped the column API),
+  RunPause (RunOptions.Pause: OptimizerRunner pauses the optimizer - also a request made while it starts, checked every
+  50 ms - waits for Resume and starts it again where it was; cancelled while paused it stops and records the run; an
+  experiment pauses all its parts),
   DataProblems (table -> regression/classification/time series/trading; kind decided by exactly
   consumed data types, never by contravariant pattern matching), Features (return, logreturn,
   diff, lag, lead, rolling mean/std/min/max, zscore; composable), OptimizerRunner, BatchRunner,
