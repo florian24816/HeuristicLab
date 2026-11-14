@@ -66,7 +66,10 @@
   time-limit run only "+ algorithm", gone once it holds one), Button.action.addblock - low (padding 12,2,12,3, no
   MinHeight), no frame, square top and rounded bottom (CornerRadius 0,0,6,6), gradient from see-through at the top to
   pale logo orange #FDE5C8 at the bottom (AddBlockBrush), hovered to the logo orange (AddBlockHoverBrush), dark text in
-  both modes (AddBlockInkBrush; light text was hard to read on the pale bottom in dark mode).
+  both modes (AddBlockInkBrush; light text was hard to read on the pale bottom in dark mode). Once a container holds a
+  block (ContainerBlockViewModel.HasChildren) its buttons fold into a 3 px logo orange line over the same room (Panel.addarea.
+  folded: the buttons at opacity 0 keep their size, so nothing jumps when the pointer passes); hovering the room shows the
+  buttons instead of the line (user's request 2026-11-14; StudioAddLineTests).
   The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
   logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
   TextBlock: a string's '_' would be an access key.

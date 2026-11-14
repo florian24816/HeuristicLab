@@ -99,8 +99,13 @@
         </DataTemplate>
 
         <!-- add buttons of a container, one per building block it accepts: "+ algorithm", "+ batch run", "+ time-limit run" -->
+        <!-- once the container holds a block the buttons fold into an orange line over the same room (no jumping when the
+             pointer passes); hovering the room shows the buttons -->
         <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
-            <ItemsControl ItemsSource="{Binding AddChoices}" IsVisible="{Binding CanAdd}" IsEnabled="{Binding IsEditable}">
+            <Panel Classes="addarea" Classes.folded="{Binding HasChildren}" Background="Transparent" HorizontalAlignment="Left"
+                   IsVisible="{Binding CanAdd}">
+            <Border Classes="addline" Height="3" VerticalAlignment="Center" Background="#F7931D" IsHitTestVisible="False" />
+            <ItemsControl Classes="addbuttons" ItemsSource="{Binding AddChoices}" IsEnabled="{Binding IsEditable}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Orientation="Horizontal" Spacing="4" />
@@ -112,6 +117,7 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+            </Panel>
         </DataTemplate>
     </UserControl.Resources>
 
@@ -142,6 +148,22 @@
         <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource DisabledBrush}" />
             <Setter Property="Foreground" Value="#9A9A9A" />
+        </Style>
+        <!-- folded add buttons: the line instead of them (they keep their room), shown again while the room is hovered -->
+        <Style Selector="Panel.addarea > Border.addline">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.addarea.folded > Border.addline">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="Panel.addarea.folded > ItemsControl.addbuttons">
+            <Setter Property="Opacity" Value="0" />
+        </Style>
+        <Style Selector="Panel.addarea.folded:pointerover > Border.addline">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.addarea.folded:pointerover > ItemsControl.addbuttons">
+            <Setter Property="Opacity" Value="1" />
         </Style>
         <!-- after the general ones: an add button's hover / disabled look -->
         <Style Selector="Button.action.addblock:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.action.addblock:pressed /template/ ContentPresenter#PART_ContentPresenter">

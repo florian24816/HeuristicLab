@@ -237,6 +237,7 @@ public partial class ContainerBlockViewModel : BlockViewModel {
       : base(workspace, parent) {
     Optimizer = optimizer;
     foreach (var child in ExperimentTree.Children(optimizer)) Children.Add(workspace.CreateBlock(child, this));
+    Children.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasChildren));
     // offered building blocks, one add button each (user's request 2026-11-13): "+ algorithm" (picked in a dialog),
     // "+ batch run", "+ time-limit run" - a time-limit run takes only an algorithm
     var choices = new List<MenuChoice> { new("+ algorithm", new AsyncRelayCommand(() => Workspace.AddAlgorithmAsync(this))) };
@@ -282,6 +283,12 @@ public partial class ContainerBlockViewModel : BlockViewModel {
 
   protected override IReadOnlyList<MenuChoice> SingleMenu =>
     [new("Show runs", new RelayCommand(() => Workspace.ShowRuns(this))), .. CopyMenu, .. EditMenu];
+
+  /// <summary>
+  /// Holds at least one block: its add buttons fold into an orange line that shows them when hovered (user's request
+  /// 2026-11-14; ExperimentWorkspaceView, Panel.addarea.folded).
+  /// </summary>
+  public bool HasChildren => Children.Count > 0;
 
   /// <summary>A time-limit run holds one algorithm, so its add button goes away once it has one.</summary>
   public bool CanAdd => Optimizer is not TimeLimitRun || Children.Count == 0;
