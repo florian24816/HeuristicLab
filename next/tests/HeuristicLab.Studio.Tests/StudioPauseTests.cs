@@ -120,6 +120,38 @@ public class StudioPauseTests {
     }, CancellationToken.None);
   }
 
+  /// <summary>Paused, stopped, started again: it runs (it failed with "Start not allowed in execution state Stopped").</summary>
+  [TestMethod]
+  [Timeout(300_000)]
+  public async Task StoppedWhilePausedExperimentsStartAgain() {
+    await session.Dispatch(async () => {
+      var vm = new MainViewModel(null, null);
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1400, Height = 800 };
+      window.Show();
+      var experiment = ws.NewExperiment();
+      var plain = Endless(ws, experiment);
+      var batch = ws.AddContainer(experiment, ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(BatchRun)));
+      var inBatch = Endless(ws, batch);
+      var timed = ws.AddContainer(experiment, ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(TimeLimitRun)));
+      var inTimed = Endless(ws, timed);
+      foreach (var round in new[] { 1, 2, 3 }) {
+        var run = ws.StartAllCommand.ExecuteAsync(null);
+        await Until(() => ws.IsRunningExperiments && experiment.Experiment.ExecutionState == ExecutionState.Started || run.IsCompleted);
+        Assert.IsFalse(run.IsCompleted, $"round {round}: {experiment.RunStatus}");
+        await Task.Delay(200);
+        ws.PauseOrResumeCommand.Execute(null);
+        await Until(() => experiment.Experiment.ExecutionState == ExecutionState.Paused);
+        ws.StopCommand.Execute(null);
+        await run;
+        Pump();
+        StringAssert.StartsWith(experiment.RunStatus, "Stopped", $"round {round}");
+      }
+      window.Close();
+      return true;
+    }, CancellationToken.None);
+  }
+
   [TestMethod]
   [Timeout(300_000)]
   public async Task AQuickBatchRunPausesResumesAndStops() {

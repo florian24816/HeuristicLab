@@ -512,7 +512,9 @@
   header-based separator check; Parquet via Parquet.Net 5.6.1 - 6.x dropped the column API),
   RunPause (RunOptions.Pause: OptimizerRunner pauses the optimizer - also a request made while it starts, checked every
   50 ms - waits for Resume and starts it again where it was; cancelled while paused it stops and records the run; an
-  experiment pauses all its parts),
+  experiment pauses all its parts; stopping goes through one lock - Stop while paused stopped it twice at once, from the
+  canceling thread and the woken run, and HeuristicLab's RunCollection, not thread-safe, threw KeyNotFoundException 'Seed'
+  and left the experiment unable to start again),
   DataProblems (table -> regression/classification/time series/trading; kind decided by exactly
   consumed data types, never by contravariant pattern matching), Features (return, logreturn,
   diff, lag, lead, rolling mean/std/min/max, zscore; composable), OptimizerRunner, BatchRunner,

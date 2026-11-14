@@ -72,6 +72,60 @@ public class PauseTests {
     return PauseResumeStop(experiment, () => [first, second]);
   }
 
+  /// <summary>Stopped while paused, the optimizer starts again (a fresh run) - it failed with "Start not allowed in execution state Stopped".</summary>
+  [TestMethod]
+  [Timeout(120_000)]
+  public async Task StoppedWhilePausedItStartsAgain() {
+    foreach (var make in new Func<IOptimizer>[] { LongGa, () => { var e = new Experiment(); e.Optimizers.Add(LongGa()); e.Optimizers.Add(LongGa()); return e; } }) {
+      var optimizer = make();
+      var pause = new RunPause();
+      using (var stop = new CancellationTokenSource()) {
+        var run = OptimizerRunner.RunAsync(optimizer, new RunOptions { Pause = pause }, cancellationToken: stop.Token);
+        await Until(() => optimizer.ExecutionState == ExecutionState.Started);
+        await Task.Delay(200);
+        pause.Pause();
+        await Until(() => optimizer.ExecutionState == ExecutionState.Paused);
+        stop.Cancel();
+        Assert.AreEqual(RunOutcome.Stopped, (await run).Outcome);
+      }
+      var again = new RunPause();
+      using var second = new CancellationTokenSource();
+      var rerun = OptimizerRunner.RunAsync(optimizer, new RunOptions { Pause = again }, cancellationToken: second.Token);
+      await Until(() => optimizer.ExecutionState == ExecutionState.Started || rerun.IsCompleted);
+      Assert.IsFalse(rerun.IsCompleted, rerun.IsCompleted ? rerun.Result.Error : "");
+      second.Cancel();
+      var report = await rerun;
+      Assert.AreEqual(RunOutcome.Stopped, report.Outcome, report.Error);
+    }
+  }
+
+  /// <summary>Stop while paused, for experiments holding an algorithm, a batch run, a time-limit run, all of them (and all without a pause).</summary>
+  [TestMethod]
+  [Timeout(120_000)]
+  [DataRow("plain")]
+  [DataRow("batch")]
+  [DataRow("timed")]
+  [DataRow("all")]
+  [DataRow("all-nopause")]
+  public async Task StopWhilePausedEndsAsStopped(string kind) {
+    var experiment = new Experiment();
+    if (kind is "plain" or "all" or "all-nopause") experiment.Optimizers.Add(LongGa());
+    if (kind is "batch" or "all" or "all-nopause") experiment.Optimizers.Add(new BatchRun { Optimizer = LongGa(), Repetitions = 10 });
+    if (kind is "timed" or "all" or "all-nopause") experiment.Optimizers.Add(new TimeLimitRun { Algorithm = LongGa(), MaximumExecutionTime = TimeSpan.FromMinutes(5) });
+    var pause = new RunPause();
+    using var stop = new CancellationTokenSource();
+    var run = OptimizerRunner.RunAsync(experiment, new RunOptions { Pause = pause }, cancellationToken: stop.Token);
+    await Until(() => experiment.ExecutionState == ExecutionState.Started);
+    await Task.Delay(300);
+    if (kind != "all-nopause") {
+      pause.Pause();
+      await Until(() => experiment.ExecutionState == ExecutionState.Paused);
+    }
+    stop.Cancel();
+    var report = await run;
+    Assert.AreEqual(RunOutcome.Stopped, report.Outcome, report.Error);
+  }
+
   [TestMethod]
   [Timeout(120_000)]
   public async Task WithoutPauseItRunsToTheEnd() {

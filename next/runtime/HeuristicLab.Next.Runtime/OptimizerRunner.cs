@@ -54,7 +54,12 @@ public static class OptimizerRunner {
 
     using var stopSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
     if (options.Timeout is TimeSpan timeout) stopSource.CancelAfter(timeout);
-    using var stopRegistration = stopSource.Token.Register(() => TryStop(optimizer));
+    // stopping goes through one lock: Stop pressed while paused stopped it from the canceling thread while this run, woken
+    // from waiting for Resume, stopped it too - two runs recorded at once broke HeuristicLab's RunCollection (not
+    // thread-safe; KeyNotFoundException 'Seed') and left the optimizer unable to start again
+    var stopGate = new object();
+    void StopOnce() { lock (stopGate) TryStop(optimizer); }
+    using var stopRegistration = stopSource.Token.Register(StopOnce);
     var clock = System.Diagnostics.Stopwatch.StartNew();
     var progressTimer = progress == null ? null
       : new Timer(_ => progress.Report(Snapshot(optimizer, clock.Elapsed)), null, options.ProgressInterval, options.ProgressInterval);
@@ -90,7 +95,7 @@ public static class OptimizerRunner {
         break;
       }
       // an exception or the stop request leaves the optimizer paused; stopping records its run
-      if (optimizer.ExecutionState == ExecutionState.Paused) TryStop(optimizer);
+      if (optimizer.ExecutionState == ExecutionState.Paused) StopOnce();
     } catch (Exception e) {
       error ??= e;
     } finally {
