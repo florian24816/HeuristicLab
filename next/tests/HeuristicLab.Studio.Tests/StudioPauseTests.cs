@@ -36,6 +36,18 @@ public class StudioPauseTests {
     }
   }
 
+  /// <summary>Paused and settled: their engines wait (the engine clock, ticking every 250 ms, stands still).</summary>
+  private static async Task Frozen(params AlgorithmBlockViewModel[] algorithms) {
+    await Task.Delay(350);
+    TimeSpan[] Times() => algorithms.Select(a => a.Algorithm.ExecutionTime).ToArray();
+    for (int attempt = 0; ; attempt++) {
+      var before = Times();
+      await Task.Delay(400);
+      if (before.SequenceEqual(Times())) return;
+      if (attempt > 20) Assert.Fail("still running");
+    }
+  }
+
   private static CatalogEntry Ga => Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!;
 
   private static AlgorithmBlockViewModel Endless(ExperimentWorkspaceViewModel ws, ContainerBlockViewModel container) {
@@ -81,7 +93,9 @@ public class StudioPauseTests {
 
       // Pause: the runs pause, the button turns into Resume (start pictogram)
       ws.PauseOrResumeCommand.Execute(null);
-      await Until(() => first.Algorithm.ExecutionState == ExecutionState.Paused && second.Algorithm.ExecutionState == ExecutionState.Paused);
+      await Frozen(first, second);
+      Assert.AreEqual(ExecutionState.Started, first.Algorithm.ExecutionState, "held below the optimizers: they stay Started");
+      Assert.AreEqual(AlgorithmStatus.Waiting, first.Status, "shown waiting, not working");
       Assert.IsTrue(ws.IsPausedExperiments);
       Assert.AreEqual("Resume", Shown());
       Assert.AreEqual("Experiment_run_selected", ShownPictogram());
@@ -96,14 +110,14 @@ public class StudioPauseTests {
 
       // Resume: they go on, the button is Pause again
       ws.PauseOrResumeCommand.Execute(null);
-      await Until(() => first.Algorithm.ExecutionState == ExecutionState.Started);
+      Assert.AreEqual(AlgorithmStatus.Working, first.Status);
       Assert.IsFalse(ws.IsPausedExperiments);
       Assert.AreEqual("Pause", Shown());
       await Until(() => first.Algorithm.ExecutionTime > pausedAt);
 
       // paused again, then Stop: the runs end (stopped) and are recorded
       ws.PauseOrResumeCommand.Execute(null);
-      await Until(() => first.Algorithm.ExecutionState == ExecutionState.Paused);
+      await Frozen(first, second);
       ws.StopCommand.Execute(null);
       await run;
       Pump();
@@ -115,6 +129,56 @@ public class StudioPauseTests {
       Assert.IsFalse(ws.IsPausedExperiments);
       Assert.AreEqual("Pause", Shown());
       Assert.IsFalse(pauseButton.IsEffectivelyEnabled);
+      window.Close();
+      return true;
+    }, CancellationToken.None);
+  }
+
+  /// <summary>Pause / Resume pressed at random moments on experiments as Studio builds them: never a failure.</summary>
+  [TestMethod]
+  [Timeout(600_000)]
+  public async Task PauseAndResumeAtAnyMomentInStudio() {
+    await session.Dispatch(async () => {
+      var vm = new MainViewModel(null, null);
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1400, Height = 800 };
+      window.Show();
+      AlgorithmBlockViewModel Short(ContainerBlockViewModel container, int generations) {
+        var block = Endless(ws, container);
+        ParameterEditor.Apply(block.Algorithm, [$"MaximumGenerations={generations}", "PopulationSize=10"]);
+        return block;
+      }
+      var random = new System.Random(3);
+      var failures = new List<string>();
+      for (int round = 0; round < 20; round++) {
+        foreach (var old in ws.Experiments.ToList()) ws.Experiments.Remove(old);
+        var experiment = ws.NewExperiment();
+        var batch = ws.AddContainer(experiment, ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(BatchRun)));
+        batch.RepetitionsText = "100";
+        Short(batch, 3);
+        Short(batch, 2);
+        var single = ws.AddContainer(experiment, ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(BatchRun)));
+        single.RepetitionsText = "100";
+        Short(single, 2);
+        var timed = ws.AddContainer(experiment, ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(TimeLimitRun)));
+        Short(timed, 4);
+        Short(experiment, 3);
+        var run = ws.StartAllCommand.ExecuteAsync(null);
+        for (int i = 0; i < 40 && !run.IsCompleted; i++) {
+          await Task.Delay(random.Next(0, 15));
+          Pump();
+          if (ws.PauseOrResumeCommand.CanExecute(null)) ws.PauseOrResumeCommand.Execute(null);
+        }
+        Pump();
+        if (experiment.RunStatus.StartsWith("Failed", StringComparison.Ordinal)) failures.Add($"round {round}, before Stop: {experiment.RunStatus}");
+        if (ws.IsPausedExperiments) ws.PauseOrResumeCommand.Execute(null);
+        if (random.Next(2) == 0) await Task.Delay(random.Next(0, 10));
+        if (ws.StopCommand.CanExecute(null)) ws.StopCommand.Execute(null);
+        await run;
+        Pump();
+        if (experiment.RunStatus.StartsWith("Failed", StringComparison.Ordinal)) failures.Add($"round {round}: {experiment.RunStatus}");
+      }
+      Assert.AreEqual(0, failures.Count, string.Join("\n", failures));
       window.Close();
       return true;
     }, CancellationToken.None);
@@ -141,12 +205,48 @@ public class StudioPauseTests {
         Assert.IsFalse(run.IsCompleted, $"round {round}: {experiment.RunStatus}");
         await Task.Delay(200);
         ws.PauseOrResumeCommand.Execute(null);
-        await Until(() => experiment.Experiment.ExecutionState == ExecutionState.Paused);
+        await Frozen(plain, inBatch, inTimed);
         ws.StopCommand.Execute(null);
         await run;
         Pump();
         StringAssert.StartsWith(experiment.RunStatus, "Stopped", $"round {round}");
       }
+      window.Close();
+      return true;
+    }, CancellationToken.None);
+  }
+
+  /// <summary>Pause pressed between two runs of a quick batch run (the algorithm stopped for an instant): the next run pauses.</summary>
+  [TestMethod]
+  [Timeout(300_000)]
+  public async Task AQuickBatchRunPausedBetweenTwoRuns() {
+    await session.Dispatch(async () => {
+      var vm = new MainViewModel(null, null);
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1400, Height = 800 };
+      window.Show();
+      var experiment = ws.NewExperiment();
+      var ga = Endless(ws, experiment);
+      ParameterEditor.Apply(ga.Algorithm, ["MaximumGenerations=3"]);
+      ws.QuickBatchSize = 3;
+      ws.Selected = ga;
+      var detail = (AlgorithmDetailViewModel)ws.Detail!;
+      bool pressed = false;
+      ga.Algorithm.Stopped += (_, _) => {
+        if (pressed) return;
+        pressed = true;
+        detail.PauseCommand.Execute(null);  // the first run just stopped, the second not started
+      };
+      detail.StartCommand.Execute(null);
+      await Until(() => pressed && ga.Algorithm.ExecutionState == ExecutionState.Paused || detail.WaitAsync().IsCompleted && pressed);
+      Assert.AreEqual(ExecutionState.Paused, ga.Algorithm.ExecutionState, "the next run paused");
+      Assert.AreEqual(0, experiment.QuickBatchRuns.Count, "not ended");
+      Pump();
+      Assert.AreEqual("\u25B6 Resume", detail.PauseText);
+      detail.PauseCommand.Execute(null);  // Resume
+      await detail.WaitAsync();
+      Pump();
+      Assert.AreEqual(3, experiment.QuickBatchRuns.Count, "the quick batch run went on to its 3 runs");
       window.Close();
       return true;
     }, CancellationToken.None);

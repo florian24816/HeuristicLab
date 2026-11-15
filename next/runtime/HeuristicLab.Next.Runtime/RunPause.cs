@@ -1,59 +1,26 @@
 using HeuristicLab.Core;
-using HeuristicLab.Optimization;
 
 namespace HeuristicLab.Next.Runtime;
 
 /// <summary>
-/// Pauses and resumes running optimizers (RunOptions.Pause; one instance may serve several runs at once). Paused, an
-/// optimizer keeps its state; resumed it goes on where it was. Cancelling the run while paused stops it (its run is
-/// recorded as when stopped while running).
+/// Pauses and resumes running optimizers (RunOptions.Pause; one instance may serve several runs at once). Paused, the
+/// engines of the run's algorithms wait before their next operation (HeuristicLab.Core EngineGate): experiments, batch
+/// runs and time-limit runs above them never notice, so none of their pause races can happen (HeuristicLab's own Pause
+/// left them in wrong states when it arrived between two optimizers or as one finished). Resumed, every engine goes on
+/// where it was; time spent paused is no execution time. Stop while paused stops the run as usual (the waiting engines
+/// wake up on the cancellation). Algorithms that run without an engine (BasicAlgorithm) and the Debug Engine are not held.
 /// </summary>
 public sealed class RunPause {
-  private readonly object gate = new();
-  private TaskCompletionSource resumed = NewResumed();
+  /// <summary>The hold the run's engines are attached to.</summary>
+  internal EngineHold Hold { get; } = new();
 
-  /// <summary>Paused (asked to pause; the optimizers pause as soon as they can).</summary>
-  public bool IsPaused { get; private set; }
+  /// <summary>Paused (the engines wait at their next operation).</summary>
+  public bool IsPaused => Hold.IsClosed;
 
-  /// <summary>Raised on any thread when <see cref="IsPaused"/> changes.</summary>
-  public event Action? Changed;
+  /// <summary>How many engine threads wait now (tests: the pause has reached them).</summary>
+  public int Waiting => Hold.Waiting;
 
-  public void Pause() {
-    lock (gate) {
-      if (IsPaused) return;
-      IsPaused = true;
-      resumed = NewResumed();
-    }
-    Changed?.Invoke();
-  }
+  public void Pause() => Hold.Close();
 
-  public void Resume() {
-    TaskCompletionSource done;
-    lock (gate) {
-      if (!IsPaused) return;
-      IsPaused = false;
-      done = resumed;
-    }
-    done.TrySetResult();
-    Changed?.Invoke();
-  }
-
-  /// <summary>Completes when resumed (at once when not paused); cancelled with the token.</summary>
-  internal Task WaitResumedAsync(CancellationToken token) {
-    lock (gate) return IsPaused ? resumed.Task.WaitAsync(token) : Task.CompletedTask;
-  }
-
-  /// <summary>Pauses the optimizer if a pause is asked for and it runs now (a request before it started is caught later).</summary>
-  internal void Apply(IOptimizer optimizer) {
-    if (!IsPaused) return;
-    try {
-      if (optimizer.ExecutionState == ExecutionState.Started) optimizer.Pause();
-    } catch (InvalidOperationException) {
-      // the state changed meanwhile (it finished or paused); the next check catches up
-    } catch (NotSupportedException) {
-      // optimizers that cannot pause run on
-    }
-  }
-
-  private static TaskCompletionSource NewResumed() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+  public void Resume() => Hold.Open();
 }

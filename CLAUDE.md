@@ -54,7 +54,8 @@
   Experiment_run_all / Experiment_run_selected / experiment_pause / experiment_stop, then a grey rectangle; labels padded
   6 px, 4 px apart, so the five with Eject fit the 700 px column - Grid RunControls). Pause (user's request 2026-11-14;
   PauseOrResumeCommand, IsPausedExperiments): every experiment run started with the start buttons pauses (one shared
-  runtime RunPause, like Stop's token; RunStatus "Paused") and the button turns into Resume (Experiment_run_selected
+  runtime RunPause, like Stop's token: their engines are held; RunStatus "Paused", their running algorithms shown
+  waiting - AlgorithmBlockViewModel.Status) and the button turns into Resume (Experiment_run_selected
   pictogram) that lets them go on; Stop while paused ends them as stopped (their runs recorded); no starts while paused.
   The user's experiment_stop was a pause pictogram: it became experiment_pause, experiment_stop is a square now.
   Eject (next to Stop: grey #A8A8A8 square with the eject pictogram; not while anything runs): EjectWindow -
@@ -510,11 +511,15 @@
   HlRuntime.Initialize, Catalog, Documents (.hl), Setups (shared "new" logic), ParameterEditor
   (set/describe), ProblemInstances, DataFiles/TabularData (CSV via HeuristicLab's parser with
   header-based separator check; Parquet via Parquet.Net 5.6.1 - 6.x dropped the column API),
-  RunPause (RunOptions.Pause: OptimizerRunner pauses the optimizer - also a request made while it starts, checked every
-  50 ms - waits for Resume and starts it again where it was; cancelled while paused it stops and records the run; an
-  experiment pauses all its parts; stopping goes through one lock - Stop while paused stopped it twice at once, from the
-  canceling thread and the woken run, and HeuristicLab's RunCollection, not thread-safe, threw KeyNotFoundException 'Seed'
-  and left the experiment unable to start again),
+  RunPause (RunOptions.Pause; 2026-11-15): pauses below the optimizers - the engines of the run's algorithms are
+  attached to the pause's EngineHold (HeuristicLab.Core EngineGate, see Known runtime facts) and wait before their next
+  operation; experiments, batch runs and time-limit runs stay Started and never see a pause; Resume lets every engine
+  go on where it was, held time is no execution time; Stop while paused wakes them (cancellation) and stops as usual.
+  Not held: BasicAlgorithms (no engine) and the Debug Engine. Stopping goes through one lock (two stops at once recorded
+  two runs at once - HeuristicLab's RunCollection is not thread-safe: KeyNotFoundException 'Seed'); errors "... not
+  allowed in execution state ..." while Stop is pending count as the stop (HeuristicLab starts parts on threads of their
+  own); an optimizer that cannot be prepared is reported Failed, not thrown - Studio closed on that; Studio's StartAsync
+  also turns any exception of one experiment into its "Failed: ..." status,
   DataProblems (table -> regression/classification/time series/trading; kind decided by exactly
   consumed data types, never by contravariant pattern matching), Features (return, logreturn,
   diff, lag, lead, rolling mean/std/min/max, zscore; composable), OptimizerRunner, BatchRunner,
@@ -578,6 +583,19 @@
 - Seeded runs are reproducible per runtime and platform, not across them: .NET Framework,
   .NET on Windows and .NET on Linux (glibc libm) can differ in the last bit of math results,
   and searches with near-ties amplify that into different but equally valid trajectories.
+- HeuristicLab's own Pause is not safe on experiments, batch runs and time-limit runs: it travels down through them and
+  each has instants where it goes wrong - Experiment.Pause between two optimizers pauses nothing and stays Started
+  (alone the run counted as completed, inside a batch run "Prepare not allowed in execution state Started"); an algorithm
+  finishing as the pause reaches it leaves its experiment Prepared, and the batch run starts the repetition over; a
+  part started on its own thread while Stop arrives refuses ("Start not allowed in execution state Stopped"). So
+  experiment runs pause below them (2026-11-15): replacements next/core/HeuristicLab.Core/Engine.cs (WaitWhileHeld:
+  waits while the engine's hold is closed, held time not counted; own EngineGate.cs: EngineHold, EngineGate.Attach/
+  Detach/HoldOf - a ConditionalWeakTable, no lookup while nothing is attached), HeuristicLab.SequentialEngine/
+  SequentialEngine.cs and HeuristicLab.ParallelEngine/ParallelEngine.cs (WaitWhileHeld before each operation). Seeded
+  results unchanged (no hold attached = the legacy path). Tests PauseTests (also PauseAndResumeAtAnyMoment: random
+  Pause/Resume) and StudioPauseTests.PauseAndResumeAtAnyMomentInStudio. A single algorithm (Studio's quick batch run)
+  uses HeuristicLab's Pause (safe on an algorithm) and remembers a Pause pressed between two runs (pauseRequested),
+  pausing the next run as it starts (Started event, 50 ms watch).
 - Compile order matters: ports compile the legacy csproj's Compile items in their order
   (Directory.Build.targets). Type order drives plugin discovery and thus default operators;
   an alphabetical glob made PSO and GA grouping pick different defaults than legacy.

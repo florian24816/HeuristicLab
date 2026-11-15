@@ -1068,6 +1068,7 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
       foreach (var e in Experiments.Where(e => e.IsRunning)) e.RunStatus = "Paused";
       Status = "Paused - Resume goes on, Stop ends the runs.";
     }
+    RefreshLive();  // the algorithms' status: waiting / working
   }
 
   [RelayCommand(CanExecute = nameof(IsRunningExperiments))]
@@ -1132,6 +1133,10 @@ public partial class ExperimentWorkspaceViewModel : ViewModelBase {
           };
           Resources.Tag(Resources.RunsOf(e.Experiment));
           return report;
+        } catch (Exception error) {
+          // whatever goes wrong in one experiment is its status, never an unhandled exception (that closed Studio)
+          e.RunStatus = $"Failed: {error.Message}";
+          return null;
         } finally {
           e.IsRunning = false;
           slotGate.Release();

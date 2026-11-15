@@ -7,7 +7,13 @@
     <AssemblyTitle>HeuristicLab.SequentialEngine</AssemblyTitle>
     <Description>HeuristicLab engine for sequential processing</Description>
     <AssemblyVersion>3.3.0.0</AssemblyVersion>
+    <!-- replaced: waits at its EngineGate hold before each operation -->
+    <LegacyExclude>$(LegacyDir)SequentialEngine.cs</LegacyExclude>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="SequentialEngine.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HeuristicLab.Common\HeuristicLab.Common.csproj" />

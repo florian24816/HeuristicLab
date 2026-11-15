@@ -36,6 +36,8 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   private int batchSize = QuickBatchRuns.DefaultSize;
   /// <summary>Stop was pressed: the quick batch run ends with the runs made so far.</summary>
   private volatile bool stopPressed;
+  /// <summary>Pause pressed and not resumed: applied as soon as the algorithm runs (also when pressed between two runs).</summary>
+  private volatile bool pauseRequested;
 
   public AlgorithmDetailViewModel(AlgorithmBlockViewModel block) {
     this.block = block;
@@ -279,6 +281,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
     }
     startedHere = true;
     stopPressed = false;
+    pauseRequested = false;
     execution = Task.Run(RunBatch);
     timer.Start();
     Tick();
@@ -293,6 +296,22 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   /// Stop and a failure.
   /// </summary>
   private void RunBatch() {
+    // a pause pressed between two runs (the algorithm stopped, the next not started) is applied as the next run starts
+    void PauseIfRequested() {
+      if (pauseRequested && Algorithm.ExecutionState == ExecutionState.Started)
+        try { Algorithm.Pause(); } catch (InvalidOperationException) { } catch (NotSupportedException) { }
+    }
+    void OnStarted(object? sender, EventArgs e) => PauseIfRequested();
+    Algorithm.Started += OnStarted;
+    using var pauseWatch = new Timer(_ => PauseIfRequested(), null, 50, 50);
+    try {
+      RunBatchLoop();
+    } finally {
+      Algorithm.Started -= OnStarted;
+    }
+  }
+
+  private void RunBatchLoop() {
     while (true) {
       Algorithm.Start(CancellationToken.None);
       if (Algorithm.ExecutionState == ExecutionState.Paused || stopPressed || BatchRunsMade >= batchSize) return;
@@ -322,6 +341,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
       if (Algorithm.Problem == null) return;
       HeuristicLab.Next.Runtime.Resources.Configure(Algorithm);
       block.Workspace.SetAlgorithmRunning(block, this, true);
+      pauseRequested = false;
       if (!startedHere) {
         // paused before this detail knew it: a quick batch run from here
         runsBefore = new HashSet<IRun>(Algorithm.Runs, ReferenceEqualityComparer.Instance);
@@ -332,7 +352,11 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
       execution = Task.Run(RunBatch);
       timer.Start();
       Tick();
-    } else Algorithm.Pause();
+    } else {
+      pauseRequested = true;
+      // between two runs the algorithm is stopped for an instant: the watch in RunBatch pauses the next one
+      try { Algorithm.Pause(); } catch (InvalidOperationException) { } catch (NotSupportedException) { }
+    }
   }
   // while an experiment runs the algorithm, the experiment's Pause / Stop control it
   private bool CanPauseOrResume() => Algorithm.ExecutionState is ExecutionState.Started or ExecutionState.Paused && !ExperimentRuns;
@@ -343,6 +367,7 @@ public partial class AlgorithmDetailViewModel : ViewModelBase {
   [RelayCommand(CanExecute = nameof(CanStop))]
   private void Stop() {
     stopPressed = true;
+    pauseRequested = false;
     block.StopRequested();
     Algorithm.Stop();
   }

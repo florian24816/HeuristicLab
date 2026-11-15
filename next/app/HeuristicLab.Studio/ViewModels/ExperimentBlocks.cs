@@ -486,6 +486,8 @@ public partial class AlgorithmBlockViewModel : BlockViewModel {
     get {
       if (Algorithm.Problem == null) return AlgorithmStatus.ProblemMissing;
       return Algorithm.ExecutionState switch {
+        // the experiment runs paused (Pause): its engines wait, the algorithm stays Started
+        ExecutionState.Started when Root is { IsRunning: true } && Workspace.IsPausedExperiments => AlgorithmStatus.Waiting,
         ExecutionState.Started => AlgorithmStatus.Working,
         ExecutionState.Paused => AlgorithmStatus.Waiting,
         ExecutionState.Stopped when failed => AlgorithmStatus.Failed,
