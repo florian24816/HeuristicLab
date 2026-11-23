@@ -240,6 +240,82 @@ public class StudioMultiSelectTests {
 
   [TestMethod]
   [Timeout(300_000)]
+  public async Task ARunPickedPicksItsContent() {
+    await session.Dispatch(() => {
+      var vm = new MainViewModel(null, new Dialogs());
+      var ws = vm.Workspace;
+      var window = new MainWindow { DataContext = vm, Width = 1400, Height = 900 };
+      window.Show();
+      var ga = Catalog.Find(Catalog.Algorithms(), "GeneticAlgorithm")!;
+      var experiment = ws.NewExperiment();
+      var batch = ws.AddContainer(experiment, ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(BatchRun)));
+      var inner1 = ws.AddAlgorithm(batch, ga);
+      var inner2 = ws.AddAlgorithm(batch, ga);
+      ws.SetProblem(inner1, Tsp());
+      var timed = ws.AddContainer(experiment, ExperimentTree.ContainerTypes().Single(e => e.Type == typeof(TimeLimitRun)));
+      var limited = ws.AddAlgorithm(timed, ga);
+      var alone = ws.AddAlgorithm(experiment, ga);
+      ws.Selected = null;
+      Pump();
+      Border Name(BlockViewModel block) => window.GetVisualDescendants().OfType<Border>()
+        .First(x => x.Classes.Contains("name") && x.DataContext == block && x.IsEffectivelyVisible);
+      List<BlockViewModel> Picked() => ws.AllBlocks().Where(x => x.IsPicked).ToList();
+
+      // right-click on a batch run: it and everything inside it picked
+      var at = Center(Name(batch), window);
+      window.MouseDown(at, MouseButton.Right);
+      window.MouseUp(at, MouseButton.Right);
+      Pump();
+      foreach (var border in window.GetVisualDescendants().OfType<Border>().Where(x => x.Classes.Contains("block"))) border.ContextMenu?.Close();
+      Pump();
+      CollectionAssert.AreEquivalent(new BlockViewModel[] { batch, inner1, inner1.Problem!, inner2 }, Picked());
+      Assert.AreEqual(Color.Parse("#1E1E1E"), Fill(Name(inner2)), "the content inverted too");
+      // its menu and its content's: split, "Delete selected items" there
+      foreach (var block in new BlockViewModel[] { batch, inner1, inner1.Problem! }) {
+        var menu = block.Menu.Select(m => m.Display).ToList();
+        Assert.AreEqual("Single selection", menu[0], block.Name);
+        CollectionAssert.Contains(menu, "Multiple selections", block.Name);
+        CollectionAssert.Contains(menu, "Delete selected items", block.Name);
+      }
+      CollectionAssert.AreEqual(new BlockViewModel[] { batch }, ws.PickedGroup().ToList(), "what moves, copies, is deleted: the run with its content");
+
+      // Ctrl+click on a time-limit run adds it with its algorithm; on a block inside a picked run: it is taken out and
+      // the run is no longer picked whole, the rest stays
+      Click(window, Center(Name(timed), window), RawInputModifiers.Control);
+      CollectionAssert.AreEquivalent(new BlockViewModel[] { batch, inner1, inner1.Problem!, inner2, timed, limited }, Picked());
+      Assert.IsTrue(alone.Menu.All(m => m.Look == ""), "a block not picked: its own menu");
+      Click(window, Center(Name(inner2), window), RawInputModifiers.Control);
+      CollectionAssert.AreEquivalent(new BlockViewModel[] { inner1, inner1.Problem!, timed, limited }, Picked());
+      CollectionAssert.AreEqual(new BlockViewModel[] { inner1, timed }, ws.PickedGroup().ToList());
+      ws.ClearPicks();
+
+      // the rectangle: a run it touches comes with its content (blue frame while drawn, picked when let go)
+      var area = window.GetVisualDescendants().OfType<Border>().First(x => x.Classes.Contains("experiment") && x.DataContext == experiment);
+      var start = area.TranslatePoint(new Point(4, Name(batch).TranslatePoint(new Point(0, -3), area)!.Value.Y), window)!.Value;
+      var end = Name(batch).TranslatePoint(new Point(Name(batch).Bounds.Width + 30, Name(batch).Bounds.Height - 4), window)!.Value;
+      window.MouseDown(start, MouseButton.Left);
+      window.MouseMove(new Point((start.X + end.X) / 2, end.Y), RawInputModifiers.LeftMouseButton);
+      window.MouseMove(end, RawInputModifiers.LeftMouseButton);
+      Pump();
+      Assert.IsTrue(batch.IsBandCovered && inner1.IsBandCovered && inner2.IsBandCovered && inner1.Problem!.IsBandCovered, "the content framed blue too");
+      Assert.IsFalse(timed.IsBandCovered || alone.IsBandCovered);
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-run-band.png"));
+      window.MouseUp(end, MouseButton.Left);
+      Pump();
+      CollectionAssert.AreEquivalent(new BlockViewModel[] { batch, inner1, inner1.Problem!, inner2 }, Picked());
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-run-picked.png"));
+
+      // delete selected items: the run with its content
+      batch.Menu.Single(m => m.Display == "Delete selected items").Command!.Execute(null);
+      Pump();
+      CollectionAssert.AreEqual(new BlockViewModel[] { timed, alone }, experiment.Children.ToList());
+      window.Close();
+      return true;
+    }, CancellationToken.None);
+  }
+
+  [TestMethod]
+  [Timeout(300_000)]
   public async Task PickedBlocksStayInOneExperimentAndShareTheMenu() {
     await session.Dispatch(() => {
       var vm = new MainViewModel(null, new Dialogs());
@@ -294,17 +370,83 @@ public class StudioMultiSelectTests {
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
       Click(window, Center(Name(a), window), RawInputModifiers.Control);
       CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+      // split in two parts: "Single selection" (this block alone, as before) and "Multiple selections" (all picked ones)
       var menu = a.Menu.Select(m => m.Display).ToList();
-      CollectionAssert.IsSubsetOf(new[] { "Delete selected items", "Copy selected items", "Copy selected items n times..." }, menu);
-      CollectionAssert.DoesNotContain(menu, "Delete");
-      CollectionAssert.Contains(c.Menu.Select(m => m.Display).ToList(), "Delete", "a block not picked keeps its own menu");
-      a.Menu.Single(m => m.Display == "Copy selected items").Command.Execute(null);
+      Assert.AreEqual("Single selection", menu[0]);
+      int multipleAt = menu.IndexOf("Multiple selections");
+      CollectionAssert.IsSubsetOf(new[] { "Copy", "Rename", "Delete" }, menu.Take(multipleAt).ToList());
+      CollectionAssert.AreEqual(new[] { "Copy selected items", "Copy selected items n times...", "Delete selected items" }, menu.Skip(multipleAt + 1).ToList());
+      CollectionAssert.AreEqual(new[] { "heading" }, a.Menu.Take(multipleAt).Select(m => m.Look).Where(l => l != "").ToList());
+      Assert.IsTrue(a.Menu.Skip(multipleAt).All(m => m.Look is "multi" or "multiheading"));
+      Assert.IsTrue(a.Menu.Where(m => m.Look is "heading" or "multiheading").All(m => m.Command == null), "titles cannot be clicked");
+      var own = c.Menu.Select(m => m.Display).ToList();
+      CollectionAssert.Contains(own, "Delete", "a block not picked keeps its own menu");
+      CollectionAssert.DoesNotContain(own, "Single selection", "without titles");
+      // drawn: the multiple part on its own grey (light mode)
+      var aBlock = window.GetVisualDescendants().OfType<Border>().First(x => x.Classes.Contains("block") && x.DataContext == a);
+      window.MouseDown(Center(Name(a), window), MouseButton.Right);
+      window.MouseUp(Center(Name(a), window), MouseButton.Right);
+      Pump();
+      Assert.IsTrue(aBlock.ContextMenu!.IsOpen);
+      var items = aBlock.ContextMenu.GetVisualDescendants().OfType<MenuItem>().ToList();
+      Assert.AreEqual(a.Menu.Count, items.Count);
+      Color Back(MenuItem item) => ((ISolidColorBrush)item.Background!).Color;
+      Assert.AreEqual(Color.Parse("#D9D9D9"), Back(items[multipleAt]));
+      Assert.AreEqual(Color.Parse("#D9D9D9"), Back(items[^1]));
+      Assert.AreNotEqual(Color.Parse("#D9D9D9"), items[1].Background is ISolidColorBrush plain ? plain.Color : Colors.Transparent);
+      Assert.AreEqual(FontWeight.Bold, items[0].FontWeight);
+      Assert.IsFalse(items[0].IsHitTestVisible);
+      // hovered: a clearly darker grey (the theme's hover hardly showed on the grey)
+      Color Hovered(MenuItem item) {
+        window.MouseMove(Center(item, window));
+        Pump();
+        var root = item.GetVisualDescendants().OfType<Border>().First(x => x.Name == "PART_LayoutRoot");
+        return ((ISolidColorBrush)root.Background!).Color;
+      }
+      Assert.AreEqual(Color.Parse("#ADADAD"), Hovered(items[^1]));
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-menu.png"));
+      vm.IsDarkMode = true;
+      Pump();
+      Assert.AreEqual(Color.Parse("#454545"), Back(items[^1]));
+      Assert.AreEqual(Color.Parse("#6E6E6E"), Hovered(items[^2]));
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-multiselect-menu-dark.png"));
+      vm.IsDarkMode = false;
+      aBlock.ContextMenu.Close();
+      Pump();
+      // right-click: on a picked block the picks stay; on another block they go and that one is selected
+      void RightClick(BlockViewModel block) {
+        var at = Center(Name(block), window);
+        window.MouseDown(at, MouseButton.Right);
+        window.MouseUp(at, MouseButton.Right);
+        Pump();
+        foreach (var border in window.GetVisualDescendants().OfType<Border>().Where(x => x.Classes.Contains("block")))
+          border.ContextMenu?.Close();
+        Pump();
+      }
+      RightClick(a);
+      CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList(), "the picked blocks' menu");
+      var shown = ws.Selected;
+      RightClick(c);
+      CollectionAssert.AreEqual(new BlockViewModel[] { c }, ws.AllBlocks().Where(x => x.IsPicked).ToList(),
+        "a block not picked: the picked ones are let go, it is picked instead");
+      Assert.AreSame(shown, ws.Selected, "the shown block (orange) stays");
+      Assert.AreEqual(Color.Parse("#1E1E1E"), Fill(Name(c)), "inverted");
+      CollectionAssert.Contains(c.Menu.Select(m => m.Display).ToList(), "Delete", "its own menu");
+      ws.ClearPicks();
+      RightClick(c);
+      CollectionAssert.AreEqual(new BlockViewModel[] { c }, ws.AllBlocks().Where(x => x.IsPicked).ToList(), "nothing picked before: picked too");
+      Assert.AreSame(shown, ws.Selected);
+      ws.ClearPicks();
+      Click(window, Center(Name(b), window), RawInputModifiers.Control);
+      Click(window, Center(Name(a), window), RawInputModifiers.Control);
+      CollectionAssert.AreEquivalent(new[] { a, b }, ws.AllBlocks().Where(x => x.IsPicked).ToList());
+      a.Menu.Single(m => m.Display == "Copy selected items").Command!.Execute(null);
       Pump();
       CollectionAssert.AreEqual(new[] { "A", "A (copy 1)", "B", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
       Click(window, Center(Name(b), window), RawInputModifiers.Control);
       Click(window, Center(Name(a), window), RawInputModifiers.Control);
       Assert.IsTrue(a.IsPicked && b.IsPicked);
-      a.Menu.Single(m => m.Display == "Delete selected items").Command.Execute(null);
+      a.Menu.Single(m => m.Display == "Delete selected items").Command!.Execute(null);
       Pump();
       CollectionAssert.AreEqual(new[] { "A (copy 1)", "B (copy 1)" }, first.Children.Select(x => x.Name).ToList());
       CollectionAssert.AreEqual(new[] { "C" }, second.Children.Select(x => x.Name).ToList());

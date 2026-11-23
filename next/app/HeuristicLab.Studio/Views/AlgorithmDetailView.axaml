@@ -93,8 +93,9 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="2">
                     <Button Classes="exec start" Content="&#x25B6; Start" Command="{Binding StartCommand}"
-                            ToolTip.Tip="Start the quick batch run; after a pause: resume it" />
-                    <Button Classes="exec" Content="&#x23F8; Pause" Command="{Binding PauseCommand}" />
+                            ToolTip.Tip="Start a quick batch run" />
+                    <Button Classes="exec" Content="{Binding PauseText}" Command="{Binding PauseCommand}"
+                            ToolTip.Tip="Pause the quick batch run; paused: resume it (Stop ends it with the runs made)" />
                     <Button Classes="exec" Content="&#x23F9; Stop" Command="{Binding StopCommand}" ToolTip.Tip="Stop: the runs made so far are the quick batch run" />
                     <Button Classes="exec prepare" Content="&#x21BA; Prepare" Command="{Binding PrepareCommand}" ToolTip.Tip="Reset results (runs are kept)" />
                 </StackPanel>

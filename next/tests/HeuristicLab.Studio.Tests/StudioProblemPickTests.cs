@@ -99,7 +99,7 @@ public class StudioProblemPickTests {
       var menu = ts.Problem.Menu.Select(m => m.Display).ToList();
       CollectionAssert.Contains(menu, "Change selected problem blocks to...");
       Assert.IsFalse(menu.Any(m => m.StartsWith("Copy")), string.Join(", ", menu));
-      ts.Problem.Menu.Single(m => m.Display == "Change selected problem blocks to...").Command.Execute(null);
+      ts.Problem.Menu.Single(m => m.Display == "Change selected problem blocks to...").Command!.Execute(null);
       Pump();
       Assert.AreSame(ts.Algorithm, dialogs.AskedFor, "the dialog offers the first one's algorithm's problems");
       Assert.AreEqual("ch130", ts.Algorithm.Problem!.Name);

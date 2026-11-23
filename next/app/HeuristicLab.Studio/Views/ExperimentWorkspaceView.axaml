@@ -28,6 +28,20 @@
                             <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
                                 <Setter Property="Header" Value="{Binding Display}" />
                                 <Setter Property="Command" Value="{Binding Command}" />
+                                <Setter Property="Tag" Value="{Binding Look}" />
+                                <!-- picked among several: "Single selection" as before, "Multiple selections" on a grey of its own -->
+                                <Style Selector="^[Tag=heading], ^[Tag=multiheading]">
+                                    <Setter Property="FontWeight" Value="Bold" />
+                                    <Setter Property="IsHitTestVisible" Value="False" />
+                                    <Setter Property="Focusable" Value="False" />
+                                </Style>
+                                <Style Selector="^[Tag=multi], ^[Tag=multiheading]">
+                                    <Setter Property="Background" Value="{DynamicResource MultiMenuBrush}" />
+                                </Style>
+                                <!-- the theme's hover grey hardly shows on that grey: a clearly darker / lighter one -->
+                                <Style Selector="^[Tag=multi]:pointerover /template/ Border#PART_LayoutRoot, ^[Tag=multi]:selected /template/ Border#PART_LayoutRoot">
+                                    <Setter Property="Background" Value="{DynamicResource MultiMenuHoverBrush}" />
+                                </Style>
                             </ControlTheme>
                         </ContextMenu.ItemContainerTheme>
                     </ContextMenu>
@@ -84,21 +98,26 @@
             </StackPanel>
         </DataTemplate>
 
-        <!-- add button of a container, with the building blocks it accepts -->
+        <!-- add buttons of a container, one per building block it accepts: "+ algorithm", "+ batch run", "+ time-limit run" -->
+        <!-- once the container holds a block the buttons fold into an orange line over the same room (no jumping when the
+             pointer passes); hovering the room shows the buttons -->
         <DataTemplate x:Key="AddButton" x:DataType="vm:ContainerBlockViewModel">
-            <Button Classes="action addblock" Content="{Binding AddText}" IsVisible="{Binding CanAdd}"
-                    IsEnabled="{Binding IsEditable}">
-                <Button.Flyout>
-                    <MenuFlyout ItemsSource="{Binding AddChoices}">
-                        <MenuFlyout.ItemContainerTheme>
-                            <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
-                                <Setter Property="Header" Value="{Binding Display}" />
-                                <Setter Property="Command" Value="{Binding Command}" />
-                            </ControlTheme>
-                        </MenuFlyout.ItemContainerTheme>
-                    </MenuFlyout>
-                </Button.Flyout>
-            </Button>
+            <Panel Classes="addarea" Classes.folded="{Binding HasChildren}" Background="Transparent" HorizontalAlignment="Left"
+                   IsVisible="{Binding CanAdd}">
+            <Border Classes="addline" Height="3" VerticalAlignment="Center" Background="{DynamicResource AddLineBrush}" IsHitTestVisible="False" />
+            <ItemsControl Classes="addbuttons" ItemsSource="{Binding AddChoices}" IsEnabled="{Binding IsEditable}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="4" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MenuChoice">
+                        <Button Classes="action addblock" Content="{Binding Display}" Command="{Binding Command}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            </Panel>
         </DataTemplate>
     </UserControl.Resources>
 
@@ -109,10 +128,15 @@
             <Setter Property="CornerRadius" Value="0" />
             <Setter Property="Padding" Value="12,6" />
         </Style>
-        <!-- the containers' add buttons: low, as the Results tab's selection state buttons -->
+        <!-- the containers' add buttons: low, as the Results tab's selection state buttons; no frame, square at the top and
+             rounded at the bottom, see-through at the top to pale logo orange at the bottom (hovered: to the logo orange) -->
         <Style Selector="Button.action.addblock">
             <Setter Property="Padding" Value="12,2,12,3" />
             <Setter Property="MinHeight" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0,0,6,6" />
+            <Setter Property="Background" Value="{DynamicResource AddBlockBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AddBlockInkBrush}" />
         </Style>
         <Style Selector="Button.action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}" />
@@ -124,6 +148,80 @@
         <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{StaticResource DisabledBrush}" />
             <Setter Property="Foreground" Value="#9A9A9A" />
+        </Style>
+        <!-- folded add buttons: the line instead of them (they keep their room), shown again while the room is hovered -->
+        <Style Selector="Panel.addarea > Border.addline">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.addarea.folded > Border.addline">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="Panel.addarea.folded > ItemsControl.addbuttons">
+            <Setter Property="Opacity" Value="0" />
+        </Style>
+        <Style Selector="Panel.addarea.folded:pointerover > Border.addline">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.addarea.folded:pointerover > ItemsControl.addbuttons">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <!-- after the general ones: an add button's hover / disabled look -->
+        <Style Selector="Button.action.addblock:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.action.addblock:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AddBlockHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AddBlockInkBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.action.addblock:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <!-- new / open tiles under the experiments -->
+        <Style Selector="Button.newtile">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <Style Selector="Button.newtile:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.newtile:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.newtile:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <!-- a rectangle as wide as the text field below it, the pictogram at its first size (36 px) in the middle -->
+        <Style Selector="Button.newtile Border.tilesquare">
+            <Setter Property="Width" Value="132" />
+            <Setter Property="Height" Value="64" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Background" Value="#FDE5C8" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Button.newtile Border.tilesquare > c|Pictogram">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.newtile Border.tilelabel">
+            <Setter Property="Width" Value="132" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Background" Value="{StaticResource ButtonBrush}" />
+        </Style>
+        <Style Selector="Button.newtile Border.tilelabel > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- "open": Open recent while its list is shown (it keeps the hover look) -->
+        <Style Selector="Button.newtile:pointerover Border.tilesquare, Button.newtile.open Border.tilesquare">
+            <Setter Property="Background" Value="#F7931D" />
+        </Style>
+        <Style Selector="Button.newtile:pointerover Border.tilelabel, Button.newtile.open Border.tilelabel">
+            <Setter Property="Background" Value="#FDE5C8" />
+        </Style>
+        <Style Selector="Button.newtile:disabled">
+            <Setter Property="Opacity" Value="0.45" />
         </Style>
         <Style Selector="Border.experiment">
             <Setter Property="Background" Value="{DynamicResource ExperimentBrush}" />
@@ -158,7 +256,8 @@
         <Style Selector="Button.picto Border.label">
             <Setter Property="Background" Value="{StaticResource ButtonBrush}" />
             <Setter Property="Height" Value="32" />
-            <Setter Property="Padding" Value="12,0" />
+            <!-- 6 (was 12) so Start all / Start selected / Pause / Stop / Eject fit the 700 px column -->
+            <Setter Property="Padding" Value="6,0" />
             <Setter Property="TextElement.Foreground" Value="{StaticResource InkBrush}" />
         </Style>
         <Style Selector="Button.picto Border.label TextBlock">
@@ -297,7 +396,7 @@
         <DockPanel Margin="12">
             <!-- global start controls -->
             <!-- the status of what runs is shown in the main window's tab row -->
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,12">
+            <Grid x:Name="RunControls" DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="4" Margin="0,0,0,12">
                 <!-- like the blocks: orange square with the pictogram, then the rectangle with the text -->
                 <Button Classes="picto" Command="{Binding StartAllCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="3">
@@ -311,14 +410,28 @@
                         <Border Classes="label"><TextBlock Text="Start selected experiments" /></Border>
                     </StackPanel>
                 </Button>
-                <Button Grid.Column="2" Classes="picto" Command="{Binding StopCommand}">
+                <!-- pause (user's request 2026-11-14): pauses the experiment runs and turns into Resume (the start pictogram) -->
+                <Button Grid.Column="2" x:Name="PauseResume" Classes="picto" Command="{Binding PauseOrResumeCommand}"
+                        ToolTip.Tip="Pause the running experiments; paused: resume them (Stop ends them)">
+                    <Panel>
+                        <StackPanel Orientation="Horizontal" Spacing="3" IsVisible="{Binding !IsPausedExperiments}">
+                            <Border Classes="square logo"><c:Pictogram Symbol="experiment_pause" Foreground="{StaticResource InkBrush}" /></Border>
+                            <Border Classes="label"><TextBlock Text="Pause" /></Border>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="3" IsVisible="{Binding IsPausedExperiments}">
+                            <Border Classes="square logo"><c:Pictogram Symbol="Experiment_run_selected" Foreground="{StaticResource InkBrush}" /></Border>
+                            <Border Classes="label"><TextBlock Text="Resume" /></Border>
+                        </StackPanel>
+                    </Panel>
+                </Button>
+                <Button Grid.Column="3" Classes="picto" Command="{Binding StopCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="3">
                         <Border Classes="square logo"><c:Pictogram Symbol="experiment_stop" Foreground="{StaticResource InkBrush}" /></Border>
                         <Border Classes="label"><TextBlock Text="Stop" /></Border>
                     </StackPanel>
                 </Button>
                 <!-- eject: like the others, but a grey square -->
-                <Button Grid.Column="3" Classes="picto" Command="{Binding EjectCommand}"
+                <Button Grid.Column="4" Classes="picto" Command="{Binding EjectCommand}"
                         ToolTip.Tip="Take experiments out of the workspace (all or chosen ones; save or autosave unsaved ones first)">
                     <StackPanel Orientation="Horizontal" Spacing="3">
                         <Border Classes="square eject"><c:Pictogram Symbol="eject" Foreground="{StaticResource InkBrush}" /></Border>
@@ -329,7 +442,7 @@
 
             <!-- the tree, and over it the rectangle that picks blocks (press on empty space and sweep) -->
             <Panel>
-            <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto" PointerPressed="TreePressed">
+            <ScrollViewer x:Name="Tree" HorizontalScrollBarVisibility="Auto" PointerPressed="TreePressed" Focusable="True">
                 <!-- blocks stay clickable while experiments run; what would change them is disabled -->
                 <StackPanel Spacing="14">
                     <ItemsControl ItemsSource="{Binding Experiments}">
@@ -360,26 +473,52 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Button Classes="action" Content="+ New experiment / open...">
-                        <Button.Flyout>
-                            <MenuFlyout>
-                                <MenuItem Header="New experiment" Command="{Binding CreateExperimentCommand}" />
-                                <MenuItem Header="New from data or benchmark..." Command="{Binding NewFromSetupCommand}"
-                                          ToolTip.Tip="An algorithm with its problem: a benchmark instance or a CSV/Parquet data file" />
-                                <MenuItem Header="Open..." Command="{Binding OpenExperimentCommand}" />
-                                <MenuItem Header="Open recent" ItemsSource="{Binding RecentMenu}" IsEnabled="{Binding HasRecentFiles}">
-                                    <MenuItem.ItemContainerTheme>
+                    <!-- new / open (user's request 2026-11-13): tiles - a pale logo orange square with the pictogram, the text
+                         below it; hovered the square turns logo orange and the text field pale orange. "Open recent" shows its
+                         list when hovered. Samples are offered on the right (nothing selected). -->
+                    <StackPanel x:Name="NewTiles" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Left">
+                        <Button Classes="newtile" Command="{Binding CreateExperimentCommand}" ToolTip.Tip="An empty experiment">
+                            <StackPanel>
+                                <Border Classes="tilesquare"><c:Pictogram Symbol="experiment_logo" Foreground="{StaticResource InkBrush}" /></Border>
+                                <Border Classes="tilelabel"><TextBlock Text="New experiment" /></Border>
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="newtile" Command="{Binding NewFromSetupCommand}"
+                                ToolTip.Tip="An algorithm with its problem: a benchmark instance or a CSV/Parquet data file">
+                            <StackPanel>
+                                <Border Classes="tilesquare"><c:Pictogram Symbol="Algorith_logo" Foreground="{StaticResource InkBrush}" /></Border>
+                                <Border Classes="tilelabel"><TextBlock Text="New benchmark instance" /></Border>
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="newtile" Command="{Binding OpenExperimentCommand}" ToolTip.Tip="One or several .hl files">
+                            <StackPanel>
+                                <Border Classes="tilesquare"><c:Pictogram Symbol="open_from_file" Foreground="{StaticResource InkBrush}" /></Border>
+                                <Border Classes="tilelabel"><TextBlock Text="Open..." /></Border>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="OpenRecent" Classes="newtile" IsEnabled="{Binding HasRecentFiles}">
+                            <Button.Flyout>
+                                <c:HoverMenuFlyout Placement="RightEdgeAlignedTop" ShowMode="Transient" ItemsSource="{Binding RecentMenu}"
+                                                  Opened="RecentListOpened" Closed="RecentListClosed">
+                                    <c:HoverMenuFlyout.ItemContainerTheme>
+                                        <!-- file names in a TextBlock: a string's '_' would be an access key (GA_TSP.hl -> GATSP.hl) -->
                                         <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
-                                            <Setter Property="Header" Value="{Binding Display}" />
+                                            <Setter Property="Header" Value="{Binding}" />
+                                            <Setter Property="HeaderTemplate">
+                                                <DataTemplate x:DataType="vm:MenuChoice"><TextBlock Text="{Binding Display}" /></DataTemplate>
+                                            </Setter>
                                             <Setter Property="Command" Value="{Binding Command}" />
                                             <Setter Property="ToolTip.Tip" Value="{Binding Tip}" />
                                         </ControlTheme>
-                                    </MenuItem.ItemContainerTheme>
-                                </MenuItem>
-                                <MenuItem Header="Samples..." Command="{Binding ShowSamplesCommand}" />
-                            </MenuFlyout>
-                        </Button.Flyout>
-                    </Button>
+                                    </c:HoverMenuFlyout.ItemContainerTheme>
+                                </c:HoverMenuFlyout>
+                            </Button.Flyout>
+                            <StackPanel>
+                                <Border Classes="tilesquare"><c:Pictogram Symbol="open_recent" Foreground="{StaticResource InkBrush}" /></Border>
+                                <Border Classes="tilelabel"><TextBlock Text="Open recent" /></Border>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
             <Canvas x:Name="BandLayer" IsHitTestVisible="False">

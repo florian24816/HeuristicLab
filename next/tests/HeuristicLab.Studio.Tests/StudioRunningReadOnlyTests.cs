@@ -90,8 +90,10 @@ public class StudioRunningReadOnlyTests {
       Assert.AreEqual("3 s", limit.TimeLimitText);
       Assert.IsFalse(ws.BeginDrag(second), "no moving");
       Assert.AreEqual(0, ws.Copy(second, 1).Count, "no copying");
-      var add = window.GetVisualDescendants().OfType<Button>().First(b => b.IsEffectivelyVisible && b.DataContext == experiment && Equals(b.Content, experiment.AddText));
-      Assert.IsFalse(add.IsEnabled, "add buttons are disabled");
+      var adds = window.GetVisualDescendants().OfType<Button>()
+        .Where(b => b.IsVisible && b.Classes.Contains("addblock") && experiment.AddChoices.Contains(b.DataContext)).ToList();
+      Assert.AreEqual(3, adds.Count);
+      Assert.IsTrue(adds.All(b => !b.IsEffectivelyEnabled), "add buttons are disabled");
 
       // parameters show they cannot be changed now: value and choice parameters get the not-editable pictogram
       var parameters = second.Detail.AlgorithmParameters.Parameters;

@@ -6,7 +6,14 @@
     <RootNamespace>HeuristicLab.Core</RootNamespace>
     <AssemblyTitle>HeuristicLab.Core</AssemblyTitle>
     <Description>HeuristicLab core classes</Description>
+    <!-- replaced: engines wait at an EngineGate hold before each operation (Studio's Pause); own: EngineGate.cs -->
+    <LegacyExclude>$(LegacyDir)Engine.cs</LegacyExclude>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Engine.cs" />
+    <Compile Include="EngineGate.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HeuristicLab.Collections\HeuristicLab.Collections.csproj" />

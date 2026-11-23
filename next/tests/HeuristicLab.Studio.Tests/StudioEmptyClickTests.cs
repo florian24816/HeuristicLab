@@ -69,7 +69,31 @@ public class StudioEmptyClickTests {
       var add = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("addblock") && b.IsEffectivelyVisible);
       Assert.AreEqual(new Thickness(12, 2, 12, 3), add.Padding);
       Assert.IsTrue(add.Bounds.Height < 28, $"low: {add.Bounds.Height}");
+      // three buttons instead of a list (user's request 2026-11-13): no frame, square top, rounded bottom, see-through
+      // at the top to pale logo orange at the bottom; hovered to the logo orange
+      var adds = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("addblock") && b.IsEffectivelyVisible
+        && b.TranslatePoint(default, window)!.Value.Y == add.TranslatePoint(default, window)!.Value.Y).ToList();
+      CollectionAssert.AreEqual(new[] { "+ algorithm", "+ batch run", "+ time-limit run" }, adds.Select(b => b.Content as string).ToList());
+      Assert.AreEqual(new Thickness(0), add.BorderThickness);
+      Assert.AreEqual(new CornerRadius(0, 0, 6, 6), add.CornerRadius);
+      var gradient = (Avalonia.Media.ILinearGradientBrush)add.Background!;
+      Assert.AreEqual(0, gradient.GradientStops[0].Color.A, "see-through at the top");
+      Assert.AreEqual(Avalonia.Media.Color.Parse("#FDE5C8"), gradient.GradientStops[^1].Color);
+      Assert.IsTrue(gradient.StartPoint.Point.Y < gradient.EndPoint.Point.Y, "top to bottom");
+      window.MouseMove(new Point(add.TranslatePoint(new Point(add.Bounds.Width / 2, add.Bounds.Height / 2), window)!.Value.X,
+        add.TranslatePoint(new Point(0, add.Bounds.Height / 2), window)!.Value.Y));
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      var presenter = add.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
+      var hovered = (Avalonia.Media.ILinearGradientBrush)presenter.Background!;
+      Assert.AreEqual(Avalonia.Media.Color.Parse("#F7931D"), hovered.GradientStops[^1].Color, "hovered: to the logo orange");
+      Assert.AreEqual(0, hovered.GradientStops[0].Color.A);
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-add-button-low.png"));
+      vm.IsDarkMode = true;
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+      window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-add-button-dark.png"));
+      vm.IsDarkMode = false;
+      window.MouseMove(new Point(2, 2));
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
       // the Results tab: a filter's value field is left by a click on empty space too
       vm.SelectedTab = MainViewModel.ResultsTab;

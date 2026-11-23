@@ -7,7 +7,13 @@
     <AssemblyTitle>HeuristicLab.ParallelEngine</AssemblyTitle>
     <Description>HeuristicLab engine for parallel processing using multiple cores on a shared memory system</Description>
     <AssemblyVersion>3.3.0.0</AssemblyVersion>
+    <!-- replaced: waits at its EngineGate hold before each operation -->
+    <LegacyExclude>$(LegacyDir)ParallelEngine.cs</LegacyExclude>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="ParallelEngine.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HeuristicLab.Common\HeuristicLab.Common.csproj" />

@@ -26,6 +26,7 @@ public partial class ExperimentWorkspaceView : UserControl {
   public ExperimentWorkspaceView() {
     InitializeComponent();
     AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
+    if (this.FindControl<Button>("OpenRecent") is { Flyout: HeuristicLab.Studio.Controls.HoverMenuFlyout recent } openRecent) recent.Attach(openRecent);
     AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
     AddHandler(PointerCaptureLostEvent, (_, _) => CancelDrag(), RoutingStrategies.Direct | RoutingStrategies.Bubble, handledEventsToo: true);
   }
@@ -80,9 +81,30 @@ public partial class ExperimentWorkspaceView : UserControl {
       }
     }, Avalonia.Threading.DispatcherPriority.Background);
 
+  // "Open recent" shows its list while the tile or the list is hovered (Controls/HoverMenuFlyout); the tile keeps its
+  // hover look meanwhile
+  private void RecentListOpened(object? sender, EventArgs e) => this.FindControl<Button>("OpenRecent")?.Classes.Set("open", true);
+
+  private void RecentListClosed(object? sender, EventArgs e) => this.FindControl<Button>("OpenRecent")?.Classes.Set("open", false);
+
   // ---- drag and drop: press a block, move, release where the faded preview shows it
 
   private void BlockPressed(object? sender, PointerPressedEventArgs e) {
+    // right-click on a block that is not picked: the picked ones (if any) are let go and this one is picked (inverted),
+    // its own menu opens; the shown block (orange) stays (user's request 2026-11-11). On a picked block the menu acts on
+    // all picked ones.
+    if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed) {
+      // a menu closed without choosing gives the focus back to the control focused before it (often "+ New experiment /
+      // open..." at the bottom), which the tab then scrolled into view - so the tab's own scroll area takes the focus
+      // first (clearing it is not enough: the menu remembers the control focused last)
+      if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not TextBox && this.FindControl<ScrollViewer>("Tree") is { } tree)
+        tree.Focus(NavigationMethod.Pointer);
+      if ((sender as Control)?.DataContext is BlockViewModel { IsPicked: false } clicked && Workspace is { } workspace) {
+        workspace.ClearPicks();
+        workspace.TogglePick(clicked);
+      }
+      return;
+    }
     if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
     // Shift+click on a purple algorithm: stop editing a field across algorithms
     if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && (sender as Control)?.DataContext is BlockViewModel { IsMultiMember: true }) {

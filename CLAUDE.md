@@ -50,8 +50,14 @@
   events: no problem, not run / stopped by the user, waiting (in a running experiment, paused),
   working, finished (also stopped by a time limit), failed. Unsaved = changed since opened/saved
   (BlockViewModel.MarkModified; detail edits via EditContext.BeginEdit; runs count as changes).
-  Start all / Start selected / Stop are drawn like blocks (Button.picto: orange square with
-  Experiment_run_all / Experiment_run_selected / experiment_stop, then a grey rectangle).
+  Start all / Start selected / Pause / Stop are drawn like blocks (Button.picto: orange square with
+  Experiment_run_all / Experiment_run_selected / experiment_pause / experiment_stop, then a grey rectangle; labels padded
+  6 px, 4 px apart, so the five with Eject fit the 700 px column - Grid RunControls). Pause (user's request 2026-11-14;
+  PauseOrResumeCommand, IsPausedExperiments): every experiment run started with the start buttons pauses (one shared
+  runtime RunPause, like Stop's token: their engines are held; RunStatus "Paused", their running algorithms shown
+  waiting - AlgorithmBlockViewModel.Status) and the button turns into Resume (Experiment_run_selected
+  pictogram) that lets them go on; Stop while paused ends them as stopped (their runs recorded); no starts while paused.
+  The user's experiment_stop was a pause pictogram: it became experiment_pause, experiment_stop is a square now.
   Eject (next to Stop: grey #A8A8A8 square with the eject pictogram; not while anything runs): EjectWindow -
   tick experiments ("Eject selected") or "Eject all", Autosave switch; ExperimentWorkspaceViewModel.EjectAsync:
   unsaved ones (!IsSaved) are saved first with autosave (never saved: "Save as..." file), else UnsavedWindow
@@ -61,8 +67,16 @@
   Empty clicks (user's request 2026-11-02): a press on anything that takes no focus leaves the text field being typed in
   (Controls/FocusRelease, a tunnel class handler on every TopLevel registered in App.Initialize; Avalonia 12 has no
   ClearFocus: FocusManager.Focus(null)); in the Experiments tab a click on empty space also unselects the selected block
-  (ExperimentWorkspaceView.EndBand: Selected = null). The containers' add buttons are low (Button.action.addblock,
-  padding 12,2,12,3, no MinHeight - as the Results tab's selection state buttons).
+  (ExperimentWorkspaceView.EndBand: Selected = null). The containers' add buttons (user's request 2026-11-13; instead of
+  one button with a list): "+ algorithm", "+ batch run", "+ time-limit run" (ContainerBlockViewModel.AddChoices; a
+  time-limit run only "+ algorithm", gone once it holds one), Button.action.addblock - low (padding 12,2,12,3, no
+  MinHeight), no frame, square top and rounded bottom (CornerRadius 0,0,6,6), gradient from see-through at the top to
+  pale logo orange #FDE5C8 at the bottom (AddBlockBrush), hovered to the logo orange (AddBlockHoverBrush), text
+  (AddBlockInkBrush) dark in light mode, white in dark mode (user's request 2026-11-14; dark text was hard to see there). Once a container holds a
+  block (ContainerBlockViewModel.HasChildren) its buttons fold into a 3 px grey line (AddLineBrush: light #8F8A84,
+  dark #8A8580; first logo orange, changed 2026-11-14) over the same room (Panel.addarea.
+  folded: the buttons at opacity 0 keep their size, so nothing jumps when the pointer passes); hovering the room shows the
+  buttons instead of the line (user's request 2026-11-14; StudioAddLineTests).
   The Experiments tab's status (Workspace.Status) sits in MainWindow's tab row between the tabs and the
   logo (TextBlock.runstatus); the bottom status bar still shows it too. Checkbox labels with names use a
   TextBlock: a string's '_' would be an access key.
@@ -90,17 +104,30 @@
   not into a time-limit run). Picked blocks belong to one experiment: the rectangle picks only in the experiment it
   started in (else the first touched block's), Ctrl+click in another experiment starts anew there. While the
   rectangle is drawn, what it would pick gets a blue frame (BlockViewModel.IsBandCovered, the rectangle's #2E6FD8;
-  inverted only once let go). A picked block's menu acts on all picked ones: "Delete selected items" (asked once),
-  "Copy selected items", "Copy selected items n times..." (each block's copies after it; menus refresh on
-  PicksChanged).
+  inverted only once let go). A right-click on a block not picked lets the picked ones (if any) go and picks it instead
+  (inverted, its own menu; the shown - orange - block stays; ExperimentWorkspaceView.BlockPressed; user's request 2026-11-11). The
+  right-click also focuses the tab's scroll area (ScrollViewer Tree, Focusable): a menu closed without choosing gives the focus
+  back to the control focused before, and when that was a new / open tile at the bottom the tab jumped there
+  (StudioMenuScrollTests). A picked block's menu (BlockViewModel.Menu = SingleMenu + MultipleMenu; user's request 2026-11-11)
+  has two parts with bold titles that cannot be clicked: "Single selection" (the block's own entries, as alone) and
+  "Multiple selections" on a grey of its own (MultiMenuBrush: light #D9D9D9, dark #454545; hovered MultiMenuHoverBrush
+  light #ADADAD, dark #6E6E6E - the theme's hover hardly showed; MenuChoice.Look -> MenuItem Tag) acting on all picked ones: "Delete selected items" (asked once), "Copy selected items", "Copy selected items n
+  times..." (each block's copies after it; menus refresh on PicksChanged). Alone (nothing else picked) only its own
+  entries, no titles.
+  Runs picked take their content (user's request 2026-11-13): a batch / time-limit run picked (right-click, Ctrl+click,
+  the rectangle - blue frame on the content while drawn) picks every block inside it (ContainerBlockViewModel.PickChanged;
+  InOneExperiment / CoverWithBand use WithContent); Ctrl+click on a block inside a picked run takes it out and lets the
+  runs above it go (KeepsContentPicks), the rest stays picked. Several picked = SeveralPicked (more than one movable
+  block picked; a block inside a picked run counts, so its menu splits too); PickedGroup still moves / copies / deletes
+  a run with its content once.
   Problem blocks (user's request 2026-11-10): an algorithm picked takes its problem along (AlgorithmBlockViewModel.PickChanged:
   shown picked, blue under the rectangle too - CoverWithBand adds the problems); a problem picked alone (rectangle over
   it only, Ctrl+click; ExperimentWorkspaceViewModel.Pickable) leaves its algorithm unpicked; Ctrl+click on a problem picked
-  with its algorithm unpicks both. Only problems picked (OnlyProblemsPicked / PickedProblems): their menu is "Change
+  with its algorithm unpicks both. Only problems picked (OnlyProblemsPicked / PickedProblems; at least two): their menu's multiple part is "Change
   selected problem blocks to..." (the problem dialog for the first one's algorithm; ChangeProblems gives every picked
   problem's algorithm a copy, whatever the algorithms; one that cannot take the problem type keeps its own, said in the
   status) and "Remove selected problems" - no copy entries. A problem picked with its algorithm among several shows the
-  picked blocks' menu.
+  picked blocks' entries there.
   Each experiment's area is filled (Border.experiment, no border; App.axaml ThemeDictionaries): light mode
   warm stone #D5CFC6 with dark writing, dark mode #36322E with light writing (ExperimentBrush/InkBrush/
   HoverBrush; missing-text in WarningBrush). Gunmetal #3E474D was replaced (fit neither mode). "Open..." takes several .hl files at once
@@ -356,9 +383,16 @@
   algorithm a new Results collection (never cache it); an algorithm's valid operators (move
   generators, ...) come from its problem, so rebuild parameter views after a problem change.
   No toolbar (removed 2026-10-11, user's request): everything starts in the Experiments tab -
-  "+ New experiment / open..." offers New experiment, New from data or benchmark... (the New dialog:
-  algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like
-  "hl new", opened as a new experiment), Open..., Open recent (workspace RecentFiles) and Samples...
+  under the experiments four tiles (user's request 2026-11-13, StackPanel NewTiles, Button.newtile: a rectangle as wide as
+  the text field below it (132 x 64 px, the pictogram 36 px in the middle) in pale logo orange #FDE5C8, the text in a
+  grey field below it; hovered the square full logo orange,
+  the field pale orange): New experiment (experiment_logo), New benchmark instance (Algorith_logo; renamed 2026-11-13; the New dialog:
+  algorithm -> compatible problem -> benchmark instance or CSV/Parquet data via Setups.Create like "hl new", opened as
+  a new experiment), Open... (open_from_file), Open recent (open_recent; workspace RecentFiles, its list shown while the
+  tile or the list is hovered - Controls/HoverMenuFlyout: closes after the pointer was off both for 250 ms, the tile
+  keeps its hover look meanwhile (class "open"), overlay input passes through to the tile; closing as soon as the pointer
+  left the tile flickered on the desktop; names in a TextBlock, a '_' would be an access key). Samples... is no tile: samples are
+  offered on the right when nothing is selected.
   Seeds are the algorithms' own Seed/SetSeedRandomly parameters, parallelism is the Resources tab.
   No results folder: runs live in their optimizers and are saved in the .hl file (the Results tab's
   "+ Results folder..." button was removed 2026-10-15; RunAnalysisViewModel.AddFolder still reads "hl run --store" folders). Runs tab (RunsBrowserViewModel): tree of the
@@ -381,7 +415,9 @@
   of 10" beside the time, BatchProgress). Its controls (user's request 2026-11-10; AlgorithmDetailView): one row of square
   fields and buttons 32 px high, all text of the title bold - "Quick batch" #FBCD96 | "of <size>" in one box in the
   grey of what cannot be pressed (ExecOffBrush/ExecOffInkBrush; BatchSizeText: the Options tab's size, the one in use
-  while a QBR runs) | "run" #FBCD96 (Border.qbr, StackPanel QbrTitle), then Button.exec Start #F7931D, Pause / Stop #F9B462, Prepare #FDE5C8 (hover a
+  while a QBR runs) | "run" #FBCD96 (Border.qbr, StackPanel QbrTitle), then Button.exec Start #F7931D, Pause / Stop #F9B462, Prepare #FDE5C8 (Pause turns into "▶ Resume" while paused -
+  PauseText, PauseCommand resumes the same quick batch run; Start only starts a new one, disabled while paused; Stop while
+  paused ends it with the runs made; user's request 2026-11-14) (hover a
   shade darker; disabled ExecOffBrush/ExecOffInkBrush: light #E3E3E3/#8C8C8C, dark #3A3A3A/#8A8A8A), then the status.
   The detail follows the algorithm's Prepared/Started/Paused/Stopped events (AlgorithmBlockViewModel.StatusChanged ->
   AlgorithmDetailViewModel.ExecutionStateChanged): only its own timer read the state before, so a new algorithm could
@@ -475,6 +511,15 @@
   HlRuntime.Initialize, Catalog, Documents (.hl), Setups (shared "new" logic), ParameterEditor
   (set/describe), ProblemInstances, DataFiles/TabularData (CSV via HeuristicLab's parser with
   header-based separator check; Parquet via Parquet.Net 5.6.1 - 6.x dropped the column API),
+  RunPause (RunOptions.Pause; 2026-11-15): pauses below the optimizers - the engines of the run's algorithms are
+  attached to the pause's EngineHold (HeuristicLab.Core EngineGate, see Known runtime facts) and wait before their next
+  operation; experiments, batch runs and time-limit runs stay Started and never see a pause; Resume lets every engine
+  go on where it was, held time is no execution time; Stop while paused wakes them (cancellation) and stops as usual.
+  Not held: BasicAlgorithms (no engine) and the Debug Engine. Stopping goes through one lock (two stops at once recorded
+  two runs at once - HeuristicLab's RunCollection is not thread-safe: KeyNotFoundException 'Seed'); errors "... not
+  allowed in execution state ..." while Stop is pending count as the stop (HeuristicLab starts parts on threads of their
+  own); an optimizer that cannot be prepared is reported Failed, not thrown - Studio closed on that; Studio's StartAsync
+  also turns any exception of one experiment into its "Failed: ..." status,
   DataProblems (table -> regression/classification/time series/trading; kind decided by exactly
   consumed data types, never by contravariant pattern matching), Features (return, logreturn,
   diff, lag, lead, rolling mean/std/min/max, zscore; composable), OptimizerRunner, BatchRunner,
@@ -538,6 +583,19 @@
 - Seeded runs are reproducible per runtime and platform, not across them: .NET Framework,
   .NET on Windows and .NET on Linux (glibc libm) can differ in the last bit of math results,
   and searches with near-ties amplify that into different but equally valid trajectories.
+- HeuristicLab's own Pause is not safe on experiments, batch runs and time-limit runs: it travels down through them and
+  each has instants where it goes wrong - Experiment.Pause between two optimizers pauses nothing and stays Started
+  (alone the run counted as completed, inside a batch run "Prepare not allowed in execution state Started"); an algorithm
+  finishing as the pause reaches it leaves its experiment Prepared, and the batch run starts the repetition over; a
+  part started on its own thread while Stop arrives refuses ("Start not allowed in execution state Stopped"). So
+  experiment runs pause below them (2026-11-15): replacements next/core/HeuristicLab.Core/Engine.cs (WaitWhileHeld:
+  waits while the engine's hold is closed, held time not counted; own EngineGate.cs: EngineHold, EngineGate.Attach/
+  Detach/HoldOf - a ConditionalWeakTable, no lookup while nothing is attached), HeuristicLab.SequentialEngine/
+  SequentialEngine.cs and HeuristicLab.ParallelEngine/ParallelEngine.cs (WaitWhileHeld before each operation). Seeded
+  results unchanged (no hold attached = the legacy path). Tests PauseTests (also PauseAndResumeAtAnyMoment: random
+  Pause/Resume) and StudioPauseTests.PauseAndResumeAtAnyMomentInStudio. A single algorithm (Studio's quick batch run)
+  uses HeuristicLab's Pause (safe on an algorithm) and remembers a Pause pressed between two runs (pauseRequested),
+  pausing the next run as it starts (Started event, 50 ms watch).
 - Compile order matters: ports compile the legacy csproj's Compile items in their order
   (Directory.Build.targets). Type order drives plugin discovery and thus default operators;
   an alphabetical glob made PSO and GA grouping pick different defaults than legacy.

@@ -38,7 +38,7 @@ public class StudioConcurrentWorkTests {
   }
 
   private static Button AddButton(Window window, ContainerBlockViewModel container) =>
-    window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("addblock") && b.DataContext == container);
+    window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("addblock") && container.AddChoices.Contains(b.DataContext));
 
   [TestMethod]
   [Timeout(300_000)]
@@ -66,8 +66,8 @@ public class StudioConcurrentWorkTests {
       CollectionAssert.AreEqual(new[] { "Show runs" }, a.Menu.Select(m => m.Display).ToList(), "the running one offers no changes");
       Assert.IsTrue(b.Menu.Any(m => m.Display == "Rename"), "the other one does");
       Pump();
-      Assert.IsFalse(AddButton(window, a).IsEnabled);
-      Assert.IsTrue(AddButton(window, b).IsEnabled);
+      Assert.IsFalse(AddButton(window, a).IsEffectivelyEnabled);
+      Assert.IsTrue(AddButton(window, b).IsEffectivelyEnabled);
       window.CaptureRenderedFrame()!.Save(Path.Combine(AppContext.BaseDirectory, "studio-concurrent-work.png"));
 
       // B: add, rename, change a parameter, move, copy, delete - all while A runs
